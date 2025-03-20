@@ -164,6 +164,28 @@ class BackgroundPropertiesPanel extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
+                  // Editor Settings section - NEW!
+                  const _SectionHeader(title: 'Editor Settings'),
+
+                  // Grid and Snap to Grid switches
+                  SwitchListTile(
+                    title: const Text('Show Grid'),
+                    value: editorProvider.showGrid,
+                    dense: true,
+                    contentPadding: const EdgeInsets.all(0),
+                    onChanged: (value) => editorProvider.toggleGrid(),
+                  ),
+
+                  SwitchListTile(
+                    title: const Text('Snap to Grid'),
+                    value: editorProvider.snapToGrid,
+                    dense: true,
+                    contentPadding: const EdgeInsets.all(0),
+                    onChanged: (value) => editorProvider.toggleSnapToGrid(),
+                  ),
+
+                  const SizedBox(height: 16),
+
                   // Canvas size section
                   const _SectionHeader(title: 'Canvas Size'),
 

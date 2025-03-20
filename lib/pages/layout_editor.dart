@@ -66,11 +66,7 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
             tooltip: 'Save layout',
             onPressed: () => _saveLayout(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Editor settings',
-            onPressed: () => _showEditorSettings(context),
-          ),
+          // Remove the settings button since we've moved these to the sidebar
         ],
       ),
       body: Row(
@@ -133,47 +129,7 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
     }
   }
 
-  void _showEditorSettings(BuildContext context) {
-    final editorProvider = Provider.of<LayoutEditorProvider>(
-      context,
-      listen: false,
-    );
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Editor Settings'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SwitchListTile(
-                  title: const Text('Show Grid'),
-                  value: editorProvider.showGrid,
-                  onChanged: (value) {
-                    editorProvider.toggleGrid();
-                    Navigator.of(context).pop();
-                  },
-                ),
-                SwitchListTile(
-                  title: const Text('Snap to Grid'),
-                  value: editorProvider.snapToGrid,
-                  onChanged: (value) {
-                    editorProvider.toggleSnapToGrid();
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-    );
-  }
+  // Remove _showEditorSettings method since it's no longer needed
 }
 
 class ToolbarContainer extends StatelessWidget {

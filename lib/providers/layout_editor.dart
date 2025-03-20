@@ -181,6 +181,9 @@ class LayoutEditorProvider with ChangeNotifier {
 
     final element = _layout!.elements[elementIndex];
 
+    // Ensure element isn't locked
+    if (element.isLocked) return;
+
     // Apply snapping if enabled
     double dx = position.dx;
     double dy = position.dy;
@@ -195,13 +198,16 @@ class LayoutEditorProvider with ChangeNotifier {
     dx = dx.clamp(0, _layout!.width - element.width);
     dy = dy.clamp(0, _layout!.height - element.height);
 
+    // Update element position
     element.x = dx;
     element.y = dy;
 
+    // Update selected element reference if needed
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
 
+    // Explicitly notify listeners to ensure UI updates
     notifyListeners();
   }
 
@@ -638,37 +644,41 @@ class LayoutEditorProvider with ChangeNotifier {
     // Get the current matrix
     final matrix = transformationController.value;
 
-    // Extract the translation values (avoid calling getTranslation() which can have precision issues)
+    // Extract the translation and scale values
     final translationX = matrix.entry(0, 3);
     final translationY = matrix.entry(1, 3);
-
-    // Define reasonable bounds with proper scaling
     final scale = matrix.getMaxScaleOnAxis();
-    final maxPanDistance = 3000.0 / scale; // Scale-aware boundaries
+
+    // Define more appropriate bounds based on scale
+    final maxPanDistance =
+        5000.0 / scale; // More relaxed boundaries for larger zoom levels
 
     // Check if canvas is too far out of view and adjust if needed
     bool needsRepositioning = false;
     double adjustedX = translationX;
     double adjustedY = translationY;
 
-    // Apply smoother limits to avoid jumpy behavior
+    // Use a smoother approach to limiting pan
     if (translationX.abs() > maxPanDistance) {
-      adjustedX = translationX.sign * maxPanDistance;
+      // Apply a gradual correction instead of hard limit
+      adjustedX = translationX * 0.9; // Move 90% back toward center
       needsRepositioning = true;
     }
 
     if (translationY.abs() > maxPanDistance) {
-      adjustedY = translationY.sign * maxPanDistance;
+      adjustedY = translationY * 0.9; // Move 90% back toward center
       needsRepositioning = true;
     }
 
-    // Apply corrected position if needed with minimal change
+    // Apply corrected position if needed
     if (needsRepositioning) {
+      // Use a clone to avoid modifying the original matrix
       final correctedMatrix =
-          Matrix4.copy(matrix)
+          matrix.clone()
             ..setEntry(0, 3, adjustedX)
             ..setEntry(1, 3, adjustedY);
 
+      // Update the controller with the corrected matrix
       transformationController.value = correctedMatrix;
     }
   }
