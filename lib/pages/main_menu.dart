@@ -13,6 +13,7 @@ import 'layout_manager.dart';
 import 'event_detail.dart';
 import 'start_event.dart';
 import 'settings.dart';
+import 'dart:io'; // For File operations
 
 enum MenuSection { events, layouts, settings }
 
@@ -49,7 +50,7 @@ class _MainMenuState extends State<MainMenu> {
       ),
       // Drawer for small screens
       drawer: !showSidebar ? _buildSidebar(context) : null,
-      // Add floating action button for creating new event
+      // Add floating action button only for events section
       floatingActionButton:
           _currentSection == MenuSection.events
               ? FloatingActionButton(
@@ -367,97 +368,93 @@ class _MainMenuState extends State<MainMenu> {
 }
 
 // Layout manager content embedded in main app
-class LayoutManagerContent extends StatelessWidget {
+class LayoutManagerContent extends StatefulWidget {
   const LayoutManagerContent({Key? key}) : super(key: key);
 
   @override
+  State<LayoutManagerContent> createState() => _LayoutManagerContentState();
+}
+
+class _LayoutManagerContentState extends State<LayoutManagerContent> {
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future:
-          Provider.of<LayoutsProvider>(context, listen: false).loadLayouts(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else {
-          return Consumer<LayoutsProvider>(
-            builder: (context, layoutsProvider, child) {
-              if (layoutsProvider.layouts.isEmpty) {
-                return const Center(child: Text('No layouts available.'));
-              } else {
-                return ListView.builder(
-                  itemCount: layoutsProvider.layouts.length,
-                  itemBuilder: (context, index) {
-                    final layout = layoutsProvider.layouts[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 8.0,
-                      ),
-                      child: ListTile(
-                        title: Text(layout.name),
-                        subtitle: Text('ID: ${layout.id}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return EditLayoutDialog(
-                                      layout: layout,
-                                      index: index,
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: const Text('Confirm Delete'),
-                                      content: const Text(
-                                        'Are you sure you want to delete this layout?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                          },
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            Provider.of<LayoutsProvider>(
-                                              context,
-                                              listen: false,
-                                            ).removeLayout(index);
-                                            Navigator.of(context).pop();
-                                          },
-                                          child: const Text('Delete'),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+    return Stack(
+      children: [
+        // Main content - list of layouts
+        FutureBuilder(
+          future:
+              Provider.of<LayoutsProvider>(
+                context,
+                listen: false,
+              ).loadLayouts(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else {
+              return Consumer<LayoutsProvider>(
+                builder: (context, layoutsProvider, child) {
+                  if (layoutsProvider.layouts.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.photo_size_select_actual,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No layouts available',
+                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Click the + button to create one',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
                       ),
                     );
-                  },
-                );
-              }
+                  } else {
+                    return GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                      itemCount: layoutsProvider.layouts.length,
+                      itemBuilder: (context, index) {
+                        final layout = layoutsProvider.layouts[index];
+                        return LayoutCard(layout: layout, index: index);
+                      },
+                    );
+                  }
+                },
+              );
+            }
+          },
+        ),
+
+        // Floating action button
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => const CreateLayoutDialog(),
+              );
             },
-          );
-        }
-      },
+            tooltip: 'Create New Layout',
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -782,6 +779,7 @@ class _EditEventDialogState extends State<EditEventDialog> {
                     );
                     Provider.of<EventsProvider>(
                       context,
+
                       listen: false,
                     ).editEvent(widget.index, updatedEvent);
                     Navigator.of(context).pop();
