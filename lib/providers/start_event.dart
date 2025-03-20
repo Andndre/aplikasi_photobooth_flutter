@@ -26,7 +26,7 @@ class StartEventProvider with ChangeNotifier {
         }
       }
       images.sort(
-        (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
+        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
       );
     }
 

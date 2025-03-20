@@ -1,4 +1,5 @@
 import 'package:aplikasi_photobooth_flutter/pages/main_menu.dart';
+import 'package:aplikasi_photobooth_flutter/providers/start_event.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/events.dart';
@@ -19,6 +20,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => EventsProvider()),
         ChangeNotifierProvider(create: (_) => LayoutsProvider()),
+        ChangeNotifierProvider(create: (_) => StartEventProvider()),
         ChangeNotifierProvider(create: (_) => SesiFotoProvider()),
       ],
       child: MaterialApp(
