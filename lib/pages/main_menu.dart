@@ -13,7 +13,6 @@ import 'layout_manager.dart';
 import 'event_detail.dart';
 import 'start_event.dart';
 import 'settings.dart';
-import 'dart:io'; // For File operations
 
 enum MenuSection { events, layouts, settings }
 
@@ -104,7 +103,7 @@ class _MainMenuState extends State<MainMenu> {
     return ListView(
       children: [
         // Events list
-        Container(
+        SizedBox(
           height: MediaQuery.of(context).size.height - 100,
           child: FutureBuilder(
             future: Future.wait([
@@ -140,7 +139,7 @@ class _MainMenuState extends State<MainMenu> {
                           // Determine the appropriate error color based on theme
                           final errorColor =
                               Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.red.shade900.withOpacity(0.4)
+                                  ? Colors.red.shade900.withValues(alpha: 0.4)
                                   : Colors.red.shade100;
 
                           return Card(
@@ -255,7 +254,7 @@ class _MainMenuState extends State<MainMenu> {
           color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 5,
               offset: const Offset(3, 0),
             ),
@@ -351,7 +350,9 @@ class _MainMenuState extends State<MainMenu> {
       ),
       tileColor:
           isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.2)
+              ? Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.2)
               : null,
       onTap: () {
         // Close drawer on small screens
@@ -369,7 +370,7 @@ class _MainMenuState extends State<MainMenu> {
 
 // Layout manager content embedded in main app
 class LayoutManagerContent extends StatefulWidget {
-  const LayoutManagerContent({Key? key}) : super(key: key);
+  const LayoutManagerContent({super.key});
 
   @override
   State<LayoutManagerContent> createState() => _LayoutManagerContentState();
@@ -460,11 +461,13 @@ class _LayoutManagerContentState extends State<LayoutManagerContent> {
 }
 
 class AddEventDialog extends StatefulWidget {
+  const AddEventDialog({super.key});
+
   @override
-  _AddEventDialogState createState() => _AddEventDialogState();
+  AddEventDialogState createState() => AddEventDialogState();
 }
 
-class _AddEventDialogState extends State<AddEventDialog> {
+class AddEventDialogState extends State<AddEventDialog> {
   final _formKey = GlobalKey<FormState>();
   String _name = '';
   String _description = '';
@@ -619,13 +622,13 @@ class EditEventDialog extends StatefulWidget {
   final Event event;
   final int index;
 
-  const EditEventDialog({required this.event, required this.index});
+  const EditEventDialog({super.key, required this.event, required this.index});
 
   @override
-  _EditEventDialogState createState() => _EditEventDialogState();
+  EditEventDialogState createState() => EditEventDialogState();
 }
 
-class _EditEventDialogState extends State<EditEventDialog> {
+class EditEventDialogState extends State<EditEventDialog> {
   final _formKey = GlobalKey<FormState>();
   late String _name;
   late String _description;
