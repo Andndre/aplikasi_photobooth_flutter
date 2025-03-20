@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import '../providers/layouts.dart';
 import '../models/layouts.dart';
 import 'dart:io';
+import 'dart:math';
 
 class LayoutManager extends StatefulWidget {
   const LayoutManager({super.key});
@@ -375,12 +376,24 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Get screen dimensions
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 1000;
+    final isLowHeight = screenSize.height < 700;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Set dialog size based on screen size
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.8,
-        height: MediaQuery.of(context).size.height * 0.8,
-        padding: const EdgeInsets.all(24.0),
+        width:
+            isSmallScreen
+                ? screenSize.width * 0.95
+                : min(screenSize.width * 0.85, 1200.0),
+        height:
+            isSmallScreen
+                ? screenSize.height * 0.95
+                : min(screenSize.height * 0.85, 800.0),
+        padding: EdgeInsets.all(isSmallScreen || isLowHeight ? 12.0 : 24.0),
         child: Form(
           key: _formKey,
           child: Column(
@@ -392,33 +405,30 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                 children: [
                   Text(
                     'Create New Layout',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style:
+                        isLowHeight
+                            ? Theme.of(context).textTheme.titleLarge
+                            : Theme.of(context).textTheme.headlineSmall,
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: isLowHeight ? 8.0 : 16.0),
 
-              // Main content area
+              // Main content area - adapt layout based on screen size
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left side - Template selection
-                    Expanded(flex: 3, child: _buildTemplateSelector()),
-
-                    const SizedBox(width: 24),
-
-                    // Right side - Layout details form
-                    Expanded(flex: 2, child: _buildLayoutDetailsForm()),
-                  ],
-                ),
+                child:
+                    isSmallScreen || isLowHeight
+                        ? _buildSmallScreenLayout()
+                        : _buildWideScreenLayout(),
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: isLowHeight ? 8.0 : 16.0),
 
               // Dialog buttons
               Row(
@@ -441,8 +451,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                           name: _name,
                           basePhoto: '', // Will be set later in the editor
                           id: 0, // ID will be set by the provider
-                          coordinates:
-                              [], // Coordinates will be added later in the editor
+                          coordinates: [], // Coordinates will be added later
                           width: _width,
                           height: _height,
                         );
@@ -466,13 +475,294 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
     );
   }
 
-  Widget _buildTemplateSelector() {
+  // Layout for wide screens - side by side template and details
+  Widget _buildWideScreenLayout() {
+    final screenSize = MediaQuery.of(context).size;
+    final isLowHeight = screenSize.height < 700;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Left side - Template selection
+        Expanded(
+          flex: 3,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _buildTemplateSelector(isLowHeight: isLowHeight),
+          ),
+        ),
+
+        // Vertical divider
+        Container(width: 1, color: Theme.of(context).dividerColor),
+
+        // Right side - Layout details form
+        Expanded(
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: SingleChildScrollView(
+              child: _buildLayoutDetailsForm(isLowHeight: isLowHeight),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Layout for small screens - stacked template and details
+  Widget _buildSmallScreenLayout() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top part - Layout details form (more important for input)
+        _buildCompactLayoutDetailsForm(),
+
+        const SizedBox(height: 12),
+        const Divider(),
+        const SizedBox(height: 8),
+
+        // Label for templates
+        Text(
+          'Choose a Template',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Standard photo paper sizes at 300 DPI',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Bottom part - Template grid (scrollable)
+        Expanded(child: _buildCompactTemplateSelector()),
+      ],
+    );
+  }
+
+  // Template selector for small screens - more compact display
+  Widget _buildCompactTemplateSelector() {
+    return Opacity(
+      opacity: _useCustomResolution ? 0.5 : 1.0,
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, // Fewer columns for small screens
+          childAspectRatio: 1.2,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
+        itemCount: _templates.length,
+        itemBuilder: (context, index) {
+          final template = _templates[index];
+          final bool isSelected =
+              !_useCustomResolution &&
+              _width == template['width'] &&
+              _height == template['height'];
+
+          return InkWell(
+            onTap:
+                _useCustomResolution ? null : () => _selectTemplate(template),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                color:
+                    isSelected
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    template['icon'] as IconData,
+                    size: 24,
+                    color:
+                        isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    template['name'] as String,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : null,
+                      fontSize: 14,
+                      color:
+                          isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    template['description'] as String,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Compact layout details form for small screens
+  Widget _buildCompactLayoutDetailsForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextFormField(
+          decoration: const InputDecoration(
+            labelText: 'Layout Name',
+            border: OutlineInputBorder(),
+            filled: true,
+            isDense: true,
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter a layout name';
+            }
+            return null;
+          },
+          onSaved: (value) {
+            _name = value!;
+          },
+        ),
+        const SizedBox(height: 12),
+
+        // Custom resolution controls
+        Row(
+          children: [
+            SizedBox(
+              height: 24,
+              width: 24,
+              child: Checkbox(
+                value: _useCustomResolution,
+                onChanged: (value) {
+                  setState(() {
+                    _useCustomResolution = value ?? false;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _useCustomResolution = !_useCustomResolution;
+                  });
+                },
+                child: const Text('Use custom resolution'),
+              ),
+            ),
+          ],
+        ),
+
+        // Show either custom resolution fields or selected dimensions
+        if (_useCustomResolution) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _widthController,
+                  decoration: const InputDecoration(
+                    labelText: 'Width',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (_useCustomResolution) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      final number = int.tryParse(value);
+                      if (number == null || number <= 0) {
+                        return 'Invalid';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _heightController,
+                  decoration: const InputDecoration(
+                    labelText: 'Height',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (_useCustomResolution) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      final number = int.tryParse(value);
+                      if (number == null || number <= 0) {
+                        return 'Invalid';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: RichText(
+              text: TextSpan(
+                style: Theme.of(context).textTheme.bodyMedium,
+                children: [
+                  const TextSpan(text: 'Selected: '),
+                  TextSpan(
+                    text: '$_width × $_height px',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTemplateSelector({bool isLowHeight = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Choose a Template',
-          style: Theme.of(context).textTheme.titleLarge,
+          style:
+              isLowHeight
+                  ? Theme.of(context).textTheme.titleMedium
+                  : Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 4),
         Text(
@@ -481,16 +771,16 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         Expanded(
           child: Opacity(
             opacity: _useCustomResolution ? 0.5 : 1.0,
             child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: isLowHeight ? 4 : 3,
+                childAspectRatio: isLowHeight ? 1.0 : 0.8,
+                crossAxisSpacing: isLowHeight ? 8 : 16,
+                mainAxisSpacing: isLowHeight ? 8 : 16,
               ),
               itemCount: _templates.length,
               itemBuilder: (context, index) {
@@ -521,41 +811,47 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                         width: 2,
                       ),
                     ),
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isLowHeight ? 8 : 16),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           template['icon'] as IconData,
-                          size: 48,
+                          size: isLowHeight ? 32 : 48,
                           color:
                               isSelected
                                   ? Theme.of(context).colorScheme.primary
                                   : null,
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: isLowHeight ? 8 : 16),
                         Text(
                           template['name'] as String,
                           textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontWeight: isSelected ? FontWeight.bold : null,
-                            fontSize: 18,
+                            fontSize: isLowHeight ? 14 : 18,
                             color:
                                 isSelected
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          template['description'] as String,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 2),
+                        if (!isLowHeight)
+                          Text(
+                            template['description'] as String,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (!isLowHeight) const SizedBox(height: 4),
                         Text(
                           '${template['width']} × ${template['height']} px',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontSize: isLowHeight ? 10 : null),
                         ),
                       ],
                     ),
@@ -569,12 +865,23 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
     );
   }
 
-  Widget _buildLayoutDetailsForm() {
+  Widget _buildLayoutDetailsForm({bool isLowHeight = false}) {
+    final descriptionTextStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Layout Details', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 24),
+        Text(
+          'Layout Details',
+          style:
+              isLowHeight
+                  ? Theme.of(context).textTheme.titleMedium
+                  : Theme.of(context).textTheme.titleLarge,
+        ),
+        SizedBox(height: isLowHeight ? 16 : 24),
 
         // Layout name
         TextFormField(
@@ -582,6 +889,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
             labelText: 'Layout Name',
             border: OutlineInputBorder(),
             filled: true,
+            isDense: true,
           ),
           validator: (value) {
             if (value == null || value.isEmpty) {
@@ -593,18 +901,22 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
             _name = value!;
           },
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: isLowHeight ? 16 : 24),
 
         // Custom resolution checkbox
         Row(
           children: [
-            Checkbox(
-              value: _useCustomResolution,
-              onChanged: (value) {
-                setState(() {
-                  _useCustomResolution = value ?? false;
-                });
-              },
+            SizedBox(
+              height: 24,
+              width: 24,
+              child: Checkbox(
+                value: _useCustomResolution,
+                onChanged: (value) {
+                  setState(() {
+                    _useCustomResolution = value ?? false;
+                  });
+                },
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -619,7 +931,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isLowHeight ? 12 : 16),
 
         // Custom resolution fields
         if (_useCustomResolution) ...[
@@ -634,6 +946,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                     labelText: 'Width',
                     border: OutlineInputBorder(),
                     filled: true,
+                    isDense: true,
                   ),
                   keyboardType: TextInputType.number,
                   validator: (value) {
@@ -658,6 +971,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                     labelText: 'Height',
                     border: OutlineInputBorder(),
                     filled: true,
+                    isDense: true,
                   ),
                   keyboardType: TextInputType.number,
                   validator: (value) {
@@ -679,7 +993,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
         ] else ...[
           // Display selected template dimensions
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceVariant,
               borderRadius: BorderRadius.circular(8),
@@ -693,26 +1007,26 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                   '$_width × $_height pixels (300 DPI)',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '${(_width / 300).toStringAsFixed(1)} × ${(_height / 300).toStringAsFixed(1)} inches',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                Text(
-                  '${(_width / 118.11).toStringAsFixed(1)} × ${(_height / 118.11).toStringAsFixed(1)} cm',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                if (!isLowHeight) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(_width / 300).toStringAsFixed(1)} × ${(_height / 300).toStringAsFixed(1)} inches',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  Text(
+                    '${(_width / 118.11).toStringAsFixed(1)} × ${(_height / 118.11).toStringAsFixed(1)} cm',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ],
             ),
           ),
         ],
 
-        const SizedBox(height: 24),
+        SizedBox(height: isLowHeight ? 16 : 24),
         Text(
           'Base image and photo spots can be configured after creating the layout.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+          style: descriptionTextStyle,
         ),
       ],
     );
