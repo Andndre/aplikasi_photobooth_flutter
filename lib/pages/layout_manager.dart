@@ -250,6 +250,7 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
   int _width = 1200; // Default to 4R size
   int _height = 1800;
   bool _useCustomResolution = false;
+  bool _isLandscape = false; // New state to track orientation
 
   // Predefined templates - Standard photo paper sizes at 300 DPI
   final List<Map<String, dynamic>> _templates = [
@@ -366,8 +367,30 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
   void _selectTemplate(Map<String, dynamic> template) {
     if (!_useCustomResolution) {
       setState(() {
-        _width = template['width'];
-        _height = template['height'];
+        // Apply the template dimensions based on orientation
+        if (_isLandscape) {
+          _width = template['height'];
+          _height = template['width'];
+        } else {
+          _width = template['width'];
+          _height = template['height'];
+        }
+        _widthController.text = _width.toString();
+        _heightController.text = _height.toString();
+      });
+    }
+  }
+
+  // New method to toggle orientation
+  void _toggleOrientation() {
+    if (!_useCustomResolution) {
+      setState(() {
+        _isLandscape = !_isLandscape;
+        // Swap width and height
+        final temp = _width;
+        _width = _height;
+        _height = temp;
+        // Update controllers
         _widthController.text = _width.toString();
         _heightController.text = _height.toString();
       });
@@ -555,10 +578,13 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
         itemCount: _templates.length,
         itemBuilder: (context, index) {
           final template = _templates[index];
+          // Fix template selection highlighting by checking both orientations
           final bool isSelected =
               !_useCustomResolution &&
-              _width == template['width'] &&
-              _height == template['height'];
+              ((_width == template['width'] && _height == template['height']) ||
+                  (_isLandscape &&
+                      _width == template['height'] &&
+                      _height == template['width']));
 
           return InkWell(
             onTap:
@@ -579,7 +605,6 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
                   width: 2,
                 ),
               ),
-              padding: const EdgeInsets.all(8),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
@@ -735,21 +760,96 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
         ] else ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: RichText(
-              text: TextSpan(
-                style: Theme.of(context).textTheme.bodyMedium,
-                children: [
-                  const TextSpan(text: 'Selected: '),
-                  TextSpan(
-                    text: '$_width x $_height px',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        children: [
+                          const TextSpan(text: 'Selected: '),
+                          TextSpan(
+                            text: '$_width x $_height px',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Replace with two separate buttons
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildOrientationButton(false, compact: true),
+                        const SizedBox(width: 4),
+                        _buildOrientationButton(true, compact: true),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
       ],
+    );
+  }
+
+  // Helper method for orientation button
+  Widget _buildOrientationButton(bool landscape, {bool compact = false}) {
+    final isSelected = _isLandscape == landscape;
+    final buttonSize = compact ? const Size(36, 30) : const Size(44, 36);
+
+    // Define tooltip text based on orientation
+    final tooltipText = landscape ? 'Landscape' : 'Portrait';
+
+    return Tooltip(
+      message: tooltipText,
+      child: Material(
+        color:
+            isSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          onTap:
+              _useCustomResolution
+                  ? null
+                  : () {
+                    if (_isLandscape != landscape) {
+                      _toggleOrientation();
+                    }
+                  },
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            height: buttonSize.height,
+            width: buttonSize.width,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color:
+                    isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: Icon(
+              landscape ? Icons.crop_landscape : Icons.crop_portrait,
+              size: compact ? 16 : 20,
+              color:
+                  isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -785,10 +885,14 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
               itemCount: _templates.length,
               itemBuilder: (context, index) {
                 final template = _templates[index];
+                // Fix template selection highlighting by checking both orientations
                 final bool isSelected =
                     !_useCustomResolution &&
-                    _width == template['width'] &&
-                    _height == template['height'];
+                    ((_width == template['width'] &&
+                            _height == template['height']) ||
+                        (_isLandscape &&
+                            _width == template['height'] &&
+                            _height == template['width']));
 
                 return InkWell(
                   onTap:
@@ -993,7 +1097,7 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
             ],
           ),
         ] else ...[
-          // Display selected template dimensions
+          // Display selected template dimensions with orientation buttons
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1003,7 +1107,29 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Selected Resolution'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Selected Resolution'),
+                    // Orientation toggle buttons
+                    Row(
+                      children: [
+                        const Text(
+                          'Orientation: ',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          children: [
+                            _buildOrientationButton(false),
+                            const SizedBox(width: 8),
+                            _buildOrientationButton(true),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '$_width x $_height pixels (300 DPI)',
