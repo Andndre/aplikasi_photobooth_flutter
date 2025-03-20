@@ -8,6 +8,12 @@ class ZoomControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final editorProvider = Provider.of<LayoutEditorProvider>(context);
+    final layout = editorProvider.layout;
+
+    // Get actual scale from transformation matrix for accuracy
+    final actualScale =
+        editorProvider.transformationController.value.getMaxScaleOnAxis();
+    final zoomPercentage = (actualScale * 100).toStringAsFixed(0);
 
     return Container(
       decoration: BoxDecoration(
@@ -34,7 +40,7 @@ class ZoomControls extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Text(
-              '${(editorProvider.scale * 100).toStringAsFixed(0)}%',
+              '$zoomPercentage%',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -42,7 +48,7 @@ class ZoomControls extends StatelessWidget {
             icon: const Icon(Icons.remove),
             tooltip: 'Zoom out',
             onPressed: () {
-              editorProvider.zoom(1 / 1.2);
+              editorProvider.zoom(1 / 1.2); // More moderate zoom out factor
             },
           ),
           const Divider(height: 1),
@@ -50,7 +56,9 @@ class ZoomControls extends StatelessWidget {
             icon: const Icon(Icons.fit_screen),
             tooltip: 'Fit to screen',
             onPressed: () {
-              editorProvider.resetZoom();
+              if (layout != null) {
+                editorProvider.fitToScreen(context);
+              }
             },
           ),
         ],

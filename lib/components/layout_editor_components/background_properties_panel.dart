@@ -51,15 +51,115 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                   // Background color section
                   const _SectionHeader(title: 'Background'),
 
-                  // Color picker button
-                  _ColorPropertyRow(
-                    label: 'Color',
-                    color: _hexToColor(layout.backgroundColor),
-                    onColorChanged: (color) {
-                      final colorHex =
-                          '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
-                      editorProvider.updateLayoutBackground(colorHex);
-                    },
+                  // Fix color picker button implementation
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            'Color',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              // Store current color for color picker
+                              Color pickerColor = _hexToColor(
+                                layout.backgroundColor,
+                              );
+
+                              // Debug print
+                              print(
+                                'Current background color: ${layout.backgroundColor}',
+                              );
+
+                              // Show color picker dialog with stateful color selection
+                              Color? resultColor = await showDialog<Color>(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  Color currentColor = pickerColor;
+                                  return StatefulBuilder(
+                                    builder: (context, setState) {
+                                      return AlertDialog(
+                                        title: const Text(
+                                          'Pick Background Color',
+                                        ),
+                                        content: SingleChildScrollView(
+                                          child: ColorPicker(
+                                            pickerColor: currentColor,
+                                            onColorChanged: (Color color) {
+                                              setState(
+                                                () => currentColor = color,
+                                              );
+                                            },
+                                            pickerAreaHeightPercent: 0.8,
+                                          ),
+                                        ),
+                                        actions: <Widget>[
+                                          TextButton(
+                                            onPressed:
+                                                () =>
+                                                    Navigator.of(context).pop(),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  context,
+                                                ).pop(currentColor),
+                                            child: const Text('Apply'),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+
+                              // Handle selected color
+                              if (resultColor != null) {
+                                final colorHex =
+                                    '#${resultColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+                                print('New background color: $colorHex');
+                                editorProvider.updateLayoutBackground(colorHex);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: _hexToColor(
+                                        layout.backgroundColor,
+                                      ),
+                                      border: Border.all(color: Colors.grey),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    layout.backgroundColor,
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),

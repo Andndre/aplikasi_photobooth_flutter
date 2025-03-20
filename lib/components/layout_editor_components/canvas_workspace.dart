@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:io';
+import 'package:flutter/gestures.dart'; // Add this for pointer signals
 import 'dart:math';
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
@@ -9,7 +9,7 @@ import './element_widget.dart';
 import './selection_overlay.dart' as custom_overlay;
 
 class CanvasWorkspace extends StatefulWidget {
-  const CanvasWorkspace({Key? key}) : super(key: key);
+  const CanvasWorkspace({super.key});
 
   @override
   CanvasWorkspaceState createState() => CanvasWorkspaceState();
@@ -18,7 +18,14 @@ class CanvasWorkspace extends StatefulWidget {
 class CanvasWorkspaceState extends State<CanvasWorkspace> {
   LayoutElement? _draggedElement;
   Offset _lastFocalPoint = Offset.zero;
-  Size? _lastSize;
+  bool _isMiddleMousePanning = false;
+  Offset _middleMouseStartPoint = Offset.zero;
+  Matrix4 _previousTransform = Matrix4.identity();
+  static const double _zoomSensitivity =
+      0.001; // Adjust sensitivity for better control
+
+  // Add a key for the InteractiveViewer
+  final _interactiveViewerKey = GlobalKey();
 
   @override
   void initState() {
@@ -35,108 +42,241 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
       return const Center(child: Text('No layout loaded'));
     }
 
-    return Container(
-      color: Colors.grey[300],
-      child: InteractiveViewer(
-        transformationController: editorProvider.transformationController,
-        constrained: false,
-        boundaryMargin: const EdgeInsets.all(100),
-        minScale: 0.1,
-        maxScale: 5.0,
-        onInteractionUpdate: (details) {
-          editorProvider.setScale(
-            editorProvider.transformationController.value.getMaxScaleOnAxis(),
+    // Calculate reasonable canvas dimensions with padding
+    final canvasWidth =
+        layout.width.toDouble() + 3000; // Add extra space for panning
+    final canvasHeight = layout.height.toDouble() + 3000;
+
+    // Calculate initial position to center the canvas
+    final canvasCenterX = canvasWidth / 2;
+    final canvasCenterY = canvasHeight / 2;
+
+    return Listener(
+      onPointerDown: (PointerDownEvent event) {
+        // Check if middle mouse button (button index 1) is pressed
+        if (event.buttons == 4) {
+          // 4 represents middle mouse button
+          setState(() {
+            _isMiddleMousePanning = true;
+            _middleMouseStartPoint = event.position;
+            _previousTransform = Matrix4.copy(
+              editorProvider.transformationController.value,
+            );
+          });
+        }
+      },
+      onPointerMove: (PointerMoveEvent event) {
+        if (_isMiddleMousePanning) {
+          // Calculate the difference between current and start positions
+          final delta = event.position - _middleMouseStartPoint;
+
+          // Create a new transform by applying the translation
+          final newTransform = Matrix4.copy(_previousTransform);
+          newTransform.translate(
+            delta.dx / editorProvider.scale,
+            delta.dy / editorProvider.scale,
           );
-        },
-        child: Stack(
-          children: [
-            // Canvas background
-            Container(
-              width: layout.width.toDouble(),
-              height: layout.height.toDouble(),
-              color: _hexToColor(layout.backgroundColor),
-              child: CustomPaint(
-                painter: editorProvider.showGrid ? GridPainter() : null,
+
+          // Apply the new transform
+          editorProvider.transformationController.value = newTransform;
+        }
+      },
+      onPointerUp: (PointerUpEvent event) {
+        if (_isMiddleMousePanning) {
+          setState(() {
+            _isMiddleMousePanning = false;
+          });
+        }
+      },
+      onPointerSignal: (PointerSignalEvent event) {
+        // Handle mouse wheel for zooming
+        if (event is PointerScrollEvent) {
+          // Don't handle zoom if it's a horizontal scroll
+          if (event.scrollDelta.dy == 0) return;
+
+          // Calculate new scale factor
+          final currentScale = editorProvider.scale;
+          final scaleFactor = 1.0 - (event.scrollDelta.dy * _zoomSensitivity);
+          final targetScale = (currentScale * scaleFactor).clamp(0.1, 5.0);
+
+          // Get the pointer's position on screen
+          final position = event.localPosition;
+
+          // Apply zoom centered on mouse position
+          editorProvider.zoomToPosition(
+            targetScale: targetScale,
+            focalPoint: position,
+          );
+
+          // Ensure canvas stays in view after zooming
+          editorProvider.ensureCanvasVisible();
+        }
+      },
+      child: MouseRegion(
+        cursor:
+            _isMiddleMousePanning
+                ? SystemMouseCursors.grabbing
+                : SystemMouseCursors.basic,
+        child: Container(
+          color: Colors.grey[300],
+          // Wrap with GestureDetector to detect clicks on empty areas
+          child: GestureDetector(
+            onTap: () {
+              // Deselect any selected element when clicking on empty area
+              if (editorProvider.selectedElement != null) {
+                editorProvider.selectElement(null);
+              }
+            },
+            child: InteractiveViewer(
+              key: _interactiveViewerKey,
+              transformationController: editorProvider.transformationController,
+              constrained: false,
+              boundaryMargin: EdgeInsets.all(max(canvasWidth, canvasHeight)),
+              minScale:
+                  0.1, // Increased minimum scale to prevent excessive zoom out
+              maxScale: 5.0,
+              panEnabled:
+                  !_isMiddleMousePanning, // Disable standard panning when middle mouse is active
+              onInteractionUpdate: (details) {
+                editorProvider.setScale(
+                  editorProvider.transformationController.value
+                      .getMaxScaleOnAxis(),
+                );
+              },
+              onInteractionEnd: (details) {
+                // Ensure canvas stays in view after interaction
+                editorProvider.ensureCanvasVisible();
+              },
+              child: SizedBox(
+                width: canvasWidth,
+                height: canvasHeight,
+                child: Stack(
+                  children: [
+                    // Background pattern to help with orientation (optional)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.grey[200],
+                        child: CustomPaint(painter: BackgroundPatternPainter()),
+                      ),
+                    ),
+
+                    // Centered canvas
+                    Positioned(
+                      left: canvasCenterX - layout.width / 2,
+                      top: canvasCenterY - layout.height / 2,
+                      child: Container(
+                        width: layout.width.toDouble(),
+                        height: layout.height.toDouble(),
+                        decoration: BoxDecoration(
+                          color: _hexToColor(layout.backgroundColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          children: [
+                            // Grid (if enabled)
+                            if (editorProvider.showGrid)
+                              Positioned.fill(
+                                child: CustomPaint(painter: GridPainter()),
+                              ),
+
+                            // Elements
+                            ...layout.elements.map((element) {
+                              if (!element.isVisible) return const SizedBox();
+
+                              return Positioned(
+                                left: element.x,
+                                top: element.y,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    if (!element.isLocked) {
+                                      editorProvider.selectElement(element);
+                                    }
+                                  },
+                                  onPanStart:
+                                      element.isLocked
+                                          ? null
+                                          : (details) {
+                                            setState(() {
+                                              _draggedElement = element;
+                                              _lastFocalPoint =
+                                                  details.localPosition;
+                                            });
+                                            editorProvider.startDrag();
+                                          },
+                                  onPanUpdate:
+                                      element.isLocked
+                                          ? null
+                                          : (details) {
+                                            if (_draggedElement?.id ==
+                                                element.id) {
+                                              final delta =
+                                                  details.localPosition -
+                                                  _lastFocalPoint;
+                                              final newPosition =
+                                                  Offset(element.x, element.y) +
+                                                  delta;
+                                              editorProvider
+                                                  .updateElementPosition(
+                                                    element.id,
+                                                    newPosition,
+                                                  );
+                                              setState(() {
+                                                _lastFocalPoint =
+                                                    details.localPosition;
+                                              });
+                                            }
+                                          },
+                                  onPanEnd:
+                                      element.isLocked
+                                          ? null
+                                          : (details) {
+                                            setState(() {
+                                              _draggedElement = null;
+                                            });
+                                            editorProvider.stopDrag();
+                                          },
+                                  child: ElementWidget(element: element),
+                                ),
+                              );
+                            }).toList(),
+
+                            // Selection overlay
+                            if (editorProvider.selectedElement != null)
+                              Positioned(
+                                left: editorProvider.selectedElement!.x,
+                                top: editorProvider.selectedElement!.y,
+                                child: custom_overlay.SelectionOverlay(
+                                  element: editorProvider.selectedElement!,
+                                  onResize: (size) {
+                                    editorProvider.updateElementSize(
+                                      editorProvider.selectedElement!.id,
+                                      size,
+                                    );
+                                  },
+                                  onRotate: (rotation) {
+                                    editorProvider.updateElementRotation(
+                                      editorProvider.selectedElement!.id,
+                                      rotation,
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-
-            // Layout elements
-            ...layout.elements.map((element) {
-              if (!element.isVisible) return const SizedBox();
-
-              return Positioned(
-                left: element.x,
-                top: element.y,
-                child: GestureDetector(
-                  onTap: () {
-                    if (!element.isLocked) {
-                      editorProvider.selectElement(element);
-                    }
-                  },
-                  onPanStart:
-                      element.isLocked
-                          ? null
-                          : (details) {
-                            setState(() {
-                              _draggedElement = element;
-                              _lastFocalPoint = details.localPosition;
-                            });
-                            editorProvider.startDrag();
-                          },
-                  onPanUpdate:
-                      element.isLocked
-                          ? null
-                          : (details) {
-                            if (_draggedElement?.id == element.id) {
-                              final delta =
-                                  details.localPosition - _lastFocalPoint;
-                              final newPosition =
-                                  Offset(element.x, element.y) + delta;
-                              editorProvider.updateElementPosition(
-                                element.id,
-                                newPosition,
-                              );
-                              setState(() {
-                                _lastFocalPoint = details.localPosition;
-                              });
-                            }
-                          },
-                  onPanEnd:
-                      element.isLocked
-                          ? null
-                          : (details) {
-                            setState(() {
-                              _draggedElement = null;
-                            });
-                            editorProvider.stopDrag();
-                          },
-                  child: ElementWidget(element: element),
-                ),
-              );
-            }).toList(),
-
-            // Selection overlay
-            if (editorProvider.selectedElement != null)
-              Positioned(
-                left: editorProvider.selectedElement!.x,
-                top: editorProvider.selectedElement!.y,
-                child: custom_overlay.SelectionOverlay(
-                  element: editorProvider.selectedElement!,
-                  onResize: (size) {
-                    editorProvider.updateElementSize(
-                      editorProvider.selectedElement!.id,
-                      size,
-                    );
-                  },
-                  onRotate: (rotation) {
-                    editorProvider.updateElementRotation(
-                      editorProvider.selectedElement!.id,
-                      rotation,
-                    );
-                  },
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -151,6 +291,28 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
     }
     return Color(int.parse(hexColor, radix: 16));
   }
+}
+
+// Background pattern to help users understand when they're outside the canvas
+class BackgroundPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = Colors.grey.withOpacity(0.2)
+          ..strokeWidth = 1.0;
+
+    const spacing = 50.0;
+
+    for (double i = 0; i < size.width; i += spacing) {
+      for (double j = 0; j < size.height; j += spacing) {
+        canvas.drawCircle(Offset(i, j), 1.0, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class GridPainter extends CustomPainter {

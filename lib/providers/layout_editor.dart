@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vector_math/vector_math_64.dart'; // Add this import for Vector3
 import '../models/layouts.dart';
 import 'dart:io';
 
@@ -448,7 +449,17 @@ class LayoutEditorProvider with ChangeNotifier {
   void updateLayoutBackground(String color) {
     if (_layout == null) return;
 
+    print("Updating background color to: $color");
+
+    // Ensure color is properly formatted
+    if (!color.startsWith('#')) {
+      color = '#$color';
+    }
+
+    // Update layout background
     _layout!.backgroundColor = color;
+
+    // Force notification to all listeners
     notifyListeners();
   }
 
@@ -503,8 +514,25 @@ class LayoutEditorProvider with ChangeNotifier {
 
   // Zoom methods
   void zoom(double factor) {
-    _scale = (_scale * factor).clamp(0.1, 5.0);
-    transformationController.value = Matrix4.diagonal3Values(_scale, _scale, 1);
+    // Get current scale from transformation matrix
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+
+    // Calculate target scale
+    final targetScale = (currentScale * factor).clamp(0.1, 5.0);
+
+    // Instead of using transformationController.view (which doesn't exist),
+    // we'll use a different approach to get a focal point for zooming
+
+    // Use the current BuildContext to get the layout's current size and position
+    // For simplicity, zoom from the center of the viewport
+    final focalPoint = Offset.zero; // Default focal point
+
+    // Apply zoom with the focal point (which will be translated to the center of the viewport)
+    zoomToPosition(targetScale: targetScale, focalPoint: focalPoint);
+
+    // Update scale value for consistency
+    _scale = targetScale;
+
     notifyListeners();
   }
 
@@ -512,5 +540,130 @@ class LayoutEditorProvider with ChangeNotifier {
     _scale = 1.0;
     transformationController.value = Matrix4.identity();
     notifyListeners();
+  }
+
+  void fitToScreen(BuildContext context) {
+    if (_layout == null) return;
+
+    // Get screen size
+    final screenSize = MediaQuery.of(context).size;
+
+    // Calculate available space (accounting for panels)
+    final availableWidth =
+        screenSize.width - 580; // Adjust based on sidebars width
+    final availableHeight =
+        screenSize.height - 160; // Adjust for top and bottom bars
+
+    // Get layout dimensions
+    final canvasWidth = _layout!.width.toDouble();
+    final canvasHeight = _layout!.height.toDouble();
+
+    // Calculate the scale needed to fit the canvas in the available space
+    final scaleX = availableWidth / canvasWidth;
+    final scaleY = availableHeight / canvasHeight;
+    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.85; // 85% for margin
+
+    // Ensure the scale is reasonable
+    _scale = scale.clamp(0.1, 3.0);
+
+    // Create a new transformation matrix
+    final newMatrix = Matrix4.identity();
+
+    // Apply scale
+    newMatrix.scale(_scale, _scale, 1.0);
+
+    // Calculate translation to center the canvas in the viewport
+    final dx = (availableWidth - (canvasWidth * _scale)) / 2 / _scale;
+    final dy = (availableHeight - (canvasHeight * _scale)) / 2 / _scale;
+
+    // Apply translation
+    newMatrix.translate(dx, dy);
+
+    // Set the transformation
+    transformationController.value = newMatrix;
+
+    notifyListeners();
+  }
+
+  void zoomToPosition({
+    required double targetScale,
+    required Offset focalPoint,
+  }) {
+    // Get the current transform
+    final currentTransform = transformationController.value;
+
+    // Calculate the point before zooming
+    final beforeOffset = transformationController.toScene(focalPoint);
+
+    // Create a new transform with the new scale
+    final newTransform = Matrix4.copy(currentTransform);
+
+    // Get the current scale
+    final currentScale = _scale;
+
+    // Calculate scale change ratio
+    final scaleChange = targetScale / currentScale;
+
+    // Apply scaling
+    newTransform.scale(scaleChange, scaleChange, 1.0);
+
+    // Set the scale
+    _scale = targetScale;
+
+    // Apply the new transform to the controller
+    transformationController.value = newTransform;
+
+    // Calculate the point after zooming
+    final afterOffset = transformationController.toScene(focalPoint);
+
+    // Calculate the needed translation to keep the focal point stationary
+    final translation = afterOffset - beforeOffset;
+
+    // Apply the translation
+    final correctedTransform = Matrix4.copy(newTransform)
+      ..translate(-translation.dx, -translation.dy);
+
+    // Set the final transform
+    transformationController.value = correctedTransform;
+
+    notifyListeners();
+  }
+
+  void ensureCanvasVisible() {
+    if (_layout == null) return;
+
+    // Get the current transform matrix
+    final matrix = transformationController.value;
+
+    // Extract the translation values
+    final translationX = matrix.getTranslation().x;
+    final translationY = matrix.getTranslation().y;
+
+    // Define reasonable bounds for how far the canvas can be panned
+    const maxPanDistance =
+        1500.0; // Maximum distance canvas center can be from viewport center
+
+    // Check if canvas is too far out of view and adjust if needed
+    bool needsRepositioning = false;
+    double adjustedX = translationX;
+    double adjustedY = translationY;
+
+    // Limit how far the canvas can be panned in each direction
+    if (translationX.abs() > maxPanDistance) {
+      adjustedX = translationX.sign * maxPanDistance;
+      needsRepositioning = true;
+    }
+
+    if (translationY.abs() > maxPanDistance) {
+      adjustedY = translationY.sign * maxPanDistance;
+      needsRepositioning = true;
+    }
+
+    // Apply corrected position if needed
+    if (needsRepositioning) {
+      final correctedMatrix = Matrix4.copy(matrix);
+      correctedMatrix.setTranslation(Vector3(adjustedX, adjustedY, 0));
+      transformationController.value = correctedMatrix;
+    }
   }
 }
