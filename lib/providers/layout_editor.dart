@@ -561,26 +561,38 @@ class LayoutEditorProvider with ChangeNotifier {
     // Calculate the scale needed to fit the canvas in the available space
     final scaleX = availableWidth / canvasWidth;
     final scaleY = availableHeight / canvasHeight;
-    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.85; // 85% for margin
+
+    // Use the smaller scale to ensure entire canvas is visible
+    final newScale =
+        (scaleX < scaleY ? scaleX : scaleY) * 0.9; // 90% for margin
 
     // Ensure the scale is reasonable
-    _scale = scale.clamp(0.1, 3.0);
+    _scale = newScale.clamp(0.1, 3.0);
 
-    // Create a new transformation matrix
-    final newMatrix = Matrix4.identity();
+    // Calculate center of the canvas in user coordinates
+    final centerX = canvasWidth / 2;
+    final centerY = canvasHeight / 2;
 
-    // Apply scale
-    newMatrix.scale(_scale, _scale, 1.0);
+    // Calculate center of the viewport in screen coordinates
+    final viewportCenterX = availableWidth / 2;
+    final viewportCenterY = availableHeight / 2;
 
-    // Calculate translation to center the canvas in the viewport
-    final dx = (availableWidth - (canvasWidth * _scale)) / 2 / _scale;
-    final dy = (availableHeight - (canvasHeight * _scale)) / 2 / _scale;
+    // Create a transformation that:
+    // 1. Scales with the calculated scale
+    // 2. Positions the canvas center at the viewport center
+    final matrix =
+        Matrix4.identity()
+          ..scale(_scale)
+          ..setTranslation(
+            Vector3(
+              viewportCenterX / _scale - centerX,
+              viewportCenterY / _scale - centerY,
+              0.0,
+            ),
+          );
 
-    // Apply translation
-    newMatrix.translate(dx, dy);
-
-    // Set the transformation
-    transformationController.value = newMatrix;
+    // Apply the transformation
+    transformationController.value = matrix;
 
     notifyListeners();
   }
@@ -592,39 +604,30 @@ class LayoutEditorProvider with ChangeNotifier {
     // Get the current transform
     final currentTransform = transformationController.value;
 
-    // Calculate the point before zooming
-    final beforeOffset = transformationController.toScene(focalPoint);
+    // Get the current scale directly from the matrix for accuracy
+    final currentScale = currentTransform.getMaxScaleOnAxis();
 
-    // Create a new transform with the new scale
-    final newTransform = Matrix4.copy(currentTransform);
+    // Calculate the point in scene coordinates before zooming
+    final focalPointScene = transformationController.toScene(focalPoint);
 
-    // Get the current scale
-    final currentScale = _scale;
-
-    // Calculate scale change ratio
+    // Calculate the scale change
     final scaleChange = targetScale / currentScale;
 
-    // Apply scaling
-    newTransform.scale(scaleChange, scaleChange, 1.0);
+    // Create a transformation matrix for this zoom operation
+    final zoomMatrix =
+        Matrix4.identity()
+          ..translate(focalPointScene.dx, focalPointScene.dy)
+          ..scale(scaleChange)
+          ..translate(-focalPointScene.dx, -focalPointScene.dy);
 
-    // Set the scale
+    // Apply the zoom transformation to the current matrix
+    final newMatrix = currentTransform * zoomMatrix;
+
+    // Update the transform controller with the new matrix
+    transformationController.value = newMatrix;
+
+    // Update the scale value
     _scale = targetScale;
-
-    // Apply the new transform to the controller
-    transformationController.value = newTransform;
-
-    // Calculate the point after zooming
-    final afterOffset = transformationController.toScene(focalPoint);
-
-    // Calculate the needed translation to keep the focal point stationary
-    final translation = afterOffset - beforeOffset;
-
-    // Apply the translation
-    final correctedTransform = Matrix4.copy(newTransform)
-      ..translate(-translation.dx, -translation.dy);
-
-    // Set the final transform
-    transformationController.value = correctedTransform;
 
     notifyListeners();
   }
@@ -632,23 +635,23 @@ class LayoutEditorProvider with ChangeNotifier {
   void ensureCanvasVisible() {
     if (_layout == null) return;
 
-    // Get the current transform matrix
+    // Get the current matrix
     final matrix = transformationController.value;
 
-    // Extract the translation values
-    final translationX = matrix.getTranslation().x;
-    final translationY = matrix.getTranslation().y;
+    // Extract the translation values (avoid calling getTranslation() which can have precision issues)
+    final translationX = matrix.entry(0, 3);
+    final translationY = matrix.entry(1, 3);
 
-    // Define reasonable bounds for how far the canvas can be panned
-    const maxPanDistance =
-        1500.0; // Maximum distance canvas center can be from viewport center
+    // Define reasonable bounds with proper scaling
+    final scale = matrix.getMaxScaleOnAxis();
+    final maxPanDistance = 3000.0 / scale; // Scale-aware boundaries
 
     // Check if canvas is too far out of view and adjust if needed
     bool needsRepositioning = false;
     double adjustedX = translationX;
     double adjustedY = translationY;
 
-    // Limit how far the canvas can be panned in each direction
+    // Apply smoother limits to avoid jumpy behavior
     if (translationX.abs() > maxPanDistance) {
       adjustedX = translationX.sign * maxPanDistance;
       needsRepositioning = true;
@@ -659,10 +662,13 @@ class LayoutEditorProvider with ChangeNotifier {
       needsRepositioning = true;
     }
 
-    // Apply corrected position if needed
+    // Apply corrected position if needed with minimal change
     if (needsRepositioning) {
-      final correctedMatrix = Matrix4.copy(matrix);
-      correctedMatrix.setTranslation(Vector3(adjustedX, adjustedY, 0));
+      final correctedMatrix =
+          Matrix4.copy(matrix)
+            ..setEntry(0, 3, adjustedX)
+            ..setEntry(1, 3, adjustedY);
+
       transformationController.value = correctedMatrix;
     }
   }

@@ -21,8 +21,6 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
   bool _isMiddleMousePanning = false;
   Offset _middleMouseStartPoint = Offset.zero;
   Matrix4 _previousTransform = Matrix4.identity();
-  static const double _zoomSensitivity =
-      0.001; // Adjust sensitivity for better control
 
   // Add a key for the InteractiveViewer
   final _interactiveViewerKey = GlobalKey();
@@ -70,12 +68,16 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
           // Calculate the difference between current and start positions
           final delta = event.position - _middleMouseStartPoint;
 
+          // To avoid floating point issues, round small deltas to zero
+          final dx = delta.dx.abs() < 0.01 ? 0.0 : delta.dx;
+          final dy = delta.dy.abs() < 0.01 ? 0.0 : delta.dy;
+
           // Create a new transform by applying the translation
           final newTransform = Matrix4.copy(_previousTransform);
-          newTransform.translate(
-            delta.dx / editorProvider.scale,
-            delta.dy / editorProvider.scale,
-          );
+
+          // Apply the translation with better scaling
+          final scale = editorProvider.scale;
+          newTransform.translate(dx / scale, dy / scale);
 
           // Apply the new transform
           editorProvider.transformationController.value = newTransform;
@@ -94,18 +96,23 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
           // Don't handle zoom if it's a horizontal scroll
           if (event.scrollDelta.dy == 0) return;
 
-          // Calculate new scale factor
-          final currentScale = editorProvider.scale;
-          final scaleFactor = 1.0 - (event.scrollDelta.dy * _zoomSensitivity);
-          final targetScale = (currentScale * scaleFactor).clamp(0.1, 5.0);
+          // Get current scale for smoother transitions
+          final currentScale =
+              editorProvider.transformationController.value.getMaxScaleOnAxis();
 
-          // Get the pointer's position on screen
-          final position = event.localPosition;
+          // Calculate zoom factor with improved control
+          // Using fixed ratios instead of dynamic calculation for more predictable behavior
+          final zoomFactor = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+
+          // Calculate target scale with proper constraints
+          final targetScale = (currentScale * zoomFactor).clamp(0.1, 5.0);
 
           // Apply zoom centered on mouse position
-          editorProvider.zoomToPosition(
-            targetScale: targetScale,
-            focalPoint: position,
+          _applyZoomWithBetterPrecision(
+            editorProvider,
+            targetScale,
+            event.localPosition,
+            currentScale,
           );
 
           // Ensure canvas stays in view after zooming
@@ -280,6 +287,39 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
         ),
       ),
     );
+  }
+
+  // New method for better zoom precision
+  void _applyZoomWithBetterPrecision(
+    LayoutEditorProvider provider,
+    double targetScale,
+    Offset focalPoint,
+    double currentScale,
+  ) {
+    // Get the current matrix
+    final matrix = provider.transformationController.value;
+
+    // Convert the focal point to scene coordinates before scaling
+    final focalPointScene = provider.transformationController.toScene(
+      focalPoint,
+    );
+
+    // Create a new matrix for this transformation
+    final newMatrix =
+        Matrix4.identity()
+          ..setTranslationRaw(0, 0, 0)
+          ..translate(focalPointScene.dx, focalPointScene.dy)
+          ..scale(targetScale / currentScale)
+          ..translate(-focalPointScene.dx, -focalPointScene.dy);
+
+    // Combine the matrices using multiplication
+    final combinedMatrix = matrix * newMatrix;
+
+    // Update the controller with the new matrix
+    provider.transformationController.value = combinedMatrix;
+
+    // Update provider's scale value
+    provider.setScale(targetScale);
   }
 
   Color _hexToColor(String hexColor) {
