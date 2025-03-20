@@ -73,6 +73,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
+  emoji_picker_flutter:
+    dependency: transitive
+    description:
+      name: emoji_picker_flutter
+      sha256: "9a44c102079891ea5877f78c70f2e3c6e9df7b7fe0a01757d31f1046eeaa016d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.3.0"
   fake_async:
     dependency: transitive
     description:
@@ -136,14 +144,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  gif:
-    dependency: "direct main"
-    description:
-      name: gif
-      sha256: ade95694f1471da737922806818ffade2814d1d7f8d10af38ebcf36ace012bc0
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.0"
   http:
     dependency: transitive
     description:
@@ -296,6 +296,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.1"
+  pro_image_editor:
+    dependency: "direct main"
+    description:
+      name: pro_image_editor
+      sha256: "7351c3f0c50f25eebd61dcc8b0a5905b7e089c4264e8b005e49f47f2ba8ba409"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.0.5"
   provider:
     dependency: "direct main"
     description:
@@ -397,6 +405,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  system_fonts:
+    dependency: "direct main"
+    description:
+      name: system_fonts
+      sha256: c220ca03cba3b510c7fa6cd8aa56f9b77c1649909cec6b99648f5201117e8914
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   term_glyph:
     dependency: transitive
     description:
@@ -421,6 +437,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  universal_io:
+    dependency: transitive
+    description:
+      name: universal_io
+      sha256: "1722b2dcc462b4b2f3ee7d188dad008b6eb4c40bbd03a3de451d82c78bba9aad"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.2"
   vector_math:
     dependency: transitive
     description:
@@ -471,4 +495,4 @@ packages:
     version: "6.5.0"
 sdks:
   dart: ">=3.7.2 <4.0.0"
-  flutter: ">=3.27.0"
+  flutter: ">=3.29.0"
