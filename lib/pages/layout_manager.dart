@@ -238,13 +238,13 @@ class LayoutCard extends StatelessWidget {
 }
 
 class CreateLayoutDialog extends StatefulWidget {
-  const CreateLayoutDialog({Key? key}) : super(key: key);
+  const CreateLayoutDialog({super.key});
 
   @override
-  State<CreateLayoutDialog> createState() => _CreateLayoutDialogState();
+  State<CreateLayoutDialog> createState() => CreateLayoutDialogState();
 }
 
-class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
+class CreateLayoutDialogState extends State<CreateLayoutDialog> {
   final _formKey = GlobalKey<FormState>();
   String _name = '';
   int _width = 1200; // Default to 4R size
@@ -255,79 +255,79 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
   final List<Map<String, dynamic>> _templates = [
     {
       'name': '4R',
-      'description': '4 × 6 inches',
-      'width': 1200, // 4 inches × 300 DPI
-      'height': 1800, // 6 inches × 300 DPI
+      'description': '4 x 6 inches',
+      'width': 1200, // 4 inches x 300 DPI
+      'height': 1800, // 6 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': '5R',
-      'description': '5 × 7 inches',
-      'width': 1500, // 5 inches × 300 DPI
-      'height': 2100, // 7 inches × 300 DPI
+      'description': '5 x 7 inches',
+      'width': 1500, // 5 inches x 300 DPI
+      'height': 2100, // 7 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': '6R',
-      'description': '6 × 8 inches',
-      'width': 1800, // 6 inches × 300 DPI
-      'height': 2400, // 8 inches × 300 DPI
+      'description': '6 x 8 inches',
+      'width': 1800, // 6 inches x 300 DPI
+      'height': 2400, // 8 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': '8R',
-      'description': '8 × 10 inches',
-      'width': 2400, // 8 inches × 300 DPI
-      'height': 3000, // 10 inches × 300 DPI
+      'description': '8 x 10 inches',
+      'width': 2400, // 8 inches x 300 DPI
+      'height': 3000, // 10 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': 'S8R',
-      'description': '8 × 12 inches',
-      'width': 2400, // 8 inches × 300 DPI
-      'height': 3600, // 12 inches × 300 DPI
+      'description': '8 x 12 inches',
+      'width': 2400, // 8 inches x 300 DPI
+      'height': 3600, // 12 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': '10R',
-      'description': '10 × 12 inches',
-      'width': 3000, // 10 inches × 300 DPI
-      'height': 3600, // 12 inches × 300 DPI
+      'description': '10 x 12 inches',
+      'width': 3000, // 10 inches x 300 DPI
+      'height': 3600, // 12 inches x 300 DPI
       'icon': Icons.photo_size_select_actual,
     },
     {
       'name': '12R',
-      'description': '12 × 16 inches',
-      'width': 3600, // 12 inches × 300 DPI
-      'height': 4800, // 16 inches × 300 DPI
+      'description': '12 x 16 inches',
+      'width': 3600, // 12 inches x 300 DPI
+      'height': 4800, // 16 inches x 300 DPI
       'icon': Icons.photo_size_select_large,
     },
     {
       'name': 'A4',
-      'description': '8.3 × 11.7 inches',
-      'width': 2480, // 8.3 inches × 300 DPI (rounded)
-      'height': 3508, // 11.7 inches × 300 DPI (rounded)
+      'description': '8.3 x 11.7 inches',
+      'width': 2480, // 8.3 inches x 300 DPI (rounded)
+      'height': 3508, // 11.7 inches x 300 DPI (rounded)
       'icon': Icons.description,
     },
     {
       'name': 'Square',
-      'description': '8 × 8 inches',
-      'width': 2400, // 8 inches × 300 DPI
-      'height': 2400, // 8 inches × 300 DPI
+      'description': '8 x 8 inches',
+      'width': 2400, // 8 inches x 300 DPI
+      'height': 2400, // 8 inches x 300 DPI
       'icon': Icons.crop_square,
     },
     {
       'name': 'Portrait',
-      'description': '8 × 10 inches',
-      'width': 2400, // 8 inches × 300 DPI
-      'height': 3000, // 10 inches × 300 DPI
+      'description': '8 x 10 inches',
+      'width': 2400, // 8 inches x 300 DPI
+      'height': 3000, // 10 inches x 300 DPI
       'icon': Icons.crop_portrait,
     },
     {
       'name': 'Landscape',
-      'description': '10 × 8 inches',
-      'width': 3000, // 10 inches × 300 DPI
-      'height': 2400, // 8 inches × 300 DPI
+      'description': '10 x 8 inches',
+      'width': 3000, // 10 inches x 300 DPI
+      'height': 2400, // 8 inches x 300 DPI
       'icon': Icons.crop_landscape,
     },
   ];
@@ -569,7 +569,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                 color:
                     isSelected
                         ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surfaceVariant,
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color:
@@ -741,7 +741,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                 children: [
                   const TextSpan(text: 'Selected: '),
                   TextSpan(
-                    text: '$_width × $_height px',
+                    text: '$_width x $_height px',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -801,7 +801,9 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                       color:
                           isSelected
                               ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context).colorScheme.surfaceVariant,
+                              : Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color:
@@ -848,7 +850,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                           ),
                         if (!isLowHeight) const SizedBox(height: 4),
                         Text(
-                          '${template['width']} × ${template['height']} px',
+                          '${template['width']} x ${template['height']} px',
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(fontSize: isLowHeight ? 10 : null),
@@ -995,7 +997,7 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -1004,17 +1006,17 @@ class _CreateLayoutDialogState extends State<CreateLayoutDialog> {
                 const Text('Selected Resolution'),
                 const SizedBox(height: 4),
                 Text(
-                  '$_width × $_height pixels (300 DPI)',
+                  '$_width x $_height pixels (300 DPI)',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 if (!isLowHeight) ...[
                   const SizedBox(height: 8),
                   Text(
-                    '${(_width / 300).toStringAsFixed(1)} × ${(_height / 300).toStringAsFixed(1)} inches',
+                    '${(_width / 300).toStringAsFixed(1)} x ${(_height / 300).toStringAsFixed(1)} inches',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   Text(
-                    '${(_width / 118.11).toStringAsFixed(1)} × ${(_height / 118.11).toStringAsFixed(1)} cm',
+                    '${(_width / 118.11).toStringAsFixed(1)} x ${(_height / 118.11).toStringAsFixed(1)} cm',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -1037,13 +1039,17 @@ class EditLayoutDialog extends StatefulWidget {
   final Layouts layout;
   final int index;
 
-  const EditLayoutDialog({required this.layout, required this.index});
+  const EditLayoutDialog({
+    super.key,
+    required this.layout,
+    required this.index,
+  });
 
   @override
-  _EditLayoutDialogState createState() => _EditLayoutDialogState();
+  EditLayoutDialogState createState() => EditLayoutDialogState();
 }
 
-class _EditLayoutDialogState extends State<EditLayoutDialog> {
+class EditLayoutDialogState extends State<EditLayoutDialog> {
   final _formKey = GlobalKey<FormState>();
   late String _name;
   late String _basePhoto;
