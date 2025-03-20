@@ -1,14 +1,35 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
+enum SortOrder { newest, oldest }
+
 class StartEventProvider with ChangeNotifier {
   List<File> _compositeImages = [];
+  SortOrder _sortOrder = SortOrder.newest;
 
   List<File> get compositeImages => _compositeImages;
+  SortOrder get sortOrder => _sortOrder;
 
   bool _isLoading = false;
-
   bool get isLoading => _isLoading;
+
+  void setSortOrder(SortOrder order) {
+    _sortOrder = order;
+    _sortImages();
+    notifyListeners();
+  }
+
+  void _sortImages() {
+    if (_sortOrder == SortOrder.newest) {
+      _compositeImages.sort(
+        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+      );
+    } else {
+      _compositeImages.sort(
+        (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
+      );
+    }
+  }
 
   Future<void> loadCompositeImages(String uploadFolder) async {
     _isLoading = true;
@@ -25,12 +46,10 @@ class StartEventProvider with ChangeNotifier {
           images.add(file);
         }
       }
-      images.sort(
-        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
-      );
-    }
 
-    _compositeImages = images;
+      _compositeImages = images;
+      _sortImages();
+    }
 
     _isLoading = false;
     notifyListeners();

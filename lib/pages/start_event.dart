@@ -80,6 +80,34 @@ class _StartEventState extends State<StartEvent> {
             },
             child: Column(
               children: [
+                // Sort dropdown
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const Text('Sort by: '),
+                      DropdownButton<SortOrder>(
+                        value: startEventProvider.sortOrder,
+                        items: const [
+                          DropdownMenuItem(
+                            value: SortOrder.newest,
+                            child: Text('Newest First'),
+                          ),
+                          DropdownMenuItem(
+                            value: SortOrder.oldest,
+                            child: Text('Oldest First'),
+                          ),
+                        ],
+                        onChanged: (SortOrder? newValue) {
+                          if (newValue != null) {
+                            startEventProvider.setSortOrder(newValue);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () => _refreshCompositeImages(context),
