@@ -16,9 +16,19 @@ class MainMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Photobooth')),
-      body: Column(
+      body: ListView(
         children: [
-          Expanded(
+          // Events section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Events',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ),
+          Container(
+            height:
+                MediaQuery.of(context).size.height * 0.6, // Adjust as needed
             child: FutureBuilder(
               future:
                   Provider.of<EventsProvider>(
@@ -37,93 +47,106 @@ class MainMenu extends StatelessWidget {
                         );
                       } else {
                         return ListView.builder(
+                          shrinkWrap: true,
+                          physics: NeverScrollableScrollPhysics(),
                           itemCount: eventsProvider.events.length,
                           itemBuilder: (context, index) {
                             final event = eventsProvider.events[index];
-                            return ListTile(
-                              title: Text(event.name),
-                              subtitle: Text(event.description),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.visibility),
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) =>
-                                                  EventDetail(event: event),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) {
-                                          return EditEventDialog(
-                                            event: event,
-                                            index: index,
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) {
-                                          return AlertDialog(
-                                            title: const Text('Confirm Delete'),
-                                            content: const Text(
-                                              'Are you sure you want to delete this event?',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () {
-                                                  Navigator.of(context).pop();
-                                                },
-                                                child: const Text('Cancel'),
+                            return Card(
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 8.0,
+                              ),
+                              child: ListTile(
+                                title: Text(event.name),
+                                subtitle: Text(event.description),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.visibility),
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder:
+                                                (context) =>
+                                                    EventDetail(event: event),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) {
+                                            return EditEventDialog(
+                                              event: event,
+                                              index: index,
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) {
+                                            return AlertDialog(
+                                              title: const Text(
+                                                'Confirm Delete',
                                               ),
-                                              TextButton(
-                                                onPressed: () {
-                                                  Provider.of<EventsProvider>(
-                                                    context,
-                                                    listen: false,
-                                                  ).removeEvent(index);
-                                                  Navigator.of(context).pop();
-                                                },
-                                                child: const Text('Delete'),
+                                              content: const Text(
+                                                'Are you sure you want to delete this event?',
                                               ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.play_arrow),
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder:
-                                              (
-                                                context,
-                                              ) => ChangeNotifierProvider(
-                                                create:
-                                                    (_) => StartEventProvider(),
-                                                child: StartEvent(event: event),
-                                              ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () {
+                                                    Navigator.of(context).pop();
+                                                  },
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () {
+                                                    Provider.of<EventsProvider>(
+                                                      context,
+                                                      listen: false,
+                                                    ).removeEvent(index);
+                                                    Navigator.of(context).pop();
+                                                  },
+                                                  child: const Text('Delete'),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.play_arrow),
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder:
+                                                (
+                                                  context,
+                                                ) => ChangeNotifierProvider(
+                                                  create:
+                                                      (_) =>
+                                                          StartEventProvider(),
+                                                  child: StartEvent(
+                                                    event: event,
+                                                  ),
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
@@ -135,24 +158,50 @@ class MainMenu extends StatelessWidget {
               },
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const LayoutManager()),
-              );
-            },
-            child: const Text('Manage Layouts'),
+
+          // Actions section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Actions',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) {
-                  return AddEventDialog();
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Card(
+              child: ListTile(
+                leading: Icon(Icons.photo_library),
+                title: Text('Manage Layouts'),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LayoutManager(),
+                    ),
+                  );
                 },
-              );
-            },
-            child: const Text('Add Event'),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Card(
+              child: ListTile(
+                leading: Icon(Icons.add),
+                title: Text('Add Event'),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AddEventDialog();
+                    },
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
