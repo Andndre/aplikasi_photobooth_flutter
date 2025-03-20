@@ -184,7 +184,7 @@ class ToolbarContainer extends StatelessWidget {
     final editorProvider = Provider.of<LayoutEditorProvider>(context);
 
     return Container(
-      height: 56,
+      height: 80,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: const BorderRadius.only(
