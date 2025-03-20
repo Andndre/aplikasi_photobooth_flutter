@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import '../models/event.dart';
 import '../providers/events.dart';
 import '../providers/layouts.dart';

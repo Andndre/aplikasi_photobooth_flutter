@@ -71,11 +71,6 @@ class SesiFotoProvider with ChangeNotifier {
       FindWindowEx(0, 0, nullptr, TEXT('aplikasi_photobooth_flutter')),
     );
 
-    // Ensure the focus is set back to the application
-    // await Future.delayed(const Duration(milliseconds: 300));
-    // FocusScope.of(context).requestFocus(FocusNode());
-    // FocusScope.of(context).requestFocus(FocusNode());
-
     print("Foto disimpan. Jumlah foto: ${_takenPhotos.length}");
 
     // If all photos are taken, copy them to the upload folder and create composite image and GIF
