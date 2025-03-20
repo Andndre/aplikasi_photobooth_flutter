@@ -1,3 +1,4 @@
+import 'package:aplikasi_photobooth_flutter/pages/layout_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -106,6 +107,18 @@ class LayoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Find background image (if any) from elements
+    String backgroundImagePath = '';
+    for (var element in layout.elements) {
+      if (element.type == 'image') {
+        backgroundImagePath = (element as ImageElement).path;
+        break;
+      }
+    }
+
+    // Count camera spots
+    int cameraSpots = layout.elements.where((e) => e.type == 'camera').length;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 4,
@@ -118,11 +131,11 @@ class LayoutCard extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                layout.basePhoto.isNotEmpty &&
-                        File(layout.basePhoto).existsSync()
-                    ? Image.file(File(layout.basePhoto), fit: BoxFit.cover)
+                backgroundImagePath.isNotEmpty &&
+                        File(backgroundImagePath).existsSync()
+                    ? Image.file(File(backgroundImagePath), fit: BoxFit.cover)
                     : Container(
-                      color: Colors.grey.shade300,
+                      color: _hexToColor(layout.backgroundColor),
                       child: const Icon(Icons.image_not_supported, size: 48),
                     ),
                 Positioned(
@@ -164,7 +177,7 @@ class LayoutCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'ID: ${layout.id} • ${layout.coordinates.length} spots',
+                  'ID: ${layout.id} • ${cameraSpots > 0 ? "$cameraSpots photo spots" : "No photo spots"}',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 8),
@@ -174,14 +187,15 @@ class LayoutCard extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.edit, size: 20),
                       onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return EditLayoutDialog(
-                              layout: layout,
-                              index: index,
-                            );
-                          },
+                        // Navigate directly to the layout editor
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (context) => LayoutEditor(
+                                  layout: layout,
+                                  layoutIndex: index,
+                                ),
+                          ),
                         );
                       },
                       tooltip: 'Edit',
@@ -234,6 +248,17 @@ class LayoutCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Helper method to convert hex color string to Color
+  Color _hexToColor(String hexColor) {
+    if (hexColor == 'transparent') return Colors.transparent;
+
+    hexColor = hexColor.replaceAll('#', '');
+    if (hexColor.length == 6) {
+      hexColor = 'FF$hexColor';
+    }
+    return Color(int.parse(hexColor, radix: 16));
   }
 }
 
@@ -454,43 +479,7 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
               SizedBox(height: isLowHeight ? 8.0 : 16.0),
 
               // Dialog buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        _formKey.currentState!.save();
-
-                        // Create a new layout with the specified dimensions
-                        final newLayout = Layouts(
-                          name: _name,
-                          basePhoto: '', // Will be set later in the editor
-                          id: 0, // ID will be set by the provider
-                          coordinates: [], // Coordinates will be added later
-                          width: _width,
-                          height: _height,
-                        );
-
-                        Provider.of<LayoutsProvider>(
-                          context,
-                          listen: false,
-                        ).addLayout(newLayout);
-
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: const Text('Create Layout'),
-                  ),
-                ],
-              ),
+              _buildDialogButtons(),
             ],
           ),
         ),
@@ -1159,336 +1148,65 @@ class CreateLayoutDialogState extends State<CreateLayoutDialog> {
       ],
     );
   }
-}
 
-class EditLayoutDialog extends StatefulWidget {
-  final Layouts layout;
-  final int index;
-
-  const EditLayoutDialog({
-    super.key,
-    required this.layout,
-    required this.index,
-  });
-
-  @override
-  EditLayoutDialogState createState() => EditLayoutDialogState();
-}
-
-class EditLayoutDialogState extends State<EditLayoutDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late String _name;
-  late String _basePhoto;
-  late String _coordinatesText;
-  late int _width;
-  late int _height;
-  final TextEditingController _widthController = TextEditingController();
-  final TextEditingController _heightController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _name = widget.layout.name;
-    _basePhoto = widget.layout.basePhoto;
-    _coordinatesText = widget.layout.coordinates
-        .map((coord) => coord.join(', '))
-        .join('\n');
-    _width = widget.layout.width;
-    _height = widget.layout.height;
-    _widthController.text = _width.toString();
-    _heightController.text = _height.toString();
-
-    _widthController.addListener(_updateFromControllers);
-    _heightController.addListener(_updateFromControllers);
-  }
-
-  @override
-  void dispose() {
-    _widthController.dispose();
-    _heightController.dispose();
-    super.dispose();
-  }
-
-  void _updateFromControllers() {
-    setState(() {
-      _width = int.tryParse(_widthController.text) ?? _width;
-      _height = int.tryParse(_heightController.text) ?? _height;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.6,
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Dialog header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Edit Layout',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Form fields in scrollable area
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextFormField(
-                        initialValue: _name,
-                        decoration: const InputDecoration(
-                          labelText: 'Name',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a layout name';
-                          }
-                          return null;
-                        },
-                        onSaved: (value) {
-                          _name = value!;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Resolution
-                      Text(
-                        'Resolution',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _widthController,
-                              decoration: const InputDecoration(
-                                labelText: 'Width',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                final number = int.tryParse(value);
-                                if (number == null || number <= 0) {
-                                  return 'Invalid';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _heightController,
-                              decoration: const InputDecoration(
-                                labelText: 'Height',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                final number = int.tryParse(value);
-                                if (number == null || number <= 0) {
-                                  return 'Invalid';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Base photo selection
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          FilePickerResult? result = await FilePicker.platform
-                              .pickFiles(
-                                type: FileType.custom,
-                                allowedExtensions: ['png', 'jpg', 'jpeg'],
-                              );
-                          if (result != null &&
-                              result.files.single.path != null) {
-                            setState(() {
-                              _basePhoto = result.files.single.path!;
-                            });
-                          }
-                        },
-                        icon: const Icon(Icons.photo_library),
-                        label: const Text('Select Base Photo'),
-                      ),
-
-                      if (_basePhoto.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          height: 150,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child:
-                                    File(_basePhoto).existsSync()
-                                        ? Image.file(
-                                          File(_basePhoto),
-                                          fit: BoxFit.contain,
-                                        )
-                                        : const Center(
-                                          child: Text('Image not found'),
-                                        ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black54,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _basePhoto = '';
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      const SizedBox(height: 16),
-
-                      // Coordinates
-                      Text(
-                        'Coordinates',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        initialValue: _coordinatesText,
-                        decoration: const InputDecoration(
-                          labelText:
-                              'Format: x, y, width, height (one per line)',
-                          hintText: '100, 100, 400, 300\n600, 100, 400, 300',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          alignLabelWithHint: true,
-                        ),
-                        maxLines: 5,
-                        onSaved: (value) {
-                          _coordinatesText = value!;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Note: In the future, we will provide a visual editor to place and resize photo spots.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Dialog buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        _formKey.currentState!.save();
-
-                        // Parse coordinates from text
-                        final coordinates =
-                            _coordinatesText.isEmpty
-                                ? <List<int>>[]
-                                : _coordinatesText.split('\n').map((line) {
-                                  final parts =
-                                      line
-                                          .split(',')
-                                          .map(
-                                            (part) =>
-                                                int.tryParse(part.trim()) ?? 0,
-                                          )
-                                          .toList();
-
-                                  // Ensure each coordinate has 4 values (x, y, width, height)
-                                  while (parts.length < 4) {
-                                    parts.add(0);
-                                  }
-
-                                  return parts;
-                                }).toList();
-
-                        final updatedLayout = Layouts(
-                          name: _name,
-                          basePhoto: _basePhoto,
-                          id: widget.layout.id,
-                          coordinates: coordinates,
-                          width: _width,
-                          height: _height,
-                        );
-
-                        Provider.of<LayoutsProvider>(
-                          context,
-                          listen: false,
-                        ).editLayout(widget.index, updatedLayout);
-
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: const Text('Save Changes'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+  Widget _buildDialogButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text('Cancel'),
         ),
-      ),
+        const SizedBox(width: 16),
+        ElevatedButton(
+          onPressed: () => _createAndNavigateToEditor(context),
+          child: const Text('Create Layout'),
+        ),
+      ],
     );
+  }
+
+  Future<void> _createAndNavigateToEditor(BuildContext context) async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+
+      // Create a new layout with the specified dimensions
+      final newLayout = Layouts(
+        name: _name,
+        id: 0, // ID will be set by the provider
+        width: _width,
+        height: _height,
+        backgroundColor: '#FFFFFF',
+        elements: [], // Empty elements list for new layout
+      );
+
+      final layoutsProvider = Provider.of<LayoutsProvider>(
+        context,
+        listen: false,
+      );
+
+      await layoutsProvider.addLayout(newLayout);
+
+      // Find the index of the newly added layout
+      final index = layoutsProvider.layouts.length - 1;
+
+      if (context.mounted) {
+        // Close dialog and navigate to editor
+        Navigator.of(context).pop();
+
+        // Navigate to layout editor
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder:
+                (context) => LayoutEditor(
+                  layout: layoutsProvider.layouts[index],
+                  layoutIndex: index,
+                ),
+          ),
+        );
+      }
+    }
   }
 }

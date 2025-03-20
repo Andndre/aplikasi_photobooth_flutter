@@ -38,19 +38,19 @@ class SesiFotoState extends State<SesiFoto> {
             body: CallbackShortcuts(
               bindings: <ShortcutActivator, VoidCallback>{
                 const SingleActivator(LogicalKeyboardKey.enter): () async {
-                  if (_photoCount <= layout.coordinates.length) {
-                    await sesiFotoProvider.takePhoto(
-                      widget.event.saveFolder,
-                      widget.event.uploadFolder,
-                      widget.event.name,
-                      layout.coordinates,
-                      layout.basePhoto,
-                      context,
-                    );
-                    setState(() {
-                      _photoCount++;
-                    });
-                  }
+                  // if (_photoCount <= layout.coordinates.length) {
+                  //   await sesiFotoProvider.takePhoto(
+                  //     widget.event.saveFolder,
+                  //     widget.event.uploadFolder,
+                  //     widget.event.name,
+                  //     layout.coordinates,
+                  //     layout.basePhoto,
+                  //     context,
+                  //   );
+                  //   setState(() {
+                  //     _photoCount++;
+                  //   });
+                  // }
                 },
               },
               child: Focus(
