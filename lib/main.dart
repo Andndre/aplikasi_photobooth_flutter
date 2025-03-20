@@ -1,4 +1,5 @@
 import 'package:aplikasi_photobooth_flutter/pages/main_menu.dart';
+import 'package:aplikasi_photobooth_flutter/providers/settings.dart';
 import 'package:aplikasi_photobooth_flutter/providers/start_event.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,14 +23,27 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LayoutsProvider()),
         ChangeNotifierProvider(create: (_) => StartEventProvider()),
         ChangeNotifierProvider(create: (_) => SesiFotoProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
-      child: MaterialApp(
-        title: 'Flutter Demo',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        ),
-        home: const MainMenu(),
-        debugShowCheckedModeBanner: false,
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, child) {
+          return MaterialApp(
+            title: 'Photobooth',
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.deepPurple,
+                brightness: Brightness.dark,
+              ),
+            ),
+            themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            home: const MainMenu(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }

@@ -48,4 +48,12 @@ class Event {
       listen: false,
     ).layouts.firstWhere((layout) => layout.id == layoutId);
   }
+
+  bool hasValidLayout(BuildContext context) {
+    final layoutsProvider = Provider.of<LayoutsProvider>(
+      context,
+      listen: false,
+    );
+    return layoutsProvider.layouts.any((layout) => layout.id == layoutId);
+  }
 }
