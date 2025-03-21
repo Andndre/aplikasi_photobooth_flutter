@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/gestures.dart'; // Add this for pointer signals
+import 'package:flutter/gestures.dart';
 import 'dart:math';
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 import './element_widget.dart';
-// Rename the import to avoid naming conflict with Flutter's SelectionOverlay
 import './selection_overlay.dart' as custom_overlay;
 
 class CanvasWorkspace extends StatefulWidget {

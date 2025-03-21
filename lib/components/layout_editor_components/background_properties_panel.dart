@@ -28,7 +28,7 @@ class BackgroundPropertiesPanel extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.all(12),
-            color: Theme.of(context).colorScheme.surfaceVariant,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Row(
               children: [
                 const Icon(Icons.crop_square),
@@ -122,7 +122,8 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                               // Handle selected color
                               if (resultColor != null) {
                                 final colorHex =
-                                    '#${resultColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+                                    // '#${resultColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+                                    '#${resultColor.toHexString()}';
                                 print('New background color: $colorHex');
                                 editorProvider.updateLayoutBackground(colorHex);
                               }
