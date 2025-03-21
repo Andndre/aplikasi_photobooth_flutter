@@ -180,6 +180,30 @@ class LayerItem extends StatelessWidget {
     );
   }
 
+  Future<List<String>> _loadSystemFonts() async {
+    // Default fonts as fallback
+    List<String> fonts = [
+      'Arial',
+      'Helvetica',
+      'Times New Roman',
+      'Courier',
+      'Verdana',
+    ];
+
+    try {
+      // Try to load system fonts
+      final systemFonts = await SystemFonts.getAvailableFonts();
+      fonts = [...fonts, ...systemFonts];
+
+      // Remove duplicates and sort
+      fonts = fonts.toSet().toList()..sort();
+    } catch (e) {
+      print('Error loading system fonts: $e');
+    }
+
+    return fonts;
+  }
+
   void _editTextElement(
     BuildContext context,
     LayoutEditorProvider editorProvider,
@@ -188,19 +212,13 @@ class LayerItem extends StatelessWidget {
     final TextEditingController textController = TextEditingController(
       text: element.text,
     );
+    final TextEditingController fontSearchController = TextEditingController();
 
     // Set text selection to end to ensure cursor is at the end when editing
     textController.selection = TextSelection.fromPosition(
       TextPosition(offset: textController.text.length),
     );
 
-    final List<String> fontFamilies = [
-      'Arial',
-      'Helvetica',
-      'Times New Roman',
-      'Courier',
-      'Verdana',
-    ];
     String selectedFontFamily = element.fontFamily;
     double fontSize = element.fontSize;
     bool isBold = element.isBold;
@@ -209,11 +227,101 @@ class LayerItem extends StatelessWidget {
     Color textColor = _hexToColor(element.color);
     Color backgroundColor = _hexToColor(element.backgroundColor);
 
+    // List of common fonts
+    final List<String> commonFonts = [
+      'Arial',
+      'Helvetica',
+      'Roboto',
+      'Times New Roman',
+      'Courier New',
+      'Verdana',
+      'Georgia',
+      'Tahoma',
+      'Trebuchet MS',
+      'Impact',
+      'Comic Sans MS',
+      'Arial Black',
+      'Palatino',
+      'Garamond',
+      'Calibri',
+      'Cambria',
+      'Segoe UI',
+      'Open Sans',
+      'Lato',
+      'Montserrat',
+    ];
+
+    // For font list
+    List<String> allFonts = commonFonts;
+    List<String> filteredFonts = allFonts;
+    bool isLoadingFonts = true;
+
+    // Add this function to create a dropdown for font selection
+    Widget buildFontFamilyDropdown(
+      String currentFont,
+      Function(String) onFontChanged,
+      List<String> fonts,
+    ) {
+      return DropdownButtonFormField<String>(
+        value: currentFont,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Font Family',
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        ),
+        items:
+            fonts.map((font) {
+              return DropdownMenuItem<String>(
+                value: font,
+                child: Text(
+                  font,
+                  style: TextStyle(fontFamily: font),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+        onChanged: (value) {
+          if (value != null) {
+            onFontChanged(value);
+          }
+        },
+      );
+    }
+
     showDialog(
       context: context,
       builder:
           (context) => StatefulBuilder(
             builder: (context, setState) {
+              // Load system fonts when dialog opens
+              if (isLoadingFonts) {
+                _loadSystemFonts().then((fonts) {
+                  setState(() {
+                    allFonts = fonts;
+                    filteredFonts = fonts;
+                    isLoadingFonts = false;
+                  });
+                });
+              }
+
+              void filterFonts(String query) {
+                setState(() {
+                  if (query.isEmpty) {
+                    filteredFonts = allFonts;
+                  } else {
+                    filteredFonts =
+                        allFonts
+                            .where(
+                              (font) => font.toLowerCase().contains(
+                                query.toLowerCase(),
+                              ),
+                            )
+                            .toList();
+                  }
+                });
+              }
+
               return AlertDialog(
                 title: const Text('Edit Text'),
                 content: SingleChildScrollView(
@@ -234,26 +342,55 @@ class LayerItem extends StatelessWidget {
 
                       const SizedBox(height: 16),
 
-                      // Font family dropdown
+                      // Font family with search
                       const Text('Font Family'),
-                      DropdownButtonFormField<String>(
-                        value: selectedFontFamily,
-                        items:
-                            fontFamilies
-                                .map(
-                                  (font) => DropdownMenuItem(
-                                    value: font,
-                                    child: Text(font),
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              selectedFontFamily = value;
-                            });
-                          }
-                        },
+                      const SizedBox(height: 4),
+                      buildFontFamilyDropdown(
+                        selectedFontFamily,
+                        (font) => setState(() => selectedFontFamily = font),
+                        commonFonts,
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Font list
+                      Container(
+                        height: 150,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: ListView.builder(
+                          itemCount: filteredFonts.length,
+                          itemBuilder: (context, index) {
+                            final font = filteredFonts[index];
+                            final isSelected = font == selectedFontFamily;
+
+                            return ListTile(
+                              title: Text(
+                                font,
+                                style: TextStyle(
+                                  fontFamily: font,
+                                  fontWeight:
+                                      isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                ),
+                              ),
+                              dense: true,
+                              selected: isSelected,
+                              onTap: () {
+                                setState(() {
+                                  selectedFontFamily = font;
+                                });
+                              },
+                              trailing:
+                                  isSelected
+                                      ? const Icon(Icons.check, size: 16)
+                                      : null,
+                            );
+                          },
+                        ),
                       ),
 
                       const SizedBox(height: 16),

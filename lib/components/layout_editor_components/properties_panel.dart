@@ -508,47 +508,19 @@ class PropertiesPanel extends StatelessWidget {
               ),
             ),
 
-            // Font family
+            // Font family with custom selector
             Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Font Family', style: TextStyle(fontSize: 12)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      isDense: true,
-                    ),
-                    value: element.fontFamily,
-                    items:
-                        [
-                          'Arial',
-                          'Helvetica',
-                          'Times New Roman',
-                          'Courier',
-                          'Verdana',
-                        ].map((font) {
-                          return DropdownMenuItem<String>(
-                            value: font,
-                            child: Text(font),
-                          );
-                        }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        editorProvider.updateTextElement(
-                          element.id,
-                          fontFamily: value,
-                        );
-                      }
-                    },
-                  ),
-                ],
+              margin: const EdgeInsets.only(
+                bottom: 16,
+              ), // Increased margin for better spacing
+              child: CustomFontSelector(
+                currentFont: element.fontFamily,
+                onFontSelected: (selectedFont) {
+                  editorProvider.updateTextElement(
+                    element.id,
+                    fontFamily: selectedFont,
+                  );
+                },
               ),
             ),
 
@@ -1052,5 +1024,233 @@ class PropertiesPanel extends StatelessWidget {
       hexColor = 'FF$hexColor';
     }
     return Color(int.parse(hexColor, radix: 16));
+  }
+}
+
+// Fix the CustomFontSelector class that has syntax errors
+
+class CustomFontSelector extends StatefulWidget {
+  final String currentFont;
+  final Function(String) onFontSelected;
+
+  const CustomFontSelector({
+    required this.currentFont,
+    required this.onFontSelected,
+  });
+
+  @override
+  _CustomFontSelectorState createState() => _CustomFontSelectorState();
+}
+
+class _CustomFontSelectorState extends State<CustomFontSelector> {
+  List<String> allFonts = [
+    'Arial',
+    'Helvetica',
+    'Roboto',
+    'Times New Roman',
+    'Courier New',
+    'Verdana',
+    'Georgia',
+    'Tahoma',
+    'Trebuchet MS',
+    'Impact',
+    'Comic Sans MS',
+    'Arial Black',
+    'Palatino',
+    'Garamond',
+    'Bookman',
+    'Avant Garde',
+    'Calibri',
+    'Cambria',
+    'Candara',
+    'Consolas',
+    'Corbel',
+    'Franklin Gothic',
+    'Segoe UI',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+  ];
+  List<String> filteredFonts = [];
+  String _searchQuery = '';
+  bool _isDropdownOpen = false;
+  final LayerLink _layerLink = LayerLink();
+  final FocusNode _focusNode = FocusNode();
+  final TextEditingController _controller = TextEditingController();
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = widget.currentFont;
+    filteredFonts = allFonts;
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _openDropdown();
+      } else {
+        _closeDropdown();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    _closeDropdown();
+    super.dispose();
+  }
+
+  void _openDropdown() {
+    _isDropdownOpen = true;
+    _overlayEntry = _createOverlayEntry();
+    if (_overlayEntry != null) {
+      Overlay.of(context).insert(_overlayEntry!);
+    }
+  }
+
+  void _closeDropdown() {
+    _isDropdownOpen = false;
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  List<String> _getFilteredFonts() {
+    if (_searchQuery.isEmpty) {
+      return allFonts;
+    }
+    return allFonts
+        .where(
+          (font) => font.toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
+        .toList();
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final Size size = renderBox.size;
+
+    return OverlayEntry(
+      builder:
+          (context) => Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height),
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(4),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: 250,
+                    minWidth: size.width,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            hintText: 'Search fonts...',
+                            prefixIcon: Icon(Icons.search, size: 20),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                              // Need to rebuild the overlay when search changes
+                              _closeDropdown();
+                              _openDropdown();
+                            });
+                          },
+                        ),
+                      ),
+                      Flexible(
+                        child: ListView(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          children:
+                              _getFilteredFonts().map((font) {
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    font,
+                                    style: TextStyle(
+                                      fontFamily: font,
+                                      fontWeight:
+                                          font == widget.currentFont
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                    ),
+                                  ),
+                                  selected: font == widget.currentFont,
+                                  onTap: () {
+                                    widget.onFontSelected(font);
+                                    _controller.text = font;
+                                    _closeDropdown();
+                                    _focusNode.unfocus();
+                                  },
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        controller: _controller,
+        focusNode: _focusNode,
+        readOnly: true,
+        decoration: InputDecoration(
+          labelText: 'Font Family',
+          border: const OutlineInputBorder(),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_controller.text.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _controller.clear();
+                      widget.onFontSelected('Arial'); // Default font
+                    });
+                  },
+                ),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
+        onTap: () {
+          if (_isDropdownOpen) {
+            _closeDropdown();
+          } else {
+            _openDropdown();
+          }
+        },
+      ),
+    );
   }
 }
