@@ -639,41 +639,49 @@ class PropertiesPanel extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      _buildAlignmentButton(
-                        context: context,
-                        icon: Icons.format_align_left,
-                        alignment: 'left',
-                        currentAlignment: element.alignment,
-                        onTap: () {
-                          editorProvider.updateTextElement(
-                            element.id,
-                            alignment: 'left',
-                          );
-                        },
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.format_align_left,
+                          alignment: 'left',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'left',
+                            );
+                          },
+                        ),
                       ),
-                      _buildAlignmentButton(
-                        context: context,
-                        icon: Icons.format_align_center,
-                        alignment: 'center',
-                        currentAlignment: element.alignment,
-                        onTap: () {
-                          editorProvider.updateTextElement(
-                            element.id,
-                            alignment: 'center',
-                          );
-                        },
+                      const SizedBox(width: 4), // Add a small gap
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.format_align_center,
+                          alignment: 'center',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'center',
+                            );
+                          },
+                        ),
                       ),
-                      _buildAlignmentButton(
-                        context: context,
-                        icon: Icons.format_align_right,
-                        alignment: 'right',
-                        currentAlignment: element.alignment,
-                        onTap: () {
-                          editorProvider.updateTextElement(
-                            element.id,
-                            alignment: 'right',
-                          );
-                        },
+                      const SizedBox(width: 4), // Add a small gap
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.format_align_right,
+                          alignment: 'right',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'right',
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -754,7 +762,10 @@ class PropertiesPanel extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Text('Text Color'),
+                                const Text(
+                                  'Text Color',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                           ),
@@ -824,7 +835,10 @@ class PropertiesPanel extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Text('Background'),
+                                const Text(
+                                  'Background',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                           ),

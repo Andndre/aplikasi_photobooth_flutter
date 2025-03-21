@@ -141,8 +141,8 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
               minScale:
                   0.1, // Increased minimum scale to prevent excessive zoom out
               maxScale: 5.0,
-              panEnabled:
-                  !_isMiddleMousePanning, // Disable standard panning when middle mouse is active
+              // Fix: Only enable panning when we're not dragging an element or using middle mouse
+              panEnabled: !_isMiddleMousePanning && !editorProvider.isDragging,
               onInteractionUpdate: (details) {
                 editorProvider.setScale(
                   editorProvider.transformationController.value
@@ -195,9 +195,17 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                             ...layout.elements.map((element) {
                               if (!element.isVisible) return const SizedBox();
 
+                              // Ensure the element has valid dimensions before adding it to the layout
+                              double width = max(10.0, element.width);
+                              double height = max(10.0, element.height);
+
                               return Positioned(
                                 left: element.x,
                                 top: element.y,
+                                width:
+                                    width, // Explicitly set width for positioning
+                                height:
+                                    height, // Explicitly set height for positioning
                                 child: GestureDetector(
                                   behavior: HitTestBehavior.opaque,
                                   onTap: () {
@@ -209,17 +217,31 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                       element.isLocked
                                           ? null
                                           : (details) {
+                                            // Start dragging the element
                                             setState(() {
                                               _draggedElement = element;
                                               _lastFocalPoint =
                                                   details.localPosition;
                                             });
+
+                                            // When starting a drag on any element, disable panning
                                             editorProvider.startDrag();
+
+                                            // Make sure this element is selected
+                                            if (editorProvider
+                                                    .selectedElement
+                                                    ?.id !=
+                                                element.id) {
+                                              editorProvider.selectElement(
+                                                element,
+                                              );
+                                            }
                                           },
                                   onPanUpdate:
                                       element.isLocked
                                           ? null
                                           : (details) {
+                                            // Update the element position while dragging
                                             if (_draggedElement?.id ==
                                                 element.id) {
                                               final delta =
@@ -228,11 +250,15 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                               final newPosition =
                                                   Offset(element.x, element.y) +
                                                   delta;
+
+                                              // Update the element position in the provider
                                               editorProvider
                                                   .updateElementPosition(
                                                     element.id,
                                                     newPosition,
                                                   );
+
+                                              // Update the last focal point
                                               setState(() {
                                                 _lastFocalPoint =
                                                     details.localPosition;
@@ -243,21 +269,36 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                       element.isLocked
                                           ? null
                                           : (details) {
+                                            // End dragging
                                             setState(() {
                                               _draggedElement = null;
                                             });
                                             editorProvider.stopDrag();
                                           },
-                                  child: ElementWidget(element: element),
+                                  child: SizedBox(
+                                    width:
+                                        width, // Ensure child has explicit width
+                                    height:
+                                        height, // Ensure child has explicit height
+                                    child: ElementWidget(element: element),
+                                  ),
                                 ),
                               );
                             }).toList(),
 
-                            // Selection overlay
+                            // Selection overlay - also ensure this has proper sizing
                             if (editorProvider.selectedElement != null)
                               Positioned(
                                 left: editorProvider.selectedElement!.x,
                                 top: editorProvider.selectedElement!.y,
+                                width: max(
+                                  10.0,
+                                  editorProvider.selectedElement!.width,
+                                ), // Explicit width
+                                height: max(
+                                  10.0,
+                                  editorProvider.selectedElement!.height,
+                                ), // Explicit height
                                 child: custom_overlay.SelectionOverlay(
                                   element: editorProvider.selectedElement!,
                                   onResize: (size) {

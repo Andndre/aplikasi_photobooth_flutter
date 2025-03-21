@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math_64.dart'; // Add this import for Vector3
@@ -122,26 +124,48 @@ class LayoutEditorProvider with ChangeNotifier {
   void addTextElement({String? text, Offset? position, Size? size}) {
     if (_layout == null) return;
 
+    // Enforce minimum size
     final textSize = size ?? const Size(200, 50);
+    final safeWidth = max(50.0, textSize.width);
+    final safeHeight = max(30.0, textSize.height);
+
+    // Ensure the element is placed within the layout bounds
     final pos =
         position ??
         Offset(
-          (_layout!.width / 2) - (textSize.width / 2),
-          (_layout!.height / 2) - (textSize.height / 2),
+          (_layout!.width / 2) - (safeWidth / 2),
+          (_layout!.height / 2) - (safeHeight / 2),
         );
 
+    // Ensure position is within bounds
+    final safeX = pos.dx.clamp(0.0, _layout!.width - safeWidth);
+    final safeY = pos.dy.clamp(0.0, _layout!.height - safeHeight);
+
+    // Create text element with safe dimensions
     final newElement = TextElement(
       id: _uuid.v4(),
-      x: pos.dx,
-      y: pos.dy,
-      width: textSize.width,
-      height: textSize.height,
+      x: safeX,
+      y: safeY,
+      width: safeWidth,
+      height: safeHeight,
       text: text ?? 'New Text',
+      fontFamily: 'Arial',
+      fontSize: 20.0,
+      color: '#000000',
+      backgroundColor: '#FFFFFF',
+      isBold: false,
+      isItalic: false,
+      alignment: 'center',
+      rotation: 0.0,
     );
 
-    _layout!.elements.add(newElement);
-    _selectedElement = newElement;
-    notifyListeners();
+    try {
+      _layout!.elements.add(newElement);
+      _selectedElement = newElement;
+      notifyListeners();
+    } catch (e) {
+      print('Error adding text element: $e');
+    }
   }
 
   void addCameraElement({Offset? position, Size? size}) {

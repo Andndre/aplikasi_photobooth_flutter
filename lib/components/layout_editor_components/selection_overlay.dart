@@ -20,23 +20,51 @@ class SelectionOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Selection border
-        Container(
-          width: element.width,
-          height: element.height,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.blue, width: 1),
+        // Selection border - Make it more visible but still transparent to clicks
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              width: element.width,
+              height: element.height,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.blue,
+                  width: 2.0, // Increased width for better visibility
+                ),
+                // Add a subtle glow effect
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.3),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
 
-        // Resize handles
+        // Make the selection area more obvious with a transparent overlay
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(
+                  0.05,
+                ), // Very subtle overlay color
+              ),
+            ),
+          ),
+        ),
+
+        // Resize handles - Make them more visible
         if (!element.isLocked) ...[
           _buildResizeHandle(Alignment.topLeft, context),
           _buildResizeHandle(Alignment.topRight, context),
           _buildResizeHandle(Alignment.bottomLeft, context),
           _buildResizeHandle(Alignment.bottomRight, context),
 
-          // Rotation handle
+          // Rotation handle - also make it more visible
           Positioned(
             left: element.width / 2 - 5,
             top: -30,
@@ -51,11 +79,19 @@ class SelectionOverlay extends StatelessWidget {
                 onRotate(angle * (180 / pi));
               },
               child: Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
+                width: 12, // Slightly larger
+                height: 12, // Slightly larger
+                decoration: BoxDecoration(
                   color: Colors.blue,
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 2,
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -65,7 +101,11 @@ class SelectionOverlay extends StatelessWidget {
           Positioned(
             left: element.width / 2,
             top: -20,
-            child: Container(width: 1, height: 20, color: Colors.blue),
+            child: Container(
+              width: 1.5, // Slightly thicker
+              height: 20,
+              color: Colors.blue,
+            ),
           ),
         ],
       ],
@@ -82,12 +122,12 @@ class SelectionOverlay extends StatelessWidget {
     double top = 0;
 
     if (alignment == Alignment.topRight || alignment == Alignment.bottomRight) {
-      left = element.width - 5;
+      left = element.width - 6; // Adjusted for larger handle
     }
 
     if (alignment == Alignment.bottomLeft ||
         alignment == Alignment.bottomRight) {
-      top = element.height - 5;
+      top = element.height - 6; // Adjusted for larger handle
     }
 
     Offset startPosition = Offset.zero;
@@ -132,11 +172,19 @@ class SelectionOverlay extends StatelessWidget {
           editorProvider.stopResize();
         },
         child: Container(
-          width: 10,
-          height: 10,
+          width: 12, // Larger handle
+          height: 12, // Larger handle
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.blue),
+            border: Border.all(color: Colors.blue, width: 1.5),
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 2,
+                spreadRadius: 1,
+              ),
+            ],
           ),
         ),
       ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'dart:math';
+import 'dart:math'; // Make sure to import this
 import '../../models/layouts.dart';
 
 class ElementWidget extends StatelessWidget {
@@ -10,11 +10,15 @@ class ElementWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ensure width and height are at least 10 pixels
+    final safeWidth = max(10.0, element.width);
+    final safeHeight = max(10.0, element.height);
+
     return Transform.rotate(
       angle: element.rotation * (pi / 180),
       child: SizedBox(
-        width: element.width,
-        height: element.height,
+        width: safeWidth,
+        height: safeHeight,
         child: _buildElementContent(),
       ),
     );
@@ -45,21 +49,34 @@ class ElementWidget extends StatelessWidget {
       case 'text':
         final textElement = element as TextElement;
         return Container(
+          width: max(10.0, element.width),
+          height: max(10.0, element.height),
           color: _hexToColor(textElement.backgroundColor),
-          child: Center(
-            child: Text(
-              textElement.text,
-              style: TextStyle(
-                color: _hexToColor(textElement.color),
-                fontSize: textElement.fontSize,
-                fontWeight:
-                    textElement.isBold ? FontWeight.bold : FontWeight.normal,
-                fontStyle:
-                    textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-                fontFamily: textElement.fontFamily,
-              ),
-              textAlign: _getTextAlignment(textElement.alignment),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(4.0),
+          child: Text(
+            textElement.text.isEmpty
+                ? ' '
+                : textElement.text, // Ensure text is never empty
+            style: TextStyle(
+              color: _hexToColor(textElement.color),
+              fontSize:
+                  max(
+                    8.0,
+                    textElement.fontSize,
+                  ).toDouble(), // Fixed: ensuring it's a double
+              fontWeight:
+                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
+              fontStyle:
+                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
+              fontFamily:
+                  textElement.fontFamily.isEmpty
+                      ? 'Arial'
+                      : textElement.fontFamily,
+              decoration: TextDecoration.none,
             ),
+            textAlign: _getTextAlignment(textElement.alignment),
+            overflow: TextOverflow.visible, // Use visible instead of clip
           ),
         );
 
