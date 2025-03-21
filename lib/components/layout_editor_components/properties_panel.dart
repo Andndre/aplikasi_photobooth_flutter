@@ -775,20 +775,50 @@ class PropertiesPanel extends StatelessWidget {
                       Expanded(
                         child: InkWell(
                           onTap: () async {
+                            // Define a flag for transparency
+                            bool isTransparent =
+                                backgroundColor == Colors.transparent;
+
                             final Color? pickedColor = await showDialog<Color>(
                               context: context,
                               builder:
                                   (context) => AlertDialog(
                                     title: const Text('Pick Background Color'),
                                     content: SingleChildScrollView(
-                                      child: ColorPicker(
-                                        pickerColor: backgroundColor,
-                                        onColorChanged: (color) {
-                                          setState(() {
-                                            backgroundColor = color;
-                                          });
-                                        },
-                                        pickerAreaHeightPercent: 0.8,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Add a checkbox for transparency
+                                          CheckboxListTile(
+                                            title: const Text(
+                                              'Transparent Background',
+                                            ),
+                                            value: isTransparent,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                isTransparent = value ?? false;
+                                                if (isTransparent) {
+                                                  backgroundColor =
+                                                      Colors.transparent;
+                                                }
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 10),
+                                          // Only show color picker if not transparent
+                                          if (!isTransparent)
+                                            ColorPicker(
+                                              pickerColor: backgroundColor,
+                                              onColorChanged: (color) {
+                                                setState(() {
+                                                  backgroundColor = color;
+                                                });
+                                              },
+                                              pickerAreaHeightPercent: 0.8,
+                                              enableAlpha:
+                                                  true, // Enable alpha channel for transparency
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     actions: [
@@ -798,10 +828,18 @@ class PropertiesPanel extends StatelessWidget {
                                         child: const Text('Cancel'),
                                       ),
                                       TextButton(
-                                        onPressed:
-                                            () => Navigator.of(
+                                        onPressed: () {
+                                          if (isTransparent) {
+                                            // Return a special marker for transparency
+                                            Navigator.of(
                                               context,
-                                            ).pop(backgroundColor),
+                                            ).pop(const Color(0x00000000));
+                                          } else {
+                                            Navigator.of(
+                                              context,
+                                            ).pop(backgroundColor);
+                                          }
+                                        },
                                         child: const Text('Select'),
                                       ),
                                     ],
@@ -810,7 +848,10 @@ class PropertiesPanel extends StatelessWidget {
 
                             if (pickedColor != null) {
                               final backgroundColorHex =
-                                  '#${pickedColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+                                  pickedColor == const Color(0x00000000)
+                                      ? 'transparent'
+                                      : '#${pickedColor.value.toRadixString(16).padLeft(8, '0')}';
+
                               editorProvider.updateTextElement(
                                 element.id,
                                 backgroundColor: backgroundColorHex,

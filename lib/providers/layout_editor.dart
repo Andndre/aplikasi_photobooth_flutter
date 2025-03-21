@@ -141,7 +141,7 @@ class LayoutEditorProvider with ChangeNotifier {
     final safeX = pos.dx.clamp(0.0, _layout!.width - safeWidth);
     final safeY = pos.dy.clamp(0.0, _layout!.height - safeHeight);
 
-    // Create text element with safe dimensions
+    // Create text element with transparent background by default
     final newElement = TextElement(
       id: _uuid.v4(),
       x: safeX,
@@ -152,7 +152,7 @@ class LayoutEditorProvider with ChangeNotifier {
       fontFamily: 'Arial',
       fontSize: 20.0,
       color: '#000000',
-      backgroundColor: '#FFFFFF',
+      backgroundColor: 'transparent', // Use 'transparent' instead of '#FFFFFF'
       isBold: false,
       isItalic: false,
       alignment: 'center',
@@ -306,7 +306,20 @@ class LayoutEditorProvider with ChangeNotifier {
     if (fontFamily != null) element.fontFamily = fontFamily;
     if (fontSize != null) element.fontSize = fontSize;
     if (color != null) element.color = color;
-    if (backgroundColor != null) element.backgroundColor = backgroundColor;
+
+    // Handle "transparent" specifically for background
+    if (backgroundColor != null) {
+      // If color is actually the string "transparent", preserve that
+      if (backgroundColor == "transparent" ||
+          backgroundColor.toLowerCase() == "transparent") {
+        element.backgroundColor = "transparent";
+      }
+      // Otherwise use the hex value, keeping alpha if present
+      else {
+        element.backgroundColor = backgroundColor;
+      }
+    }
+
     if (isBold != null) element.isBold = isBold;
     if (isItalic != null) element.isItalic = isItalic;
     if (alignment != null) element.alignment = alignment;

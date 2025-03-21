@@ -137,12 +137,34 @@ class ElementWidget extends StatelessWidget {
   }
 
   Color _hexToColor(String hexColor) {
-    if (hexColor == 'transparent') return Colors.transparent;
-
-    hexColor = hexColor.replaceAll('#', '');
-    if (hexColor.length == 6) {
-      hexColor = 'FF$hexColor';
+    // Handle "transparent" string explicitly
+    if (hexColor == 'transparent' || hexColor.toLowerCase() == 'transparent') {
+      return Colors.transparent;
     }
-    return Color(int.parse(hexColor, radix: 16));
+
+    // Remove hash prefix if present
+    hexColor = hexColor.replaceAll('#', '');
+
+    try {
+      // Handle different hex formats
+      if (hexColor.length == 6) {
+        // Add FF for alpha if not present
+        hexColor = 'FF$hexColor';
+      } else if (hexColor.length == 8) {
+        // Already has alpha, do nothing
+      } else if (hexColor.length == 3) {
+        // Convert 3-digit hex to 6-digit
+        hexColor =
+            'FF${hexColor[0]}${hexColor[0]}${hexColor[1]}${hexColor[1]}${hexColor[2]}${hexColor[2]}';
+      } else {
+        print('Invalid hex color format: $hexColor');
+        return Colors.black; // Default fallback
+      }
+
+      return Color(int.parse(hexColor, radix: 16));
+    } catch (e) {
+      print('Error parsing color: $e for hexColor: $hexColor');
+      return Colors.black; // Default fallback
+    }
   }
 }
