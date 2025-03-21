@@ -193,9 +193,19 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
 
                             // Elements
                             ...layout.elements.map((element) {
-                              if (!element.isVisible) return const SizedBox();
+                              // Invisible element must be wrapped in Positioned to be valid in a Stack
+                              if (!element.isVisible) {
+                                // Use SizedBox.shrink() for invisible elements
+                                return Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  width: 0, // Explicitly set width
+                                  height: 0, // Explicitly set height
+                                  child: SizedBox.shrink(),
+                                );
+                              }
 
-                              // Ensure the element has valid dimensions before adding it to the layout
+                              // Ensure the element has valid dimensions
                               double width = max(10.0, element.width);
                               double height = max(10.0, element.height);
 
@@ -203,11 +213,13 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                 left: element.x,
                                 top: element.y,
                                 width:
-                                    width, // Explicitly set width for positioning
+                                    width, // Explicitly set width on the Positioned widget
                                 height:
-                                    height, // Explicitly set height for positioning
+                                    height, // Explicitly set height on the Positioned widget
                                 child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
+                                  behavior:
+                                      HitTestBehavior
+                                          .opaque, // This ensures touches are captured
                                   onTap: () {
                                     if (!element.isLocked) {
                                       editorProvider.selectElement(element);
@@ -276,17 +288,15 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                             editorProvider.stopDrag();
                                           },
                                   child: SizedBox(
-                                    width:
-                                        width, // Ensure child has explicit width
-                                    height:
-                                        height, // Ensure child has explicit height
+                                    width: width,
+                                    height: height,
                                     child: ElementWidget(element: element),
                                   ),
                                 ),
                               );
-                            }).toList(),
+                            }),
 
-                            // Selection overlay - also ensure this has proper sizing
+                            // Selection overlay - fix positioning
                             if (editorProvider.selectedElement != null)
                               Positioned(
                                 left: editorProvider.selectedElement!.x,
@@ -294,11 +304,11 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                 width: max(
                                   10.0,
                                   editorProvider.selectedElement!.width,
-                                ), // Explicit width
+                                ), // Explicitly set width
                                 height: max(
                                   10.0,
                                   editorProvider.selectedElement!.height,
-                                ), // Explicit height
+                                ), // Explicitly set height
                                 child: custom_overlay.SelectionOverlay(
                                   element: editorProvider.selectedElement!,
                                   onResize: (size) {

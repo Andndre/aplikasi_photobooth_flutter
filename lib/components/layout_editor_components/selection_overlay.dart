@@ -19,18 +19,15 @@ class SelectionOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.passthrough, // Ensure the stack properly fits its size
       children: [
-        // Selection border - Make it more visible but still transparent to clicks
+        // Selection border - make it a non-interactive overlay
         Positioned.fill(
           child: IgnorePointer(
+            // Use IgnorePointer to make sure this doesn't capture touches
             child: Container(
-              width: element.width,
-              height: element.height,
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.blue,
-                  width: 2.0, // Increased width for better visibility
-                ),
+                border: Border.all(color: Colors.blue, width: 2.0),
                 // Add a subtle glow effect
                 boxShadow: [
                   BoxShadow(
@@ -44,29 +41,23 @@ class SelectionOverlay extends StatelessWidget {
           ),
         ),
 
-        // Make the selection area more obvious with a transparent overlay
+        // Very light overlay to show what's selected
         Positioned.fill(
           child: IgnorePointer(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(
-                  0.05,
-                ), // Very subtle overlay color
-              ),
-            ),
+            child: Container(color: Colors.blue.withOpacity(0.03)),
           ),
         ),
 
-        // Resize handles - Make them more visible
+        // The resize handles should remain interactive
         if (!element.isLocked) ...[
           _buildResizeHandle(Alignment.topLeft, context),
           _buildResizeHandle(Alignment.topRight, context),
           _buildResizeHandle(Alignment.bottomLeft, context),
           _buildResizeHandle(Alignment.bottomRight, context),
 
-          // Rotation handle - also make it more visible
+          // Rotation handle
           Positioned(
-            left: element.width / 2 - 5,
+            left: element.width / 2 - 6,
             top: -30,
             child: GestureDetector(
               onPanUpdate: (details) {
@@ -79,8 +70,8 @@ class SelectionOverlay extends StatelessWidget {
                 onRotate(angle * (180 / pi));
               },
               child: Container(
-                width: 12, // Slightly larger
-                height: 12, // Slightly larger
+                width: 12,
+                height: 12,
                 decoration: BoxDecoration(
                   color: Colors.blue,
                   shape: BoxShape.circle,
@@ -100,12 +91,12 @@ class SelectionOverlay extends StatelessWidget {
           // Rotation line
           Positioned(
             left: element.width / 2,
-            top: -20,
-            child: Container(
-              width: 1.5, // Slightly thicker
-              height: 20,
-              color: Colors.blue,
-            ),
+            top: -30,
+            bottom: null,
+            right: null,
+            width: 1.5,
+            height: 30,
+            child: Container(color: Colors.blue),
           ),
         ],
       ],
