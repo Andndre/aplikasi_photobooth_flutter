@@ -180,29 +180,29 @@ class LayerItem extends StatelessWidget {
     );
   }
 
-  Future<List<String>> _loadSystemFonts() async {
-    // Default fonts as fallback
-    List<String> fonts = [
-      'Arial',
-      'Helvetica',
-      'Times New Roman',
-      'Courier',
-      'Verdana',
-    ];
+  // Future<List<String>> _loadSystemFonts() async {
+  //   // Default fonts as fallback
+  //   List<String> fonts = [
+  //     'Arial',
+  //     'Helvetica',
+  //     'Times New Roman',
+  //     'Courier',
+  //     'Verdana',
+  //   ];
 
-    try {
-      // Try to load system fonts
-      final systemFonts = await SystemFonts.getAvailableFonts();
-      fonts = [...fonts, ...systemFonts];
+  //   try {
+  //     // Try to load system fonts
+  //     final systemFonts = await SystemFonts.getAvailableFonts();
+  //     fonts = [...fonts, ...systemFonts];
 
-      // Remove duplicates and sort
-      fonts = fonts.toSet().toList()..sort();
-    } catch (e) {
-      print('Error loading system fonts: $e');
-    }
+  //     // Remove duplicates and sort
+  //     fonts = fonts.toSet().toList()..sort();
+  //   } catch (e) {
+  //     print('Error loading system fonts: $e');
+  //   }
 
-    return fonts;
-  }
+  //   return fonts;
+  // }
 
   void _editTextElement(
     BuildContext context,
@@ -289,292 +289,292 @@ class LayerItem extends StatelessWidget {
       );
     }
 
-    showDialog(
-      context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder: (context, setState) {
-              // Load system fonts when dialog opens
-              if (isLoadingFonts) {
-                _loadSystemFonts().then((fonts) {
-                  setState(() {
-                    allFonts = fonts;
-                    filteredFonts = fonts;
-                    isLoadingFonts = false;
-                  });
-                });
-              }
+    // showDialog(
+    //   context: context,
+    //   builder:
+    //       (context) => StatefulBuilder(
+    //         builder: (context, setState) {
+    //           // Load system fonts when dialog opens
+    //           if (isLoadingFonts) {
+    //             _loadSystemFonts().then((fonts) {
+    //               setState(() {
+    //                 allFonts = fonts;
+    //                 filteredFonts = fonts;
+    //                 isLoadingFonts = false;
+    //               });
+    //             });
+    //           }
 
-              void filterFonts(String query) {
-                setState(() {
-                  if (query.isEmpty) {
-                    filteredFonts = allFonts;
-                  } else {
-                    filteredFonts =
-                        allFonts
-                            .where(
-                              (font) => font.toLowerCase().contains(
-                                query.toLowerCase(),
-                              ),
-                            )
-                            .toList();
-                  }
-                });
-              }
+    //           void filterFonts(String query) {
+    //             setState(() {
+    //               if (query.isEmpty) {
+    //                 filteredFonts = allFonts;
+    //               } else {
+    //                 filteredFonts =
+    //                     allFonts
+    //                         .where(
+    //                           (font) => font.toLowerCase().contains(
+    //                             query.toLowerCase(),
+    //                           ),
+    //                         )
+    //                         .toList();
+    //               }
+    //             });
+    //           }
 
-              return AlertDialog(
-                title: const Text('Edit Text'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Text input field with proper direction
-                      TextField(
-                        controller: textController,
-                        decoration: const InputDecoration(
-                          labelText: 'Text',
-                          border: OutlineInputBorder(),
-                        ),
-                        textDirection: TextDirection.ltr,
-                        maxLines: 3,
-                      ),
+    //           return AlertDialog(
+    //             title: const Text('Edit Text'),
+    //             content: SingleChildScrollView(
+    //               child: Column(
+    //                 mainAxisSize: MainAxisSize.min,
+    //                 crossAxisAlignment: CrossAxisAlignment.start,
+    //                 children: [
+    //                   // Text input field with proper direction
+    //                   TextField(
+    //                     controller: textController,
+    //                     decoration: const InputDecoration(
+    //                       labelText: 'Text',
+    //                       border: OutlineInputBorder(),
+    //                     ),
+    //                     textDirection: TextDirection.ltr,
+    //                     maxLines: 3,
+    //                   ),
 
-                      const SizedBox(height: 16),
+    //                   const SizedBox(height: 16),
 
-                      // Font family with search
-                      const Text('Font Family'),
-                      const SizedBox(height: 4),
-                      buildFontFamilyDropdown(
-                        selectedFontFamily,
-                        (font) => setState(() => selectedFontFamily = font),
-                        commonFonts,
-                      ),
+    //                   // Font family with search
+    //                   const Text('Font Family'),
+    //                   const SizedBox(height: 4),
+    //                   buildFontFamilyDropdown(
+    //                     selectedFontFamily,
+    //                     (font) => setState(() => selectedFontFamily = font),
+    //                     commonFonts,
+    //                   ),
 
-                      const SizedBox(height: 8),
+    //                   const SizedBox(height: 8),
 
-                      // Font list
-                      Container(
-                        height: 150,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: ListView.builder(
-                          itemCount: filteredFonts.length,
-                          itemBuilder: (context, index) {
-                            final font = filteredFonts[index];
-                            final isSelected = font == selectedFontFamily;
+    //                   // Font list
+    //                   Container(
+    //                     height: 150,
+    //                     decoration: BoxDecoration(
+    //                       border: Border.all(color: Colors.grey.shade300),
+    //                       borderRadius: BorderRadius.circular(4),
+    //                     ),
+    //                     child: ListView.builder(
+    //                       itemCount: filteredFonts.length,
+    //                       itemBuilder: (context, index) {
+    //                         final font = filteredFonts[index];
+    //                         final isSelected = font == selectedFontFamily;
 
-                            return ListTile(
-                              title: Text(
-                                font,
-                                style: TextStyle(
-                                  fontFamily: font,
-                                  fontWeight:
-                                      isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                ),
-                              ),
-                              dense: true,
-                              selected: isSelected,
-                              onTap: () {
-                                setState(() {
-                                  selectedFontFamily = font;
-                                });
-                              },
-                              trailing:
-                                  isSelected
-                                      ? const Icon(Icons.check, size: 16)
-                                      : null,
-                            );
-                          },
-                        ),
-                      ),
+    //                         return ListTile(
+    //                           title: Text(
+    //                             font,
+    //                             style: TextStyle(
+    //                               fontFamily: font,
+    //                               fontWeight:
+    //                                   isSelected
+    //                                       ? FontWeight.bold
+    //                                       : FontWeight.normal,
+    //                             ),
+    //                           ),
+    //                           dense: true,
+    //                           selected: isSelected,
+    //                           onTap: () {
+    //                             setState(() {
+    //                               selectedFontFamily = font;
+    //                             });
+    //                           },
+    //                           trailing:
+    //                               isSelected
+    //                                   ? const Icon(Icons.check, size: 16)
+    //                                   : null,
+    //                         );
+    //                       },
+    //                     ),
+    //                   ),
 
-                      const SizedBox(height: 16),
+    //                   const SizedBox(height: 16),
 
-                      // Font size slider
-                      Row(
-                        children: [
-                          const Text('Size:'),
-                          Expanded(
-                            child: Slider(
-                              value: fontSize,
-                              min: 8,
-                              max: 72,
-                              divisions: 64,
-                              onChanged: (value) {
-                                setState(() {
-                                  fontSize = value;
-                                });
-                              },
-                            ),
-                          ),
-                          Text('${fontSize.round()} px'),
-                        ],
-                      ),
+    //                   // Font size slider
+    //                   Row(
+    //                     children: [
+    //                       const Text('Size:'),
+    //                       Expanded(
+    //                         child: Slider(
+    //                           value: fontSize,
+    //                           min: 8,
+    //                           max: 72,
+    //                           divisions: 64,
+    //                           onChanged: (value) {
+    //                             setState(() {
+    //                               fontSize = value;
+    //                             });
+    //                           },
+    //                         ),
+    //                       ),
+    //                       Text('${fontSize.round()} px'),
+    //                     ],
+    //                   ),
 
-                      // Style options (bold, italic)
-                      Row(
-                        children: [
-                          const Text('Style:'),
-                          const SizedBox(width: 16),
-                          ChoiceChip(
-                            label: const Text('Bold'),
-                            selected: isBold,
-                            onSelected: (selected) {
-                              setState(() {
-                                isBold = selected;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('Italic'),
-                            selected: isItalic,
-                            onSelected: (selected) {
-                              setState(() {
-                                isItalic = selected;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+    //                   // Style options (bold, italic)
+    //                   Row(
+    //                     children: [
+    //                       const Text('Style:'),
+    //                       const SizedBox(width: 16),
+    //                       ChoiceChip(
+    //                         label: const Text('Bold'),
+    //                         selected: isBold,
+    //                         onSelected: (selected) {
+    //                           setState(() {
+    //                             isBold = selected;
+    //                           });
+    //                         },
+    //                       ),
+    //                       const SizedBox(width: 8),
+    //                       ChoiceChip(
+    //                         label: const Text('Italic'),
+    //                         selected: isItalic,
+    //                         onSelected: (selected) {
+    //                           setState(() {
+    //                             isItalic = selected;
+    //                           });
+    //                         },
+    //                       ),
+    //                     ],
+    //                   ),
 
-                      const SizedBox(height: 16),
+    //                   const SizedBox(height: 16),
 
-                      // Alignment options
-                      const Text('Alignment:'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Icon(Icons.format_align_left),
-                              value: 'left',
-                              groupValue: alignment,
-                              onChanged: (value) {
-                                setState(() {
-                                  alignment = value!;
-                                });
-                              },
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Icon(Icons.format_align_center),
-                              value: 'center',
-                              groupValue: alignment,
-                              onChanged: (value) {
-                                setState(() {
-                                  alignment = value!;
-                                });
-                              },
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Icon(Icons.format_align_right),
-                              value: 'right',
-                              groupValue: alignment,
-                              onChanged: (value) {
-                                setState(() {
-                                  alignment = value!;
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+    //                   // Alignment options
+    //                   const Text('Alignment:'),
+    //                   Row(
+    //                     children: [
+    //                       Expanded(
+    //                         child: RadioListTile<String>(
+    //                           title: const Icon(Icons.format_align_left),
+    //                           value: 'left',
+    //                           groupValue: alignment,
+    //                           onChanged: (value) {
+    //                             setState(() {
+    //                               alignment = value!;
+    //                             });
+    //                           },
+    //                         ),
+    //                       ),
+    //                       Expanded(
+    //                         child: RadioListTile<String>(
+    //                           title: const Icon(Icons.format_align_center),
+    //                           value: 'center',
+    //                           groupValue: alignment,
+    //                           onChanged: (value) {
+    //                             setState(() {
+    //                               alignment = value!;
+    //                             });
+    //                           },
+    //                         ),
+    //                       ),
+    //                       Expanded(
+    //                         child: RadioListTile<String>(
+    //                           title: const Icon(Icons.format_align_right),
+    //                           value: 'right',
+    //                           groupValue: alignment,
+    //                           onChanged: (value) {
+    //                             setState(() {
+    //                               alignment = value!;
+    //                             });
+    //                           },
+    //                         ),
+    //                       ),
+    //                     ],
+    //                   ),
 
-                      const SizedBox(height: 16),
+    //                   const SizedBox(height: 16),
 
-                      // Color options
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                // Show color picker for text
-                                // ...existing color picker code...
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: textColor,
-                                      border: Border.all(color: Colors.grey),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text('Text Color'),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                // Show color picker for background
-                                // ...existing color picker code...
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: backgroundColor,
-                                      border: Border.all(color: Colors.grey),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text('Background'),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      // Update the text element
-                      editorProvider.updateTextElement(
-                        element.id,
-                        text: textController.text,
-                        fontFamily: selectedFontFamily,
-                        fontSize: fontSize,
-                        color:
-                            '#${textColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
-                        backgroundColor:
-                            '#${backgroundColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
-                        isBold: isBold,
-                        isItalic: isItalic,
-                        alignment: alignment,
-                      );
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Apply'),
-                  ),
-                ],
-              );
-            },
-          ),
-    );
+    //                   // Color options
+    //                   Row(
+    //                     children: [
+    //                       Expanded(
+    //                         child: ElevatedButton(
+    //                           onPressed: () async {
+    //                             // Show color picker for text
+    //                             // ...existing color picker code...
+    //                           },
+    //                           child: Row(
+    //                             mainAxisAlignment: MainAxisAlignment.center,
+    //                             children: [
+    //                               Container(
+    //                                 width: 16,
+    //                                 height: 16,
+    //                                 decoration: BoxDecoration(
+    //                                   color: textColor,
+    //                                   border: Border.all(color: Colors.grey),
+    //                                 ),
+    //                               ),
+    //                               const SizedBox(width: 8),
+    //                               const Text('Text Color'),
+    //                             ],
+    //                           ),
+    //                         ),
+    //                       ),
+    //                       const SizedBox(width: 8),
+    //                       Expanded(
+    //                         child: ElevatedButton(
+    //                           onPressed: () async {
+    //                             // Show color picker for background
+    //                             // ...existing color picker code...
+    //                           },
+    //                           child: Row(
+    //                             mainAxisAlignment: MainAxisAlignment.center,
+    //                             children: [
+    //                               Container(
+    //                                 width: 16,
+    //                                 height: 16,
+    //                                 decoration: BoxDecoration(
+    //                                   color: backgroundColor,
+    //                                   border: Border.all(color: Colors.grey),
+    //                                 ),
+    //                               ),
+    //                               const SizedBox(width: 8),
+    //                               const Text('Background'),
+    //                             ],
+    //                           ),
+    //                         ),
+    //                       ),
+    //                     ],
+    //                   ),
+    //                 ],
+    //               ),
+    //             ),
+    //             actions: [
+    //               TextButton(
+    //                 onPressed: () => Navigator.of(context).pop(),
+    //                 child: const Text('Cancel'),
+    //               ),
+    //               TextButton(
+    //                 onPressed: () {
+    //                   // Update the text element
+    //                   editorProvider.updateTextElement(
+    //                     element.id,
+    //                     text: textController.text,
+    //                     fontFamily: selectedFontFamily,
+    //                     fontSize: fontSize,
+    //                     color:
+    //                         '#${textColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
+    //                     backgroundColor:
+    //                         '#${backgroundColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
+    //                     isBold: isBold,
+    //                     isItalic: isItalic,
+    //                     alignment: alignment,
+    //                   );
+    //                   Navigator.of(context).pop();
+    //                 },
+    //                 child: const Text('Apply'),
+    //               ),
+    //             ],
+    //           );
+    //         },
+    //       ),
+    // );
   }
 
   void _replaceImage(

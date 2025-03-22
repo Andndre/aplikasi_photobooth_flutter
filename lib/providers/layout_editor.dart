@@ -18,7 +18,7 @@ class LayoutEditorProvider with ChangeNotifier {
   bool _isDragging = false;
   bool _isResizing = false;
   bool _showGrid = true;
-  bool _snapToGrid = true;
+  bool _snapToGrid = false; // Changed to false by default
   final _uuid = Uuid();
 
   // Add a TransformationController

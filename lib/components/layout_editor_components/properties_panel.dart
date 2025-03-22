@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -46,6 +48,12 @@ class _NumberPropertyRow extends StatelessWidget {
     // Create a text controller with the current value
     final controller = TextEditingController(text: value.toStringAsFixed(1));
 
+    // State for dragging
+    double startX = 0;
+    double startValue = value;
+    bool isDragging = false;
+    bool isShiftPressed = false;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -55,23 +63,121 @@ class _NumberPropertyRow extends StatelessWidget {
             child: Text(label, style: const TextStyle(fontSize: 14)),
           ),
           Expanded(
-            child: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (text) {
-                final newValue = double.tryParse(text);
-                if (newValue != null) {
-                  onChanged(newValue);
+            child: Listener(
+              // Use Listener instead of GestureDetector to detect mouse buttons
+              onPointerDown: (PointerDownEvent event) {
+                // Check if middle button is pressed (button index 2 corresponds to middle button)
+                if (event.buttons == 4) {
+                  // 4 is middle button
+                  startX = event.localPosition.dx;
+                  startValue = value;
+                  isDragging = true;
+
+                  // Check if shift key is pressed for precision mode
+                  isShiftPressed = event.down && (event.buttons & 0x8) != 0;
                 }
               },
+              onPointerMove: (PointerMoveEvent event) {
+                if (isDragging) {
+                  // Calculate delta and apply a sensitivity factor
+                  final dx = event.localPosition.dx - startX;
+
+                  // Check if shift key is currently pressed
+                  isShiftPressed = (event.buttons & 0x8) != 0;
+
+                  // Determine the adjustment factor based on precision mode and value magnitude
+                  double adjustmentFactor;
+
+                  if (isShiftPressed) {
+                    // Precision mode (slow changes) with Shift key
+                    adjustmentFactor = 0.05; // Very fine control
+
+                    if (label == 'Rotation') {
+                      adjustmentFactor = 0.02; // Even finer for rotation
+                    }
+                  } else {
+                    // Fast mode (without Shift key)
+                    adjustmentFactor = 5.0; // Much faster control
+
+                    if (startValue.abs() > 100) {
+                      adjustmentFactor = 10.0; // Even faster for large values
+                    }
+
+                    if (label == 'Rotation') {
+                      adjustmentFactor =
+                          2.0; // Still keep rotation a bit controlled
+                    }
+                  }
+
+                  // Calculate new value with the appropriate sensitivity
+                  final newValue = startValue + (dx * adjustmentFactor);
+
+                  // Optionally round to 1 decimal place for better usability
+                  final roundedValue = (newValue * 10).round() / 10;
+
+                  // Update the controller text and call the callback
+                  controller.text = roundedValue.toStringAsFixed(1);
+                  onChanged(roundedValue);
+                }
+              },
+              onPointerUp: (PointerUpEvent event) {
+                isDragging = false;
+              },
+              child: Stack(
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (text) {
+                      final newValue = double.tryParse(text);
+                      if (newValue != null) {
+                        onChanged(newValue);
+                      }
+                    },
+                    // Add a cursor style hint to indicate the scrubbing capability
+                    mouseCursor: SystemMouseCursors.resizeLeftRight,
+                  ),
+
+                  // Add a visual tooltip overlay that appears during dragging
+                  if (isDragging)
+                    Positioned(
+                      right: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                isShiftPressed
+                                    ? Colors.blue.withOpacity(0.7)
+                                    : Colors.orange.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isShiftPressed ? 'Fine' : 'Fast',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -1071,186 +1177,179 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     'Lato',
     'Montserrat',
   ];
-  List<String> filteredFonts = [];
-  String _searchQuery = '';
-  bool _isDropdownOpen = false;
-  final LayerLink _layerLink = LayerLink();
-  final FocusNode _focusNode = FocusNode();
+
   final TextEditingController _controller = TextEditingController();
-  OverlayEntry? _overlayEntry;
+  bool _isDropdownVisible = false;
+  String _searchText = '';
+
+  // Add a focus node for the search field
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _controller.text = widget.currentFont;
-    filteredFonts = allFonts;
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus) {
-        _openDropdown();
-      } else {
-        _closeDropdown();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
     _controller.dispose();
-    _closeDropdown();
+    _searchFocusNode.dispose(); // Dispose the focus node
     super.dispose();
   }
 
-  void _openDropdown() {
-    _isDropdownOpen = true;
-    _overlayEntry = _createOverlayEntry();
-    if (_overlayEntry != null) {
-      Overlay.of(context).insert(_overlayEntry!);
-    }
-  }
-
-  void _closeDropdown() {
-    _isDropdownOpen = false;
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
   List<String> _getFilteredFonts() {
-    if (_searchQuery.isEmpty) {
+    if (_searchText.isEmpty) {
       return allFonts;
     }
     return allFonts
-        .where(
-          (font) => font.toLowerCase().contains(_searchQuery.toLowerCase()),
-        )
+        .where((font) => font.toLowerCase().contains(_searchText.toLowerCase()))
         .toList();
-  }
-
-  OverlayEntry _createOverlayEntry() {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final Size size = renderBox.size;
-
-    return OverlayEntry(
-      builder:
-          (context) => Positioned(
-            width: size.width,
-            child: CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: Offset(0, size.height),
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxHeight: 250,
-                    minWidth: size.width,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            hintText: 'Search fonts...',
-                            prefixIcon: Icon(Icons.search, size: 20),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              _searchQuery = value;
-                              // Need to rebuild the overlay when search changes
-                              _closeDropdown();
-                              _openDropdown();
-                            });
-                          },
-                        ),
-                      ),
-                      Flexible(
-                        child: ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          children:
-                              _getFilteredFonts().map((font) {
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(
-                                    font,
-                                    style: TextStyle(
-                                      fontFamily: font,
-                                      fontWeight:
-                                          font == widget.currentFont
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                    ),
-                                  ),
-                                  selected: font == widget.currentFont,
-                                  onTap: () {
-                                    widget.onFontSelected(font);
-                                    _controller.text = font;
-                                    _closeDropdown();
-                                    _focusNode.unfocus();
-                                  },
-                                );
-                              }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: TextFormField(
-        controller: _controller,
-        focusNode: _focusNode,
-        readOnly: true,
-        decoration: InputDecoration(
-          labelText: 'Font Family',
-          border: const OutlineInputBorder(),
-          suffixIcon: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_controller.text.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () {
-                    setState(() {
-                      _controller.clear();
-                      widget.onFontSelected('Arial'); // Default font
-                    });
-                  },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Font selector field
+        TextField(
+          controller: _controller,
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: 'Font Family',
+            border: const OutlineInputBorder(),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_controller.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        _controller.clear();
+                        widget.onFontSelected('Arial');
+                      });
+                    },
+                  ),
+                Icon(
+                  _isDropdownVisible
+                      ? Icons.arrow_drop_up
+                      : Icons.arrow_drop_down,
                 ),
-              const Icon(Icons.arrow_drop_down),
-            ],
+              ],
+            ),
           ),
+          onTap: () {
+            setState(() {
+              _isDropdownVisible = !_isDropdownVisible;
+              _searchText = '';
+
+              // If dropdown is opened, request focus on the search field after the frame is built
+              if (_isDropdownVisible) {
+                // Use Future.delayed to ensure the focus happens after the build
+                Future.delayed(Duration.zero, () {
+                  _searchFocusNode.requestFocus();
+                });
+              }
+            });
+          },
         ),
-        onTap: () {
-          if (_isDropdownOpen) {
-            _closeDropdown();
-          } else {
-            _openDropdown();
-          }
-        },
-      ),
+
+        // Dropdown with search field
+        if (_isDropdownVisible)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(4),
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Search box
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    focusNode: _searchFocusNode,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Search fonts...',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchText = value;
+                      });
+                    },
+                    // Add onSubmitted to handle Enter key press
+                    onSubmitted: (value) {
+                      // Get filtered fonts
+                      final filteredFonts = _getFilteredFonts();
+                      // If there are any results, select the first one
+                      if (filteredFonts.isNotEmpty) {
+                        final firstFont = filteredFonts.first;
+                        setState(() {
+                          _controller.text = firstFont;
+                          _isDropdownVisible = false;
+                          widget.onFontSelected(firstFont);
+                        });
+                      }
+                    },
+                  ),
+                ),
+
+                // Fonts list
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _getFilteredFonts().length,
+                    itemBuilder: (context, index) {
+                      final font = _getFilteredFonts()[index];
+                      final isSelected = font == widget.currentFont;
+
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          font,
+                          style: TextStyle(
+                            fontFamily: font,
+                            fontWeight:
+                                isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                          ),
+                        ),
+                        selected: isSelected,
+                        onTap: () {
+                          setState(() {
+                            _controller.text = font;
+                            _isDropdownVisible = false;
+                            widget.onFontSelected(font);
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
