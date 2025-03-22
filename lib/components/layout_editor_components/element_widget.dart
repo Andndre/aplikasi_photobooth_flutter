@@ -52,7 +52,9 @@ class ElementWidget extends StatelessWidget {
           width: max(10.0, element.width),
           height: max(10.0, element.height),
           color: _hexToColor(textElement.backgroundColor),
-          alignment: Alignment.center,
+          alignment: _getElementAlignment(
+            textElement.alignment,
+          ), // Use alignment property for Container
           padding: const EdgeInsets.all(4.0),
           child: Text(
             textElement.text.isEmpty
@@ -75,7 +77,9 @@ class ElementWidget extends StatelessWidget {
                       : textElement.fontFamily,
               decoration: TextDecoration.none,
             ),
-            textAlign: _getTextAlignment(textElement.alignment),
+            textAlign: _getTextAlignment(
+              textElement.alignment,
+            ), // Keep textAlign for text widget
             overflow: TextOverflow.visible, // Use visible instead of clip
           ),
         );
@@ -133,6 +137,36 @@ class ElementWidget extends StatelessWidget {
       case 'center':
       default:
         return TextAlign.center;
+    }
+  }
+
+  Alignment _getElementAlignment(String alignment) {
+    switch (alignment) {
+      case 'topLeft':
+        return Alignment.topLeft;
+      case 'topCenter':
+        return Alignment.topCenter;
+      case 'topRight':
+        return Alignment.topRight;
+      case 'centerLeft':
+        return Alignment.centerLeft;
+      case 'center':
+        return Alignment.center;
+      case 'centerRight':
+        return Alignment.centerRight;
+      case 'bottomLeft':
+        return Alignment.bottomLeft;
+      case 'bottomCenter':
+        return Alignment.bottomCenter;
+      case 'bottomRight':
+        return Alignment.bottomRight;
+      // Legacy support for old alignment values
+      case 'left':
+        return Alignment.centerLeft;
+      case 'right':
+        return Alignment.centerRight;
+      default:
+        return Alignment.center;
     }
   }
 

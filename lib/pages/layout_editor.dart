@@ -9,7 +9,6 @@ import '../components/layout_editor_components/zoom_controls.dart';
 import '../components/layout_editor_components/layers_sidebar.dart';
 import '../components/layout_editor_components/properties_panel.dart';
 import '../components/layout_editor_components/background_properties_panel.dart';
-import '../components/layout_editor_components/element_widget.dart';
 // Use a prefix for this import to avoid conflicts
 import '../components/layout_editor_components/selection_overlay.dart'
     as custom_overlay;
