@@ -534,6 +534,18 @@ class PropertiesPanel extends StatelessWidget {
           ),
         ),
 
+        // Aspect Ratio Lock - NEW
+        _SwitchPropertyRow(
+          label: 'Lock Ratio',
+          value: element.aspectRatioLocked,
+          onChanged: (value) {
+            editorProvider.updateImageElement(
+              element.id,
+              aspectRatioLocked: value,
+            );
+          },
+        ),
+
         // Opacity
         Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -566,6 +578,51 @@ class PropertiesPanel extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+
+        // Image info - NEW
+        Container(
+          margin: const EdgeInsets.only(top: 8, bottom: 8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.aspect_ratio, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Aspect Ratio: ${(element.width / element.height).toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.photo, size: 16),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${element.path.split('/').last}',
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

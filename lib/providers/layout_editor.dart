@@ -99,26 +99,55 @@ class LayoutEditorProvider with ChangeNotifier {
     final file = File(path);
     if (!file.existsSync()) return;
 
-    final imageSize = size ?? const Size(200, 200);
-    final pos =
-        position ??
-        Offset(
-          (_layout!.width / 2) - (imageSize.width / 2),
-          (_layout!.height / 2) - (imageSize.height / 2),
-        );
+    // Get image dimensions to calculate aspect ratio
+    final imageBytes = file.readAsBytesSync();
+    final decodedImage = decodeImageFromList(imageBytes);
 
-    final newElement = ImageElement(
-      id: _uuid.v4(),
-      x: pos.dx,
-      y: pos.dy,
-      width: imageSize.width,
-      height: imageSize.height,
-      path: path,
-    );
+    // Default image size with a reasonable maximum
+    Size imageSize = const Size(200, 200);
 
-    _layout!.elements.add(newElement);
-    _selectedElement = newElement;
-    notifyListeners();
+    // Wait for image to load then update with proper dimensions
+    decodedImage.then((image) {
+      final aspectRatio = image.width / image.height;
+
+      // If size is provided, use it as a starting point
+      if (size != null) {
+        imageSize = size;
+      } else {
+        // Calculate a size that preserves aspect ratio with max width/height of 300
+        if (image.width > image.height) {
+          // Landscape
+          final maxWidth = 300.0;
+          imageSize = Size(maxWidth, maxWidth / aspectRatio);
+        } else {
+          // Portrait
+          final maxHeight = 300.0;
+          imageSize = Size(maxHeight * aspectRatio, maxHeight);
+        }
+      }
+
+      // Calculate position (centered if not provided)
+      final pos =
+          position ??
+          Offset(
+            (_layout!.width / 2) - (imageSize.width / 2),
+            (_layout!.height / 2) - (imageSize.height / 2),
+          );
+
+      final newElement = ImageElement(
+        id: _uuid.v4(),
+        x: pos.dx,
+        y: pos.dy,
+        width: imageSize.width,
+        height: imageSize.height,
+        path: path,
+        aspectRatioLocked: true, // Default to true
+      );
+
+      _layout!.elements.add(newElement);
+      _selectedElement = newElement;
+      notifyListeners();
+    });
   }
 
   void addTextElement({String? text, Offset? position, Size? size}) {
@@ -243,6 +272,27 @@ class LayoutEditorProvider with ChangeNotifier {
 
     final element = _layout!.elements[elementIndex];
 
+    // Handle aspect ratio for image elements
+    if (element.type == 'image') {
+      final imageElement = element as ImageElement;
+
+      // If aspect ratio is locked, calculate new height based on width
+      if (imageElement.aspectRatioLocked) {
+        final aspectRatio = element.width / element.height;
+
+        // Determine if width or height was changed by comparing with original values
+        final widthChanged = size.width != element.width;
+
+        if (widthChanged) {
+          // Adjust height based on width change
+          size = Size(size.width, size.width / aspectRatio);
+        } else {
+          // Adjust width based on height change
+          size = Size(size.height * aspectRatio, size.height);
+        }
+      }
+    }
+
     // Apply snapping if enabled
     double width = size.width;
     double height = size.height;
@@ -331,7 +381,12 @@ class LayoutEditorProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateImageElement(String id, {String? path, double? opacity}) {
+  void updateImageElement(
+    String id, {
+    String? path,
+    double? opacity,
+    bool? aspectRatioLocked,
+  }) {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
@@ -340,8 +395,36 @@ class LayoutEditorProvider with ChangeNotifier {
 
     final element = _layout!.elements[elementIndex] as ImageElement;
 
-    if (path != null) element.path = path;
+    if (path != null) {
+      element.path = path;
+
+      // If new image is loaded, update aspect ratio
+      if (aspectRatioLocked ?? element.aspectRatioLocked) {
+        final file = File(path);
+        if (file.existsSync()) {
+          final imageBytes = file.readAsBytesSync();
+          final decodedImage = decodeImageFromList(imageBytes);
+
+          decodedImage.then((image) {
+            final aspectRatio = image.width / image.height;
+
+            // Maintain current width, adjust height to match aspect ratio
+            final newHeight = element.width / aspectRatio;
+            element.height = newHeight;
+
+            if (_selectedElement?.id == id) {
+              _selectedElement = element;
+            }
+
+            notifyListeners();
+          });
+        }
+      }
+    }
+
     if (opacity != null) element.opacity = opacity;
+    if (aspectRatioLocked != null)
+      element.aspectRatioLocked = aspectRatioLocked;
 
     if (_selectedElement?.id == id) {
       _selectedElement = element;

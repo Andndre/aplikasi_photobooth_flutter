@@ -34,7 +34,10 @@ class ElementWidget extends StatelessWidget {
               opacity: imageElement.opacity,
               child: Image.file(
                 file,
-                fit: BoxFit.fill,
+                fit:
+                    imageElement.aspectRatioLocked
+                        ? BoxFit.contain
+                        : BoxFit.fill,
                 width: element.width,
                 height: element.height,
               ),

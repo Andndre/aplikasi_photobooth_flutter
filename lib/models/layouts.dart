@@ -45,6 +45,7 @@ abstract class LayoutElement {
 class ImageElement extends LayoutElement {
   String path;
   double opacity;
+  bool aspectRatioLocked; // Add this new property
 
   ImageElement({
     required String id,
@@ -54,6 +55,8 @@ class ImageElement extends LayoutElement {
     required double height,
     required this.path,
     this.opacity = 1.0,
+    this.aspectRatioLocked =
+        true, // Default to true for preserving aspect ratio
     double rotation = 0.0,
     bool isLocked = false,
     bool isVisible = true,
@@ -83,6 +86,7 @@ class ImageElement extends LayoutElement {
       'isVisible': isVisible,
       'path': path,
       'opacity': opacity,
+      'aspectRatioLocked': aspectRatioLocked,
     };
   }
 
@@ -98,6 +102,8 @@ class ImageElement extends LayoutElement {
       isVisible: json['isVisible'] as bool? ?? true,
       path: json['path'] as String,
       opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      aspectRatioLocked:
+          json['aspectRatioLocked'] as bool? ?? true, // Default to true
     );
   }
 }
