@@ -96,19 +96,30 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
         }
         return KeyEventResult.ignored;
       },
-      child: WillPopScope(
-        onWillPop: () async {
-          // If there are unsaved changes, show confirmation dialog
-          if (_hasUnsavedChanges) {
-            return await _showUnsavedChangesDialog(context) ?? false;
+      // Replace WillPopScope with PopScope
+      child: PopScope<dynamic>(
+        canPop: !_hasUnsavedChanges, // Only allow popping if no unsaved changes
+        onPopInvokedWithResult: (didPop, dynamic result) async {
+          // If didPop is true, the pop was allowed and already happened
+          if (didPop) {
+            return;
           }
-          return true; // Allow navigation if no unsaved changes
+
+          // If we have unsaved changes, show the dialog
+          if (_hasUnsavedChanges) {
+            final bool? shouldPop = await _showUnsavedChangesDialog(context);
+            // If user confirmed saving/discarding and the context is still valid
+            if (context.mounted && shouldPop == true) {
+              Navigator.of(context).pop(result);
+            }
+          }
         },
         child: Scaffold(
           appBar: AppBar(
             title: Text('Editing: ${layout.name}'),
             actions: [
-              IconButton(
+              // Replace the simple IconButton with a TextButton.icon
+              TextButton.icon(
                 icon: Icon(
                   _hasUnsavedChanges
                       ? Icons
@@ -119,11 +130,19 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
                           ? Theme.of(context).colorScheme.primary
                           : Colors.green, // Indicate saved with green color
                 ),
-                tooltip:
-                    _hasUnsavedChanges
-                        ? 'Save changes (Ctrl+S)'
-                        : 'Layout is saved',
+                label: Text(
+                  _hasUnsavedChanges ? 'Save' : 'Saved',
+                  style: TextStyle(
+                    color:
+                        _hasUnsavedChanges
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.green,
+                  ),
+                ),
                 onPressed: () => _saveLayout(context),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
               ),
             ],
           ),
