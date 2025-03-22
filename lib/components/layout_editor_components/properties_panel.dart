@@ -48,12 +48,7 @@ class _NumberPropertyRow extends StatelessWidget {
     // Create a text controller with the current value
     final controller = TextEditingController(text: value.toStringAsFixed(1));
 
-    // State for dragging
-    double startX = 0;
-    double startValue = value;
-    bool isDragging = false;
-    bool isShiftPressed = false;
-
+    // Use StatefulBuilder to properly manage the dragging state
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -63,121 +58,142 @@ class _NumberPropertyRow extends StatelessWidget {
             child: Text(label, style: const TextStyle(fontSize: 14)),
           ),
           Expanded(
-            child: Listener(
-              // Use Listener instead of GestureDetector to detect mouse buttons
-              onPointerDown: (PointerDownEvent event) {
-                // Check if middle button is pressed (button index 2 corresponds to middle button)
-                if (event.buttons == 4) {
-                  // 4 is middle button
-                  startX = event.localPosition.dx;
-                  startValue = value;
-                  isDragging = true;
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                // State for dragging - moved inside StatefulBuilder
+                double startX = 0;
+                double startValue = value;
+                bool isDragging = false;
+                bool isShiftPressed = false;
 
-                  // Check if shift key is pressed for precision mode
-                  isShiftPressed = event.down && (event.buttons & 0x8) != 0;
-                }
-              },
-              onPointerMove: (PointerMoveEvent event) {
-                if (isDragging) {
-                  // Calculate delta and apply a sensitivity factor
-                  final dx = event.localPosition.dx - startX;
-
-                  // Check if shift key is currently pressed
-                  isShiftPressed = (event.buttons & 0x8) != 0;
-
-                  // Determine the adjustment factor based on precision mode and value magnitude
-                  double adjustmentFactor;
-
-                  if (isShiftPressed) {
-                    // Precision mode (slow changes) with Shift key
-                    adjustmentFactor = 0.05; // Very fine control
-
-                    if (label == 'Rotation') {
-                      adjustmentFactor = 0.02; // Even finer for rotation
+                return Listener(
+                  // Use Listener instead of GestureDetector to detect mouse buttons
+                  onPointerDown: (PointerDownEvent event) {
+                    // Check if middle button is pressed (button index 2 corresponds to middle button)
+                    if (event.buttons == 4) {
+                      // 4 is middle button
+                      setState(() {
+                        startX = event.localPosition.dx;
+                        startValue = value;
+                        isDragging = true;
+                        // Check if shift key is pressed for precision mode
+                        isShiftPressed =
+                            event.down && (event.buttons & 0x8) != 0;
+                      });
                     }
-                  } else {
-                    // Fast mode (without Shift key)
-                    adjustmentFactor = 5.0; // Much faster control
+                  },
+                  onPointerMove: (PointerMoveEvent event) {
+                    if (isDragging) {
+                      // Calculate delta and apply a sensitivity factor
+                      final dx = event.localPosition.dx - startX;
 
-                    if (startValue.abs() > 100) {
-                      adjustmentFactor = 10.0; // Even faster for large values
-                    }
-
-                    if (label == 'Rotation') {
-                      adjustmentFactor =
-                          2.0; // Still keep rotation a bit controlled
-                    }
-                  }
-
-                  // Calculate new value with the appropriate sensitivity
-                  final newValue = startValue + (dx * adjustmentFactor);
-
-                  // Optionally round to 1 decimal place for better usability
-                  final roundedValue = (newValue * 10).round() / 10;
-
-                  // Update the controller text and call the callback
-                  controller.text = roundedValue.toStringAsFixed(1);
-                  onChanged(roundedValue);
-                }
-              },
-              onPointerUp: (PointerUpEvent event) {
-                isDragging = false;
-              },
-              child: Stack(
-                children: [
-                  TextField(
-                    controller: controller,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      isDense: true,
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (text) {
-                      final newValue = double.tryParse(text);
-                      if (newValue != null) {
-                        onChanged(newValue);
+                      // Check if shift key is currently pressed
+                      bool newShiftPressed = (event.buttons & 0x8) != 0;
+                      if (isShiftPressed != newShiftPressed) {
+                        setState(() {
+                          isShiftPressed = newShiftPressed;
+                        });
                       }
-                    },
-                    // Add a cursor style hint to indicate the scrubbing capability
-                    mouseCursor: SystemMouseCursors.resizeLeftRight,
-                  ),
 
-                  // Add a visual tooltip overlay that appears during dragging
-                  if (isDragging)
-                    Positioned(
-                      right: 8,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
+                      // Determine the adjustment factor based on precision mode and value magnitude
+                      double adjustmentFactor;
+
+                      if (isShiftPressed) {
+                        // Precision mode (slow changes) with Shift key
+                        adjustmentFactor = 0.05; // Very fine control
+
+                        if (label == 'Rotation') {
+                          adjustmentFactor = 0.02; // Even finer for rotation
+                        }
+                      } else {
+                        // Fast mode (without Shift key)
+                        adjustmentFactor = 5.0; // Much faster control
+
+                        if (startValue.abs() > 100) {
+                          adjustmentFactor =
+                              10.0; // Even faster for large values
+                        }
+
+                        if (label == 'Rotation') {
+                          adjustmentFactor =
+                              2.0; // Still keep rotation a bit controlled
+                        }
+                      }
+
+                      // Calculate new value with the appropriate sensitivity
+                      final newValue = startValue + (dx * adjustmentFactor);
+
+                      // Optionally round to 1 decimal place for better usability
+                      final roundedValue = (newValue * 10).round() / 10;
+
+                      // Update the controller text and call the callback
+                      controller.text = roundedValue.toStringAsFixed(1);
+                      onChanged(roundedValue);
+                    }
+                  },
+                  onPointerUp: (PointerUpEvent event) {
+                    if (isDragging) {
+                      setState(() {
+                        isDragging = false;
+                      });
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      TextField(
+                        controller: controller,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
-                          decoration: BoxDecoration(
-                            color:
-                                isShiftPressed
-                                    ? Colors.blue.withOpacity(0.7)
-                                    : Colors.orange.withOpacity(0.7),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isShiftPressed ? 'Fine' : 'Fast',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (text) {
+                          final newValue = double.tryParse(text);
+                          if (newValue != null) {
+                            onChanged(newValue);
+                          }
+                        },
+                        mouseCursor: SystemMouseCursors.resizeLeftRight,
+                      ),
+
+                      // Now the tooltip will properly show when isDragging is true
+                      if (isDragging)
+                        Positioned(
+                          right: 8,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    isShiftPressed
+                                        ? Colors.blue.withOpacity(0.7)
+                                        : Colors.orange.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isShiftPressed ? 'Fine' : 'Fast',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                ],
-              ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
