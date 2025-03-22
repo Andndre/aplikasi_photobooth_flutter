@@ -715,23 +715,81 @@ class PropertiesPanel extends StatelessWidget {
                 children: [
                   const Text('Alignment', style: TextStyle(fontSize: 12)),
                   const SizedBox(height: 4),
+
+                  // First row of alignment options (Top)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.align_horizontal_left,
+                          alignment: 'topLeft',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'topLeft',
+                            );
+                          },
+                          label: 'Top Left',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.align_horizontal_center,
+                          alignment: 'topCenter',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'topCenter',
+                            );
+                          },
+                          label: 'Top Center',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.align_horizontal_right,
+                          alignment: 'topRight',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'topRight',
+                            );
+                          },
+                          label: 'Top Right',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Second row of alignment options (Middle)
                   Row(
                     children: [
                       Expanded(
                         child: _buildAlignmentButton(
                           context: context,
                           icon: Icons.format_align_left,
-                          alignment: 'left',
+                          alignment: 'centerLeft',
                           currentAlignment: element.alignment,
                           onTap: () {
                             editorProvider.updateTextElement(
                               element.id,
-                              alignment: 'left',
+                              alignment: 'centerLeft',
                             );
                           },
+                          label: 'Center Left',
                         ),
                       ),
-                      const SizedBox(width: 4), // Add a small gap
+                      const SizedBox(width: 4),
                       Expanded(
                         child: _buildAlignmentButton(
                           context: context,
@@ -744,21 +802,78 @@ class PropertiesPanel extends StatelessWidget {
                               alignment: 'center',
                             );
                           },
+                          label: 'Center',
                         ),
                       ),
-                      const SizedBox(width: 4), // Add a small gap
+                      const SizedBox(width: 4),
                       Expanded(
                         child: _buildAlignmentButton(
                           context: context,
                           icon: Icons.format_align_right,
-                          alignment: 'right',
+                          alignment: 'centerRight',
                           currentAlignment: element.alignment,
                           onTap: () {
                             editorProvider.updateTextElement(
                               element.id,
-                              alignment: 'right',
+                              alignment: 'centerRight',
                             );
                           },
+                          label: 'Center Right',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Third row of alignment options (Bottom)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.vertical_align_bottom_outlined,
+                          alignment: 'bottomLeft',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'bottomLeft',
+                            );
+                          },
+                          label: 'Bottom Left',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.vertical_align_center_outlined,
+                          alignment: 'bottomCenter',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'bottomCenter',
+                            );
+                          },
+                          label: 'Bottom Center',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _buildAlignmentButton(
+                          context: context,
+                          icon: Icons.vertical_align_top_outlined,
+                          alignment: 'bottomRight',
+                          currentAlignment: element.alignment,
+                          onTap: () {
+                            editorProvider.updateTextElement(
+                              element.id,
+                              alignment: 'bottomRight',
+                            );
+                          },
+                          label: 'Bottom Right',
                         ),
                       ),
                     ],
@@ -1058,35 +1173,59 @@ class PropertiesPanel extends StatelessWidget {
     required String alignment,
     required String currentAlignment,
     required VoidCallback onTap,
+    String? label,
   }) {
     final isSelected = alignment == currentAlignment;
 
-    // Remove the outer Expanded wrapper as it's causing conflicts
     return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerLowest,
-          border: Border.all(
-            color:
-                isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline.withOpacity(0.5),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color:
+                  isSelected
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerLowest,
+              border: Border.all(
+                color:
+                    isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(
+                          context,
+                        ).colorScheme.outline.withOpacity(0.5),
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 18,
+              color:
+                  isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          icon,
-          size: 20,
-          color:
-              isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurface,
-        ),
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 9,
+                  color:
+                      isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.8),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1351,5 +1490,27 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
           ),
       ],
     );
+  }
+}
+
+TextAlign _getTextAlignment(String alignment) {
+  switch (alignment) {
+    case 'topLeft':
+    case 'centerLeft':
+    case 'bottomLeft':
+    case 'left':
+      return TextAlign.left;
+
+    case 'topRight':
+    case 'centerRight':
+    case 'bottomRight':
+    case 'right':
+      return TextAlign.right;
+
+    case 'topCenter':
+    case 'center':
+    case 'bottomCenter':
+    default:
+      return TextAlign.center;
   }
 }

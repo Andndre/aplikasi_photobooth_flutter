@@ -39,69 +39,86 @@ class LayerItem extends StatelessWidget {
         elementIcon = Icons.help;
     }
 
-    return ListTile(
-      dense: true,
-      selected: isSelected,
-      tileColor:
-          isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-              : null,
-      leading: Icon(
-        elementIcon,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 4.0),
+      decoration: BoxDecoration(
         color:
-            element.isVisible
-                ? isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : null
-                : Colors.grey,
+            isSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+        border:
+            isSelected
+                ? Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 1,
+                )
+                : null,
       ),
-      title: Text(
-        elementName,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          decoration: !element.isVisible ? TextDecoration.lineThrough : null,
-          color: !element.isVisible ? Colors.grey : null,
+      child: ListTile(
+        dense: true,
+        selected: isSelected,
+        selectedTileColor: Colors.transparent, // Remove default selection color
+        leading: Icon(
+          elementIcon,
+          color:
+              element.isVisible
+                  ? isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : null
+                  : Colors.grey,
         ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              element.isVisible ? Icons.visibility : Icons.visibility_off,
-              size: 18,
+        title: Text(
+          elementName,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color:
+                isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : (!element.isVisible ? Colors.grey : null),
+            decoration: !element.isVisible ? TextDecoration.lineThrough : null,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(
+                element.isVisible ? Icons.visibility : Icons.visibility_off,
+                size: 18,
+              ),
+              tooltip: element.isVisible ? 'Hide' : 'Show',
+              onPressed: () {
+                editorProvider.toggleElementVisibility(element.id);
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
             ),
-            tooltip: element.isVisible ? 'Hide' : 'Show',
-            onPressed: () {
-              editorProvider.toggleElementVisibility(element.id);
-            },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-          ),
-          IconButton(
-            icon: Icon(
-              element.isLocked ? Icons.lock : Icons.lock_open,
-              size: 18,
+            IconButton(
+              icon: Icon(
+                element.isLocked ? Icons.lock : Icons.lock_open,
+                size: 18,
+              ),
+              tooltip: element.isLocked ? 'Unlock' : 'Lock',
+              onPressed: () {
+                editorProvider.toggleElementLock(element.id);
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
             ),
-            tooltip: element.isLocked ? 'Unlock' : 'Lock',
-            onPressed: () {
-              editorProvider.toggleElementLock(element.id);
-            },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, size: 18),
-            tooltip: 'More options',
-            onPressed: () => _showLayerOptions(context, editorProvider),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.more_vert, size: 18),
+              tooltip: 'More options',
+              onPressed: () => _showLayerOptions(context, editorProvider),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+            ),
+          ],
+        ),
+        onTap: () {
+          editorProvider.selectElement(element);
+        },
       ),
-      onTap: () {
-        editorProvider.selectElement(element);
-      },
     );
   }
 
