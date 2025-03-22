@@ -17,10 +17,10 @@ class LayoutEditor extends StatelessWidget {
   final int layoutIndex;
 
   const LayoutEditor({
-    Key? key,
+    super.key,
     required this.layout,
     required this.layoutIndex,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +38,7 @@ class LayoutEditor extends StatelessWidget {
 class LayoutEditorScreen extends StatefulWidget {
   final int layoutIndex;
 
-  const LayoutEditorScreen({Key? key, required this.layoutIndex})
-    : super(key: key);
+  const LayoutEditorScreen({super.key, required this.layoutIndex});
 
   @override
   LayoutEditorScreenState createState() => LayoutEditorScreenState();
