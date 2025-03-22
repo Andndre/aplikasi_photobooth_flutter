@@ -11,8 +11,15 @@ class LayerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final editorProvider = Provider.of<LayoutEditorProvider>(context);
-    final isSelected = editorProvider.selectedElement?.id == element.id;
+    // Fix: Use listen: false to avoid rebuilds during drag operations
+    final editorProvider = Provider.of<LayoutEditorProvider>(
+      context,
+      listen: false,
+    );
+    // Only listen to selectedElement changes for highlighting
+    final selectedElementId =
+        Provider.of<LayoutEditorProvider>(context).selectedElement?.id;
+    final isSelected = selectedElementId == element.id;
 
     String elementName;
     IconData elementIcon;
@@ -39,39 +46,43 @@ class LayerItem extends StatelessWidget {
         elementIcon = Icons.help;
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 4.0),
-      decoration: BoxDecoration(
-        color:
-            isSelected
-                ? Theme.of(context).colorScheme.primaryContainer
-                : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
-        border:
-            isSelected
-                ? Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 1,
-                )
-                : null,
-      ),
+    // Wrap the ListTile with a GestureDetector for right-click context menu
+    return GestureDetector(
+      onSecondaryTap: () {
+        // Show context menu on right-click
+        _showContextMenu(context, editorProvider);
+      },
       child: ListTile(
         dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
         selected: isSelected,
-        selectedTileColor: Colors.transparent, // Remove default selection color
-        leading: Icon(
-          elementIcon,
-          color:
-              element.isVisible
-                  ? isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : null
-                  : Colors.grey,
+        selectedTileColor: Colors.transparent,
+        // Add a drag handle at the start
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!element.isLocked)
+              Icon(
+                Icons.drag_handle,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              ),
+            const SizedBox(width: 4),
+            Icon(
+              elementIcon,
+              color:
+                  element.isVisible
+                      ? (isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : null)
+                      : Colors.grey,
+            ),
+          ],
         ),
         title: Text(
           elementName,
           style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontWeight: FontWeight.normal,
             color:
                 isSelected
                     ? Theme.of(context).colorScheme.primary
@@ -79,6 +90,7 @@ class LayerItem extends StatelessWidget {
             decoration: !element.isVisible ? TextDecoration.lineThrough : null,
           ),
         ),
+        // Keep only visibility and lock toggles, remove the more options button
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -106,120 +118,133 @@ class LayerItem extends StatelessWidget {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
             ),
-            IconButton(
-              icon: const Icon(Icons.more_vert, size: 18),
-              tooltip: 'More options',
-              onPressed: () => _showLayerOptions(context, editorProvider),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-            ),
+            // More options button removed in favor of right-click menu
           ],
         ),
         onTap: () {
           editorProvider.selectElement(element);
         },
+        onLongPress: () {
+          // Show context menu on long press for mobile support
+          _showContextMenu(context, editorProvider);
+        },
       ),
     );
   }
 
-  void _showLayerOptions(
+  // Method to show context menu - can be called from right-click or long press
+  void _showContextMenu(
     BuildContext context,
     LayoutEditorProvider editorProvider,
   ) {
-    showModalBottomSheet(
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    showMenu(
       context: context,
-      builder:
-          (context) => Column(
-            mainAxisSize: MainAxisSize.min,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy + size.height,
+        position.dx + size.width,
+        position.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'duplicate',
+          child: Row(
             children: [
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  editorProvider.deleteElement(element.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.copy),
-                title: const Text('Duplicate'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  editorProvider.copyElement(element.id);
-                  editorProvider.pasteElement();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.vertical_align_top),
-                title: const Text('Bring to Front'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  editorProvider.bringToFront(element.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.vertical_align_bottom),
-                title: const Text('Send to Back'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  editorProvider.sendToBack(element.id);
-                },
-              ),
-              // Add element-specific options
-              if (element.type == 'text')
-                ListTile(
-                  leading: const Icon(Icons.text_fields),
-                  title: const Text('Edit Text'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _editTextElement(
-                      context,
-                      editorProvider,
-                      element as TextElement,
-                    );
-                  },
-                ),
-              if (element.type == 'image')
-                ListTile(
-                  leading: const Icon(Icons.image),
-                  title: const Text('Replace Image'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _replaceImage(
-                      context,
-                      editorProvider,
-                      element as ImageElement,
-                    );
-                  },
-                ),
+              Icon(Icons.copy, size: 18),
+              const SizedBox(width: 8),
+              const Text('Duplicate'),
             ],
           ),
-    );
+        ),
+        PopupMenuItem(
+          value: 'bringToFront',
+          child: Row(
+            children: [
+              Icon(Icons.vertical_align_top, size: 18),
+              const SizedBox(width: 8),
+              const Text('Bring to Front'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'sendToBack',
+          child: Row(
+            children: [
+              Icon(Icons.vertical_align_bottom, size: 18),
+              const SizedBox(width: 8),
+              const Text('Send to Back'),
+            ],
+          ),
+        ),
+        if (element.type == 'text')
+          PopupMenuItem(
+            value: 'editText',
+            child: Row(
+              children: [
+                Icon(Icons.text_fields, size: 18),
+                const SizedBox(width: 8),
+                const Text('Edit Text'),
+              ],
+            ),
+          ),
+        if (element.type == 'image')
+          PopupMenuItem(
+            value: 'replaceImage',
+            child: Row(
+              children: [
+                Icon(Icons.image, size: 18),
+                const SizedBox(width: 8),
+                const Text('Replace Image'),
+              ],
+            ),
+          ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(
+                Icons.delete,
+                size: 18,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(width: 8),
+              const Text('Delete'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+
+      switch (value) {
+        case 'delete':
+          editorProvider.deleteElement(element.id);
+          break;
+        case 'duplicate':
+          editorProvider.copyElement(element.id);
+          editorProvider.pasteElement();
+          break;
+        case 'bringToFront':
+          editorProvider.bringToFront(element.id);
+          break;
+        case 'sendToBack':
+          editorProvider.sendToBack(element.id);
+          break;
+        case 'editText':
+          _editTextElement(context, editorProvider, element as TextElement);
+          break;
+        case 'replaceImage':
+          _replaceImage(context, editorProvider, element as ImageElement);
+          break;
+      }
+    });
   }
 
-  // Future<List<String>> _loadSystemFonts() async {
-  //   // Default fonts as fallback
-  //   List<String> fonts = [
-  //     'Arial',
-  //     'Helvetica',
-  //     'Times New Roman',
-  //     'Courier',
-  //     'Verdana',
-  //   ];
-
-  //   try {
-  //     // Try to load system fonts
-  //     final systemFonts = await SystemFonts.getAvailableFonts();
-  //     fonts = [...fonts, ...systemFonts];
-
-  //     // Remove duplicates and sort
-  //     fonts = fonts.toSet().toList()..sort();
-  //   } catch (e) {
-  //     print('Error loading system fonts: $e');
-  //   }
-
-  //   return fonts;
-  // }
+  // Existing _showLayerOptions method can be removed
 
   void _editTextElement(
     BuildContext context,

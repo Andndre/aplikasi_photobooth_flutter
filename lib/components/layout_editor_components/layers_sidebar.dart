@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 import 'layer_item.dart';
 
@@ -10,193 +9,221 @@ class LayersSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final editorProvider = Provider.of<LayoutEditorProvider>(context);
-    final layout = editorProvider.layout;
+    // Use Consumer for efficient rebuilds
+    return Consumer<LayoutEditorProvider>(
+      builder: (context, editorProvider, _) {
+        final layout = editorProvider.layout;
 
-    if (layout == null) {
-      return const Center(child: Text('No layout loaded'));
-    }
+        if (layout == null) {
+          return const Center(child: Text('No layout loaded'));
+        }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Sidebar header
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Layers', style: Theme.of(context).textTheme.titleMedium),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+        // Reversed list for correct z-index display (top item = front)
+        final List<LayoutElement> reversedElements =
+            layout.elements.reversed.toList();
+
+        return Container(
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+            color: Theme.of(context).colorScheme.surface,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.color_lens, size: 20),
-                      tooltip: 'Change background color',
-                      onPressed:
-                          () => _showColorPicker(context, editorProvider),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 30,
-                        minHeight: 30,
+                    const Icon(Icons.layers),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Layers',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${layout.elements.length} items',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Search box (optional)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search layers...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  // Implement search functionality here
+                ),
+              ),
+
+              // Layer type filters (optional)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    _buildFilterChip(context, 'All', true, () {}),
+                    _buildFilterChip(context, 'Image', false, () {}),
+                    _buildFilterChip(context, 'Text', false, () {}),
+                    _buildFilterChip(context, 'Camera', false, () {}),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+
+              // Layers list with ReorderableListView for drag reordering
+              Expanded(
+                child: ReorderableListView.builder(
+                  buildDefaultDragHandles:
+                      false, // We'll add custom drag handles
+                  padding: EdgeInsets.zero,
+                  itemCount: reversedElements.length,
+                  itemBuilder: (context, index) {
+                    final element = reversedElements[index];
+                    final isSelected =
+                        editorProvider.selectedElement?.id == element.id;
+
+                    // Fix: Use ChangeNotifierProvider.value to provide access during reordering
+                    return ChangeNotifierProvider<LayoutEditorProvider>.value(
+                      key: ValueKey(element.id),
+                      value: editorProvider,
+                      child: ReorderableDragStartListener(
+                        index: index,
+                        enabled:
+                            !element
+                                .isLocked, // Disable drag for locked elements
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 1.0,
+                            horizontal: 4.0,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                isSelected
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer
+                                        .withOpacity(0.5)
+                                    : null,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: LayerItem(element: element),
+                        ),
+                      ),
+                    );
+                  },
+                  onReorder: (oldIndex, newIndex) {
+                    // Handle the reordering of layers
+                    // Note: ReorderableListView indexes are relative to the visible list
+                    if (oldIndex < newIndex) {
+                      // When moving down, the item is inserted after the destination
+                      newIndex -= 1;
+                    }
+
+                    // Convert the reversed list index to the actual order in elements list
+                    final actualOldIndex =
+                        layout.elements.length - 1 - oldIndex;
+                    final actualNewIndex =
+                        layout.elements.length - 1 - newIndex;
+
+                    // Call the provider to reorder elements
+                    editorProvider.reorderElements(
+                      actualOldIndex,
+                      actualNewIndex,
+                    );
+                  },
+                ),
+              ),
+
+              // Bottom action bar
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  border: Border(
+                    top: BorderSide(color: Theme.of(context).dividerColor),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Tooltip(
+                      message: 'Show/Hide All',
+                      child: IconButton(
+                        icon: const Icon(Icons.visibility, size: 20),
+                        onPressed: () {
+                          // Toggle visibility of all elements
+                          editorProvider.toggleAllElementsVisibility();
+                        },
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.add, size: 20),
-                      tooltip: 'Add element',
-                      onPressed:
-                          () => _showAddElementMenu(context, editorProvider),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 30,
-                        minHeight: 30,
+                    Tooltip(
+                      message: 'Lock/Unlock All',
+                      child: IconButton(
+                        icon: const Icon(Icons.lock_outline, size: 20),
+                        onPressed: () {
+                          // Toggle lock of all elements
+                          editorProvider.toggleAllElementsLock();
+                        },
+                      ),
+                    ),
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () {
+                        // Group selected elements
+                        // (Advanced feature - could be implemented later)
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text(
+                        'Group',
+                        style: TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-
-          // Layers list
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
-              itemCount: layout.elements.length,
-              itemBuilder: (context, index) {
-                // Display elements in reverse order so top-most element is at the top
-                final element =
-                    layout.elements[layout.elements.length - 1 - index];
-                return LayerItem(element: element);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showColorPicker(
-    BuildContext context,
-    LayoutEditorProvider editorProvider,
-  ) {
-    final layout = editorProvider.layout;
-    if (layout == null) return;
-
-    Color currentColor = _hexToColor(layout.backgroundColor);
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Select Background Color'),
-            content: SingleChildScrollView(
-              child: ColorPicker(
-                pickerColor: currentColor,
-                onColorChanged: (color) {
-                  currentColor = color;
-                },
-                pickerAreaHeightPercent: 0.8,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  editorProvider.updateLayoutBackground(
-                    '#${currentColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
-                  );
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Apply'),
               ),
             ],
           ),
+        );
+      },
     );
   }
 
-  void _showAddElementMenu(
+  Widget _buildFilterChip(
     BuildContext context,
-    LayoutEditorProvider editorProvider,
+    String label,
+    bool isSelected,
+    VoidCallback onTap,
   ) {
-    final RenderBox button = context.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(const Offset(0, 0), ancestor: overlay),
-        button.localToGlobal(
-          button.size.bottomRight(Offset.zero),
-          ancestor: overlay,
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(fontSize: 12)),
+        selected: isSelected,
+        onSelected: (value) => onTap(),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      Offset.zero & overlay.size,
     );
-
-    showMenu(
-      context: context,
-      position: position,
-      items: [
-        PopupMenuItem(
-          child: const Text('Add Image'),
-          onTap: () async {
-            // Allow time for the menu to close
-            await Future.delayed(Duration.zero);
-            if (context.mounted) {
-              _addImage(context, editorProvider);
-            }
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Add Text'),
-          onTap: () {
-            editorProvider.addTextElement();
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Add Camera Spot'),
-          onTap: () {
-            editorProvider.addCameraElement();
-          },
-        ),
-      ],
-    );
-  }
-
-  Future<void> _addImage(
-    BuildContext context,
-    LayoutEditorProvider editorProvider,
-  ) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-    );
-
-    if (result != null &&
-        result.files.isNotEmpty &&
-        result.files.first.path != null) {
-      editorProvider.addImageElement(result.files.first.path!);
-    }
-  }
-
-  Color _hexToColor(String hexColor) {
-    if (hexColor == 'transparent') return Colors.transparent;
-
-    hexColor = hexColor.replaceAll('#', '');
-    if (hexColor.length == 6) {
-      hexColor = 'FF$hexColor';
-    }
-    return Color(int.parse(hexColor, radix: 16));
   }
 }

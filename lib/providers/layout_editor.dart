@@ -802,4 +802,54 @@ class LayoutEditorProvider with ChangeNotifier {
       transformationController.value = correctedMatrix;
     }
   }
+
+  void reorderElements(int oldIndex, int newIndex) {
+    if (_layout == null) return;
+
+    if (oldIndex < 0 ||
+        oldIndex >= _layout!.elements.length ||
+        newIndex < 0 ||
+        newIndex >= _layout!.elements.length) {
+      return; // Invalid indices
+    }
+
+    // Remove the element from the old position
+    final element = _layout!.elements.removeAt(oldIndex);
+
+    // Insert it at the new position
+    _layout!.elements.insert(newIndex, element);
+
+    notifyListeners();
+  }
+
+  void toggleAllElementsVisibility() {
+    if (_layout == null || _layout!.elements.isEmpty) return;
+
+    // Determine the new state based on majority of current states
+    // If more elements are visible, we'll hide all; otherwise, show all
+    final visibleCount = _layout!.elements.where((e) => e.isVisible).length;
+    final shouldHide = visibleCount > _layout!.elements.length / 2;
+
+    // Apply the new visibility state to all elements
+    for (final element in _layout!.elements) {
+      element.isVisible = !shouldHide;
+    }
+
+    notifyListeners();
+  }
+
+  void toggleAllElementsLock() {
+    if (_layout == null || _layout!.elements.isEmpty) return;
+
+    // Similar to visibility toggle - check majority state
+    final lockedCount = _layout!.elements.where((e) => e.isLocked).length;
+    final shouldUnlock = lockedCount > _layout!.elements.length / 2;
+
+    // Apply the new lock state to all elements
+    for (final element in _layout!.elements) {
+      element.isLocked = !shouldUnlock;
+    }
+
+    notifyListeners();
+  }
 }
