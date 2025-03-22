@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this import for keyboard shortcuts
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/layouts.dart';
@@ -10,8 +11,6 @@ import '../components/layout_editor_components/layers_sidebar.dart';
 import '../components/layout_editor_components/properties_panel.dart';
 import '../components/layout_editor_components/background_properties_panel.dart';
 // Use a prefix for this import to avoid conflicts
-import '../components/layout_editor_components/selection_overlay.dart'
-    as custom_overlay;
 
 class LayoutEditor extends StatelessWidget {
   final Layouts layout;
@@ -47,59 +46,196 @@ class LayoutEditorScreen extends StatefulWidget {
 }
 
 class LayoutEditorScreenState extends State<LayoutEditorScreen> {
+  // Add a flag to track if there are unsaved changes
+  bool _hasUnsavedChanges = false;
+
+  // Create a focus node to handle keyboard shortcuts
+  final FocusNode _shortcutFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _shortcutFocusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final editorProvider = Provider.of<LayoutEditorProvider>(context);
     final layout = editorProvider.layout;
 
+    // Listen for changes and update the unsaved changes flag
+    editorProvider.addListener(() {
+      if (!_hasUnsavedChanges) {
+        setState(() {
+          _hasUnsavedChanges = true;
+        });
+      }
+    });
+
     if (layout == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Editing: ${layout.name}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save layout',
-            onPressed: () => _saveLayout(context),
-          ),
-          // Remove the settings button since we've moved these to the sidebar
-        ],
-      ),
-      body: Row(
-        children: [
-          // Left sidebar with layers
-          SizedBox(width: 250, child: LayersSidebar()),
+    // Use KeyboardListener with different key detection approach
+    return Focus(
+      focusNode: _shortcutFocusNode,
+      autofocus: true,
+      onKeyEvent: (_, KeyEvent event) {
+        // Debug the received key event
+        print(
+          'Key event: ${event.runtimeType} - logical: ${event.logicalKey.keyLabel}, '
+          'physical: ${event.physicalKey.usbHidUsage}',
+        );
 
-          // Main canvas area
-          Expanded(
-            flex: 3,
-            child: Center(
-              child: Stack(
-                children: [
-                  // Canvas workspace
-                  Positioned.fill(child: CanvasWorkspace()),
-
-                  // Zoom controls
-                  Positioned(right: 16, bottom: 80, child: ZoomControls()),
-                ],
+        // Check for Ctrl+S using both key types for robustness
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.keyS &&
+            (HardwareKeyboard.instance.isControlPressed)) {
+          // Support both Ctrl and Command
+          _saveLayout(context);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: WillPopScope(
+        onWillPop: () async {
+          // If there are unsaved changes, show confirmation dialog
+          if (_hasUnsavedChanges) {
+            return await _showUnsavedChangesDialog(context) ?? false;
+          }
+          return true; // Allow navigation if no unsaved changes
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text('Editing: ${layout.name}'),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _hasUnsavedChanges
+                      ? Icons
+                          .save_outlined // Different icon for unsaved changes
+                      : Icons.check_circle_outline, // Icon for saved state
+                  color:
+                      _hasUnsavedChanges
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.green, // Indicate saved with green color
+                ),
+                tooltip:
+                    _hasUnsavedChanges
+                        ? 'Save changes (Ctrl+S)'
+                        : 'Layout is saved',
+                onPressed: () => _saveLayout(context),
               ),
-            ),
+            ],
           ),
+          body: Row(
+            children: [
+              // Left sidebar with layers
+              SizedBox(width: 250, child: LayersSidebar()),
 
-          // Right sidebar with properties panel
-          SizedBox(
-            width: 280,
-            child:
-                editorProvider.selectedElement != null
-                    ? PropertiesPanel(element: editorProvider.selectedElement!)
-                    : BackgroundPropertiesPanel(),
+              // Main canvas area
+              Expanded(
+                flex: 3,
+                child: Center(
+                  child: Stack(
+                    children: [
+                      // Canvas workspace
+                      Positioned.fill(child: CanvasWorkspace()),
+
+                      // Zoom controls
+                      Positioned(right: 16, bottom: 80, child: ZoomControls()),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Right sidebar with properties panel
+              SizedBox(
+                width: 280,
+                child:
+                    editorProvider.selectedElement != null
+                        ? PropertiesPanel(
+                          element: editorProvider.selectedElement!,
+                        )
+                        : BackgroundPropertiesPanel(),
+              ),
+            ],
           ),
-        ],
+          bottomNavigationBar: ToolbarContainer(),
+        ),
       ),
-      bottomNavigationBar: ToolbarContainer(),
+    );
+  }
+
+  // Add method to show the confirmation dialog
+  Future<bool?> _showUnsavedChangesDialog(BuildContext context) async {
+    // Capture the editorProvider before showing the dialog
+    final editorProvider = Provider.of<LayoutEditorProvider>(
+      context,
+      listen: false,
+    );
+    final layoutsProvider = Provider.of<LayoutsProvider>(
+      context,
+      listen: false,
+    );
+
+    return await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Unsaved Changes'),
+            content: const Text(
+              'You have unsaved changes. Do you want to save them before leaving?',
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    () => Navigator.of(
+                      dialogContext,
+                    ).pop(false), // Don't save, continue navigation
+                child: const Text('Discard'),
+              ),
+              TextButton(
+                onPressed:
+                    () => Navigator.of(
+                      dialogContext,
+                    ).pop(null), // Cancel navigation
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  // Save the layout using the providers captured from the parent context
+                  if (editorProvider.layout != null) {
+                    await layoutsProvider.editLayout(
+                      widget.layoutIndex,
+                      editorProvider.layout!,
+                    );
+
+                    // Only update UI if the widget is still mounted
+                    if (context.mounted) {
+                      // Mark changes as saved
+                      setState(() {
+                        _hasUnsavedChanges = false;
+                      });
+
+                      // Show success message
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Layout saved successfully'),
+                        ),
+                      );
+                    }
+                  }
+
+                  // Close the dialog and continue navigation
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -120,15 +256,20 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
       );
 
       if (context.mounted) {
+        // Mark changes as saved
+        setState(() {
+          _hasUnsavedChanges = false;
+        });
+
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Layout saved successfully')),
         );
-        Navigator.of(context).pop();
+
+        // Remove Navigator.pop() to stay on the current screen
       }
     }
   }
-
-  // Remove _showEditorSettings method since it's no longer needed
 }
 
 class ToolbarContainer extends StatelessWidget {
