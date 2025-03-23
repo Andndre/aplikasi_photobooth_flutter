@@ -132,9 +132,6 @@ class ElementWidget extends StatelessWidget {
             decoration: TextDecoration.none,
             package: null, // Ensure no package is specified for system fonts
           );
-
-          // Try to load font if not already loaded
-          _loadFontFamily(textElement.fontFamily);
         }
 
         return Container(

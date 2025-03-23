@@ -1560,6 +1560,9 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
   // Add map to store font file paths
   Map<String, String> fontPaths = {};
 
+  // Add a set to keep track of loaded fonts
+  Set<String> loadedFonts = {};
+
   @override
   void initState() {
     super.initState();
@@ -1635,10 +1638,8 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
 
         print('Loaded ${sortedFonts.length} system fonts');
 
-        // Try to preload the currently selected font if it's a system font
-        if (systemFonts.contains(widget.currentFont)) {
-          _preloadFont(widget.currentFont);
-        }
+        // Preload all system fonts
+        await _preloadAllSystemFonts();
       } else {
         print('Windows Fonts directory not found');
         _setDefaultFonts();
@@ -1657,38 +1658,6 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
         _isLoading = false;
       }
     });
-  }
-
-  // Helper method to clean up font names
-  String _cleanFontName(String name) {
-    // Remove common suffixes like Regular, Bold, Italic
-    final suffixes = [
-      'regular',
-      'bold',
-      'italic',
-      'light',
-      'medium',
-      'black',
-      'thin',
-    ];
-
-    // Convert underscores to spaces
-    name = name.replaceAll('_', ' ');
-
-    // Try to handle font naming conventions
-    for (var suffix in suffixes) {
-      if (name.toLowerCase().endsWith(suffix)) {
-        name = name.substring(0, name.length - suffix.length).trim();
-      }
-    }
-
-    // Handle common font family markers
-    if (name.contains('-')) {
-      // Many fonts use FamilyName-StyleName format
-      name = name.split('-').first.trim();
-    }
-
-    return name;
   }
 
   // Load Google Fonts asynchronously
@@ -1722,19 +1691,22 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     }
   }
 
-  Future<void> _preloadFont(String fontName) async {
-    if (!fontPaths.containsKey(fontName)) return;
+  Future<void> _preloadAllSystemFonts() async {
+    for (var entry in fontPaths.entries) {
+      if (loadedFonts.contains(entry.key)) continue;
 
-    try {
-      final fontFile = File(fontPaths[fontName]!);
-      if (await fontFile.exists()) {
-        final fontLoader = FontLoader(fontName);
-        final bytes = await fontFile.readAsBytes();
-        fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
-        await fontLoader.load();
+      try {
+        final fontFile = File(entry.value);
+        if (await fontFile.exists()) {
+          final fontLoader = FontLoader(entry.key);
+          final bytes = await fontFile.readAsBytes();
+          fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
+          await fontLoader.load();
+          loadedFonts.add(entry.key);
+        }
+      } catch (e) {
+        print('Error preloading font ${entry.key}: $e');
       }
-    } catch (e) {
-      print('Error preloading font $fontName: $e');
     }
   }
 
@@ -1744,11 +1716,6 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
       _controller.text = font;
       _isDropdownVisible = false;
     });
-
-    // Preload the font if it's a system font
-    if (systemFonts.contains(font)) {
-      _preloadFont(font);
-    }
 
     widget.onFontSelected(font);
   }
