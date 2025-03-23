@@ -15,7 +15,7 @@ class SesiFoto extends StatefulWidget {
 }
 
 class SesiFotoState extends State<SesiFoto> {
-  int _photoCount = 1; // Start from 1
+  final int _photoCount = 1; // Start from 1
 
   @override
   Widget build(BuildContext context) {

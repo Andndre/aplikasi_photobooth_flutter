@@ -11,14 +11,14 @@ class FolderSelector extends StatelessWidget {
   final bool required;
 
   const FolderSelector({
-    Key? key,
+    super.key,
     required this.label,
     required this.hint,
     this.icon = Icons.folder,
     required this.selectedPath,
     required this.onSelectFolder,
     this.required = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

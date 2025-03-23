@@ -11,12 +11,12 @@ class SelectionOverlay extends StatelessWidget {
   final bool isPrimary;
 
   const SelectionOverlay({
-    Key? key,
+    super.key,
     required this.element,
     required this.onResize,
     required this.onRotate,
     this.isPrimary = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

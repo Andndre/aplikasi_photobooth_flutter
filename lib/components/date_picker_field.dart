@@ -9,13 +9,13 @@ class DatePickerField extends StatelessWidget {
   final DateTime? lastDate;
 
   const DatePickerField({
-    Key? key,
+    super.key,
     required this.selectedDate,
     required this.onDateChanged,
     this.label = 'Date',
     this.firstDate,
     this.lastDate,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

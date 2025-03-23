@@ -166,8 +166,8 @@ class ImagePreview extends StatefulWidget {
   const ImagePreview({
     required this.images,
     required this.initialIndex,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   _ImagePreviewState createState() => _ImagePreviewState();

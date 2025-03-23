@@ -5,8 +5,7 @@ class DialogHeader extends StatelessWidget {
   final String title;
   final VoidCallback onClose;
 
-  const DialogHeader({Key? key, required this.title, required this.onClose})
-    : super(key: key);
+  const DialogHeader({super.key, required this.title, required this.onClose});
 
   @override
   Widget build(BuildContext context) {

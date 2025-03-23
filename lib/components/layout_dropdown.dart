@@ -10,12 +10,12 @@ class LayoutDropdown extends StatelessWidget {
   final String? Function(int?)? validator;
 
   const LayoutDropdown({
-    Key? key,
+    super.key,
     this.value,
     required this.onChanged,
     this.onSaved,
     this.validator,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

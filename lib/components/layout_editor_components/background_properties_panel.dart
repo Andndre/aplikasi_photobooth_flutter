@@ -6,7 +6,7 @@ import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 
 class BackgroundPropertiesPanel extends StatelessWidget {
-  const BackgroundPropertiesPanel({Key? key}) : super(key: key);
+  const BackgroundPropertiesPanel({super.key});
 
   @override
   Widget build(BuildContext context) {

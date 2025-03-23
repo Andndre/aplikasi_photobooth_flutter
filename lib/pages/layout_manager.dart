@@ -1,7 +1,6 @@
 import 'package:aplikasi_photobooth_flutter/pages/layout_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import '../providers/layouts.dart';
 import '../models/layouts.dart';
 import 'dart:io';
@@ -76,8 +75,7 @@ class _LayoutManagerState extends State<LayoutManager> {
 class LayoutsList extends StatelessWidget {
   final LayoutsProvider layoutsProvider;
 
-  const LayoutsList({Key? key, required this.layoutsProvider})
-    : super(key: key);
+  const LayoutsList({super.key, required this.layoutsProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -102,8 +100,7 @@ class LayoutCard extends StatelessWidget {
   final Layouts layout;
   final int index;
 
-  const LayoutCard({required this.layout, required this.index, Key? key})
-    : super(key: key);
+  const LayoutCard({required this.layout, required this.index, super.key});
 
   @override
   Widget build(BuildContext context) {

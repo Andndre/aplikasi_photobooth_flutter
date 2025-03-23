@@ -7,9 +7,9 @@ class MultiSelectionPropertiesPanel extends StatelessWidget {
   final List<LayoutElement> selectedElements;
 
   const MultiSelectionPropertiesPanel({
-    Key? key,
+    super.key,
     required this.selectedElements,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +39,7 @@ class MultiSelectionPropertiesPanel extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.all(12),
-            color: Theme.of(context).colorScheme.surfaceVariant,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Row(
               children: [
                 const Icon(Icons.select_all),
@@ -437,8 +437,9 @@ class MultiSelectionPropertiesPanel extends StatelessWidget {
   }
 
   void _matchDimension(LayoutEditorProvider editorProvider, bool isWidth) {
-    if (selectedElements.isEmpty || editorProvider.selectedElement == null)
+    if (selectedElements.isEmpty || editorProvider.selectedElement == null) {
       return;
+    }
 
     // Use the primary selected element as reference
     final reference = editorProvider.selectedElement!;

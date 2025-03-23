@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/services.dart'; // Add this import for HardwareKeyboard
+// Add this import for HardwareKeyboard
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 import 'layer_item.dart';
 
 class LayersSidebar extends StatefulWidget {
-  const LayersSidebar({Key? key}) : super(key: key);
+  const LayersSidebar({super.key});
 
   @override
   State<LayersSidebar> createState() => _LayersSidebarState();

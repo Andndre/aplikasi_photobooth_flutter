@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
 
 class ZoomControls extends StatelessWidget {
-  const ZoomControls({Key? key}) : super(key: key);
+  const ZoomControls({super.key});
 
   @override
   Widget build(BuildContext context) {

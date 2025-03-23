@@ -1,4 +1,3 @@
-import 'dart:ui';
 
 import 'package:aplikasi_photobooth_flutter/providers/layout_editor.dart';
 import 'package:flutter/material.dart';
@@ -294,7 +293,7 @@ class _DisplayProperty extends StatelessWidget {
 class PropertiesPanel extends StatelessWidget {
   final LayoutElement element;
 
-  const PropertiesPanel({Key? key, required this.element}) : super(key: key);
+  const PropertiesPanel({super.key, required this.element});
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +310,7 @@ class PropertiesPanel extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.all(12),
-            color: Theme.of(context).colorScheme.surfaceVariant,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Row(
               children: [
                 Icon(_getElementIcon(element.type)),
@@ -645,7 +644,7 @@ class PropertiesPanel extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${element.path.split('/').last}',
+                            element.path.split('/').last,
                             style: const TextStyle(fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1526,7 +1525,7 @@ class CustomFontSelector extends StatefulWidget {
   final String currentFont;
   final Function(String) onFontSelected;
 
-  const CustomFontSelector({
+  const CustomFontSelector({super.key, 
     required this.currentFont,
     required this.onFontSelected,
   });

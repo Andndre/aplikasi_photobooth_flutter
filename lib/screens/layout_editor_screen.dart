@@ -10,7 +10,7 @@ import '../components/layout_editor_components/multi_selection_properties_panel.
 import '../components/layout_editor_components/editor_footer.dart';
 
 class LayoutEditorScreen extends StatelessWidget {
-  const LayoutEditorScreen({Key? key}) : super(key: key);
+  const LayoutEditorScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -9,8 +9,7 @@ class LayerItem extends StatelessWidget {
   final LayoutElement element;
   final bool isSelected;
 
-  const LayerItem({Key? key, required this.element, this.isSelected = false})
-    : super(key: key);
+  const LayerItem({super.key, required this.element, this.isSelected = false});
 
   @override
   Widget build(BuildContext context) {

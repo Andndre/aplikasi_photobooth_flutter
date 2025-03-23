@@ -253,9 +253,7 @@ class LayoutEditorProvider with ChangeNotifier {
         } else {
           _selectedElementIds.add(element.id);
           // Update primary selected element if this is the first selection
-          if (_selectedElement == null) {
-            _selectedElement = element;
-          }
+          _selectedElement ??= element;
         }
       }
     } else {
@@ -1019,8 +1017,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
-    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'image')
+    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'image') {
       return;
+    }
 
     final element = _layout!.elements[elementIndex] as ImageElement;
 
@@ -1052,8 +1051,9 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     if (opacity != null) element.opacity = opacity;
-    if (aspectRatioLocked != null)
+    if (aspectRatioLocked != null) {
       element.aspectRatioLocked = aspectRatioLocked;
+    }
 
     if (_selectedElement?.id == id) {
       _selectedElement = element;
@@ -1069,8 +1069,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
-    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'camera')
+    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'camera') {
       return;
+    }
 
     final element = _layout!.elements[elementIndex] as CameraElement;
 
@@ -1273,8 +1274,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
-    if (elementIndex < 0 || elementIndex >= _layout!.elements.length - 1)
+    if (elementIndex < 0 || elementIndex >= _layout!.elements.length - 1) {
       return;
+    }
 
     final element = _layout!.elements.removeAt(elementIndex);
     _layout!.elements.insert(elementIndex + 1, element);
@@ -1614,8 +1616,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
-    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'group')
+    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'group') {
       return;
+    }
 
     final element = _layout!.elements[elementIndex] as GroupElement;
     element.name = name;

@@ -10,14 +10,14 @@ class DialogButtons extends StatelessWidget {
   final Color? confirmColor;
 
   const DialogButtons({
-    Key? key,
+    super.key,
     this.cancelText = 'Cancel',
     this.confirmText = 'Confirm',
     required this.onCancel,
     required this.onConfirm,
     this.isConfirmEnabled = true,
     this.confirmColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

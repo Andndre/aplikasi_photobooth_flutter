@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 // Base class for all layout elements
 abstract class LayoutElement {
@@ -50,28 +49,20 @@ class ImageElement extends LayoutElement {
   bool aspectRatioLocked; // Add this new property
 
   ImageElement({
-    required String id,
-    required double x,
-    required double y,
-    required double width,
-    required double height,
+    required super.id,
+    required super.x,
+    required super.y,
+    required super.width,
+    required super.height,
     required this.path,
     this.opacity = 1.0,
     this.aspectRatioLocked =
         true, // Default to true for preserving aspect ratio
-    double rotation = 0.0,
-    bool isLocked = false,
-    bool isVisible = true,
+    super.rotation,
+    super.isLocked,
+    super.isVisible,
   }) : super(
-         id: id,
          type: 'image',
-         x: x,
-         y: y,
-         width: width,
-         height: height,
-         rotation: rotation,
-         isLocked: isLocked,
-         isVisible: isVisible,
        );
 
   @override
@@ -189,25 +180,17 @@ class CameraElement extends LayoutElement {
   String label;
 
   CameraElement({
-    required String id,
-    required double x,
-    required double y,
-    required double width,
-    required double height,
+    required super.id,
+    required super.x,
+    required super.y,
+    required super.width,
+    required super.height,
     this.label = 'Photo Spot',
-    double rotation = 0.0,
-    bool isLocked = false,
-    bool isVisible = true,
+    super.rotation,
+    super.isLocked,
+    super.isVisible,
   }) : super(
-         id: id,
          type: 'camera',
-         x: x,
-         y: y,
-         width: width,
-         height: height,
-         rotation: rotation,
-         isLocked: isLocked,
-         isVisible: isVisible,
        );
 
   @override
@@ -246,26 +229,18 @@ class GroupElement extends LayoutElement {
   String name;
 
   GroupElement({
-    required String id,
-    required double x,
-    required double y,
-    required double width,
-    required double height,
+    required super.id,
+    required super.x,
+    required super.y,
+    required super.width,
+    required super.height,
     required this.childIds,
     this.name = 'Group',
-    double rotation = 0.0,
-    bool isVisible = true,
-    bool isLocked = false,
+    super.rotation,
+    super.isVisible,
+    super.isLocked,
   }) : super(
-         id: id,
          type: 'group',
-         x: x,
-         y: y,
-         width: width,
-         height: height,
-         rotation: rotation,
-         isVisible: isVisible,
-         isLocked: isLocked,
        );
 
   factory GroupElement.fromJson(Map<String, dynamic> json) {
