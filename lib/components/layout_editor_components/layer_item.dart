@@ -150,8 +150,8 @@ class LayerItem extends StatelessWidget {
               title: Text(
                 elementName,
                 style: TextStyle(
-                  fontWeight:
-                      isCurrentlySelected ? FontWeight.bold : FontWeight.normal,
+                  // Remove the fontWeight condition - no longer bold when selected
+                  fontWeight: FontWeight.normal,
                   color:
                       isCurrentlySelected
                           ? selectedTextColor
