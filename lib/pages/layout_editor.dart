@@ -10,6 +10,7 @@ import '../components/layout_editor_components/zoom_controls.dart';
 import '../components/layout_editor_components/layers_sidebar.dart';
 import '../components/layout_editor_components/properties_panel.dart';
 import '../components/layout_editor_components/background_properties_panel.dart';
+import '../components/layout_editor_components/editor_footer.dart'; // Add this import
 // Use a prefix for this import to avoid conflicts
 
 class LayoutEditor extends StatelessWidget {
@@ -146,40 +147,56 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
               ),
             ],
           ),
-          body: Row(
+          body: Column(
+            // Change from Row to Column to add footer at bottom
             children: [
-              // Left sidebar with layers
-              SizedBox(width: 250, child: LayersSidebar()),
-
-              // Main canvas area
+              // Main content in an Expanded widget
               Expanded(
-                flex: 3,
-                child: Center(
-                  child: Stack(
-                    children: [
-                      // Canvas workspace
-                      Positioned.fill(child: CanvasWorkspace()),
+                child: Row(
+                  children: [
+                    // Left sidebar with layers
+                    SizedBox(width: 250, child: LayersSidebar()),
 
-                      // Zoom controls
-                      Positioned(right: 16, bottom: 80, child: ZoomControls()),
-                    ],
-                  ),
+                    // Main canvas area
+                    Expanded(
+                      flex: 3,
+                      child: Center(
+                        child: Stack(
+                          children: [
+                            // Canvas workspace
+                            Positioned.fill(child: CanvasWorkspace()),
+
+                            // Zoom controls
+                            Positioned(
+                              right: 16,
+                              bottom: 80,
+                              child: ZoomControls(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Right sidebar with properties panel
+                    SizedBox(
+                      width: 280,
+                      child:
+                          editorProvider.selectedElement != null
+                              ? PropertiesPanel(
+                                element: editorProvider.selectedElement!,
+                              )
+                              : BackgroundPropertiesPanel(),
+                    ),
+                  ],
                 ),
               ),
 
-              // Right sidebar with properties panel
-              SizedBox(
-                width: 280,
-                child:
-                    editorProvider.selectedElement != null
-                        ? PropertiesPanel(
-                          element: editorProvider.selectedElement!,
-                        )
-                        : BackgroundPropertiesPanel(),
-              ),
+              // Footer with project information
+              const EditorFooter(),
             ],
           ),
-          bottomNavigationBar: ToolbarContainer(),
+          // Remove bottomNavigationBar to prevent conflict with EditorFooter
+          // bottomNavigationBar: ToolbarContainer(),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart'; // Add this import for HardwareKeyboard
 import 'dart:math';
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
@@ -129,7 +130,8 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
           child: GestureDetector(
             onTap: () {
               // Deselect any selected element when clicking on empty area
-              if (editorProvider.selectedElement != null) {
+              if (editorProvider.selectedElement != null ||
+                  editorProvider.selectedElementIds.isNotEmpty) {
                 editorProvider.selectElement(null);
               }
             },
@@ -221,8 +223,20 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                       HitTestBehavior
                                           .opaque, // This ensures touches are captured
                                   onTap: () {
+                                    // Support multi-selection with either Ctrl or Shift key
+                                    final isMultiSelectModifier =
+                                        HardwareKeyboard
+                                            .instance
+                                            .isControlPressed ||
+                                        HardwareKeyboard
+                                            .instance
+                                            .isShiftPressed;
+
                                     if (!element.isLocked) {
-                                      editorProvider.selectElement(element);
+                                      editorProvider.selectElement(
+                                        element,
+                                        addToSelection: isMultiSelectModifier,
+                                      );
                                     }
                                   },
                                   onPanStart:
@@ -296,35 +310,37 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                               );
                             }),
 
-                            // Selection overlay - fix positioning
-                            if (editorProvider.selectedElement != null)
-                              Positioned(
-                                left: editorProvider.selectedElement!.x,
-                                top: editorProvider.selectedElement!.y,
-                                width: max(
-                                  10.0,
-                                  editorProvider.selectedElement!.width,
-                                ), // Explicitly set width
-                                height: max(
-                                  10.0,
-                                  editorProvider.selectedElement!.height,
-                                ), // Explicitly set height
+                            // Selection overlays for all selected elements
+                            ...editorProvider.selectedElements.map((element) {
+                              // Don't show overlay for invisible elements
+                              if (!element.isVisible)
+                                return const SizedBox.shrink();
+
+                              return Positioned(
+                                left: element.x,
+                                top: element.y,
+                                width: max(10.0, element.width),
+                                height: max(10.0, element.height),
                                 child: custom_overlay.SelectionOverlay(
-                                  element: editorProvider.selectedElement!,
+                                  element: element,
+                                  isPrimary:
+                                      element.id ==
+                                      editorProvider.selectedElement?.id,
                                   onResize: (size) {
                                     editorProvider.updateElementSize(
-                                      editorProvider.selectedElement!.id,
+                                      element.id,
                                       size,
                                     );
                                   },
                                   onRotate: (rotation) {
                                     editorProvider.updateElementRotation(
-                                      editorProvider.selectedElement!.id,
+                                      element.id,
                                       rotation,
                                     );
                                   },
                                 ),
-                              ),
+                              );
+                            }),
                           ],
                         ),
                       ),

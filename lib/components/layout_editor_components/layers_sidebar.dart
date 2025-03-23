@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart'; // Add this import for HardwareKeyboard
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 import 'layer_item.dart';
@@ -240,8 +241,9 @@ class _LayersSidebarState extends State<LayersSidebar> {
                     itemCount: reversedElements.length,
                     itemBuilder: (context, index) {
                       final element = reversedElements[index];
-                      final isSelected =
-                          editorProvider.selectedElement?.id == element.id;
+                      final isSelected = editorProvider.isElementSelected(
+                        element.id,
+                      );
 
                       // Fix: Use ChangeNotifierProvider.value to provide access during reordering
                       return ChangeNotifierProvider<LayoutEditorProvider>.value(
@@ -252,22 +254,39 @@ class _LayersSidebarState extends State<LayersSidebar> {
                           enabled:
                               !element
                                   .isLocked, // Disable drag for locked elements
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 1.0,
-                              horizontal: 4.0,
+                          child: GestureDetector(
+                            // Add behavior for Ctrl+click or Shift+click multi-select
+                            onTap: () {
+                              // Check if Ctrl or Shift key is pressed for multi-select
+                              final isMultiSelectModifier =
+                                  HardwareKeyboard.instance.isControlPressed ||
+                                  HardwareKeyboard.instance.isShiftPressed;
+
+                              editorProvider.selectElement(
+                                element,
+                                addToSelection: isMultiSelectModifier,
+                              );
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                vertical: 1.0,
+                                horizontal: 4.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    isSelected
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer
+                                            .withOpacity(0.5)
+                                        : null,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: LayerItem(
+                                element: element,
+                                isSelected: isSelected,
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              color:
-                                  isSelected
-                                      ? Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer
-                                          .withOpacity(0.5)
-                                      : null,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: LayerItem(element: element),
                           ),
                         ),
                       );
@@ -313,7 +332,7 @@ class _LayersSidebarState extends State<LayersSidebar> {
                   ),
                 ),
 
-              // Bottom action bar
+              // Bottom action bar with added Select All button
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -344,6 +363,15 @@ class _LayersSidebarState extends State<LayersSidebar> {
                         onPressed: () {
                           // Toggle lock of all elements
                           editorProvider.toggleAllElementsLock();
+                        },
+                      ),
+                    ),
+                    Tooltip(
+                      message: 'Select All',
+                      child: IconButton(
+                        icon: const Icon(Icons.select_all, size: 20),
+                        onPressed: () {
+                          editorProvider.selectAllElements();
                         },
                       ),
                     ),

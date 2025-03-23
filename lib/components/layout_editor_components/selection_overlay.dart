@@ -8,16 +8,33 @@ class SelectionOverlay extends StatelessWidget {
   final LayoutElement element;
   final Function(Size) onResize;
   final Function(double) onRotate;
+  final bool isPrimary;
 
   const SelectionOverlay({
     Key? key,
     required this.element,
     required this.onResize,
     required this.onRotate,
+    this.isPrimary = true,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Get the current scale from the provider to maintain consistent handle sizes
+    final editorProvider = Provider.of<LayoutEditorProvider>(context);
+    final currentScale =
+        editorProvider.transformationController.value.getMaxScaleOnAxis();
+
+    // Calculate the inverse scale to counter the zoom effect
+    final inverseScale = 1 / currentScale;
+
+    // Define colors based on primary selection
+    final borderColor = isPrimary ? Colors.blue : Colors.lightBlue;
+    final fillColor =
+        isPrimary
+            ? Colors.blue.withOpacity(0.03)
+            : Colors.lightBlue.withOpacity(0.02);
+
     return Stack(
       fit: StackFit.passthrough, // Ensure the stack properly fits its size
       children: [
@@ -27,13 +44,16 @@ class SelectionOverlay extends StatelessWidget {
             // Use IgnorePointer to make sure this doesn't capture touches
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blue, width: 2.0),
+                border: Border.all(
+                  color: borderColor,
+                  width: 2.0 * inverseScale,
+                ),
                 // Add a subtle glow effect
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 4,
-                    spreadRadius: 1,
+                    color: borderColor.withOpacity(0.3),
+                    blurRadius: 4 * inverseScale,
+                    spreadRadius: 1 * inverseScale,
                   ),
                 ],
               ),
@@ -43,13 +63,11 @@ class SelectionOverlay extends StatelessWidget {
 
         // Very light overlay to show what's selected
         Positioned.fill(
-          child: IgnorePointer(
-            child: Container(color: Colors.blue.withOpacity(0.03)),
-          ),
+          child: IgnorePointer(child: Container(color: fillColor)),
         ),
 
         // The resize handles should remain interactive
-        if (!element.isLocked) ...[
+        if (isPrimary && !element.isLocked) ...[
           _buildResizeHandle(Alignment.topLeft, context),
           _buildResizeHandle(Alignment.topRight, context),
           _buildResizeHandle(Alignment.bottomLeft, context),

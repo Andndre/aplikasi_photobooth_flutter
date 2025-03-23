@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/layouts.dart';
@@ -6,8 +7,10 @@ import '../../providers/layout_editor.dart';
 
 class LayerItem extends StatelessWidget {
   final LayoutElement element;
+  final bool isSelected;
 
-  const LayerItem({Key? key, required this.element}) : super(key: key);
+  const LayerItem({Key? key, required this.element, this.isSelected = false})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +19,8 @@ class LayerItem extends StatelessWidget {
       context,
       listen: false,
     );
-    // Only listen to selectedElement changes for highlighting
-    final selectedElementId =
-        Provider.of<LayoutEditorProvider>(context).selectedElement?.id;
-    final isSelected = selectedElementId == element.id;
+    // Don't redefine isSelected since it's passed as a parameter now
+    // Just use the parameter directly
 
     String elementName;
     IconData elementIcon;
@@ -86,7 +87,7 @@ class LayerItem extends StatelessWidget {
         title: Text(
           elementName,
           style: TextStyle(
-            fontWeight: FontWeight.normal,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             color:
                 isSelected
                     ? Theme.of(context).colorScheme.primary
@@ -94,7 +95,7 @@ class LayerItem extends StatelessWidget {
             decoration: !element.isVisible ? TextDecoration.lineThrough : null,
           ),
         ),
-        // Keep only visibility and lock toggles, remove the more options button
+        // Keep visibility and lock toggles, but remove checkbox for multi-select
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -125,8 +126,12 @@ class LayerItem extends StatelessWidget {
             // More options button removed in favor of right-click menu
           ],
         ),
+        // Layer sidebar uses ctrl modifier for multi-selection
         onTap: () {
-          editorProvider.selectElement(element);
+          // Check if Ctrl key is pressed for multi-select
+          final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+
+          editorProvider.selectElement(element, addToSelection: isCtrlPressed);
         },
         onLongPress: () {
           // Show context menu on long press for mobile support

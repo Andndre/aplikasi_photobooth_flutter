@@ -2,16 +2,20 @@ import 'dart:math';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math_64.dart';
 import '../models/layouts.dart';
 import 'dart:io';
+import 'dart:math' as math;
 
 enum EditMode { select, move, text, image, camera }
 
 class LayoutEditorProvider with ChangeNotifier {
   Layouts? _layout;
   LayoutElement? _selectedElement;
+  // Add support for multiple selected elements
+  final Set<String> _selectedElementIds = {};
   EditMode _editMode = EditMode.select;
   List<LayoutElement> _clipboard = [];
   double _scale = 1.0;
@@ -38,6 +42,15 @@ class LayoutEditorProvider with ChangeNotifier {
 
   Layouts? get layout => _layout;
   LayoutElement? get selectedElement => _selectedElement;
+  // Add getter for multiple selection
+  Set<String> get selectedElementIds => _selectedElementIds;
+  List<LayoutElement> get selectedElements {
+    if (_layout == null) return [];
+    return _layout!.elements
+        .where((element) => _selectedElementIds.contains(element.id))
+        .toList();
+  }
+
   EditMode get editMode => _editMode;
   double get scale => _scale;
   Offset get offset => _offset;
@@ -45,6 +58,9 @@ class LayoutEditorProvider with ChangeNotifier {
   bool get isResizing => _isResizing;
   bool get showGrid => _showGrid;
   bool get snapToGrid => _snapToGrid;
+
+  // Add getter to check if multiple elements are selected
+  bool get hasMultipleElementsSelected => _selectedElementIds.length > 1;
 
   void setLayout(Layouts layout) {
     _layout = layout;
@@ -163,8 +179,230 @@ class LayoutEditorProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void selectElement(LayoutElement? element) {
-    _selectedElement = element;
+  // Modify select element to support multi-selection
+  void selectElement(LayoutElement? element, {bool addToSelection = false}) {
+    if (element == null) {
+      // Clear selection
+      _selectedElement = null;
+      _selectedElementIds.clear();
+      notifyListeners();
+      return;
+    }
+
+    if (addToSelection) {
+      // Check if Shift key is being pressed for range selection
+      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+
+      if (isShiftPressed && _selectedElement != null && _layout != null) {
+        // Range selection - select all elements between the last selected element and the current one
+        final lastSelectedIndex = _layout!.elements.indexWhere(
+          (e) => e.id == _selectedElement!.id,
+        );
+        final currentIndex = _layout!.elements.indexWhere(
+          (e) => e.id == element.id,
+        );
+
+        if (lastSelectedIndex != -1 && currentIndex != -1) {
+          // Select all elements in the range
+          final startIndex = math.min(lastSelectedIndex, currentIndex);
+          final endIndex = math.max(lastSelectedIndex, currentIndex);
+
+          // Clear existing selection if not also pressing Ctrl
+          if (!HardwareKeyboard.instance.isControlPressed) {
+            _selectedElementIds.clear();
+          }
+
+          // Add all elements in the range to selection
+          for (int i = startIndex; i <= endIndex; i++) {
+            _selectedElementIds.add(_layout!.elements[i].id);
+          }
+
+          // Make the current element the primary selection
+          _selectedElement = element;
+        }
+      } else {
+        // Toggle selection for this element (Ctrl behavior)
+        if (_selectedElementIds.contains(element.id)) {
+          _selectedElementIds.remove(element.id);
+          // If this was the primary selected element, update it
+          if (_selectedElement?.id == element.id) {
+            _selectedElement =
+                _selectedElementIds.isNotEmpty
+                    ? _findElementById(_selectedElementIds.first)
+                    : null;
+          }
+        } else {
+          _selectedElementIds.add(element.id);
+          // Update primary selected element if this is the first selection
+          if (_selectedElement == null) {
+            _selectedElement = element;
+          }
+        }
+      }
+    } else {
+      // Standard single selection
+      _selectedElement = element;
+      _selectedElementIds.clear();
+      _selectedElementIds.add(element.id);
+    }
+
+    notifyListeners();
+  }
+
+  // Add method to check if an element is selected
+  bool isElementSelected(String elementId) {
+    return _selectedElementIds.contains(elementId);
+  }
+
+  // Add method to select multiple elements
+  void selectElements(List<LayoutElement> elements) {
+    if (elements.isEmpty) {
+      selectElement(null);
+      return;
+    }
+
+    _selectedElementIds.clear();
+    for (final element in elements) {
+      _selectedElementIds.add(element.id);
+    }
+
+    // Set the first element as the primary selected element
+    _selectedElement = elements.first;
+
+    notifyListeners();
+  }
+
+  // Add method to select all elements
+  void selectAllElements() {
+    if (_layout == null || _layout!.elements.isEmpty) return;
+
+    _selectedElementIds.clear();
+    for (final element in _layout!.elements) {
+      _selectedElementIds.add(element.id);
+    }
+
+    // Set the first element as the primary selected element
+    _selectedElement = _layout!.elements.first;
+
+    notifyListeners();
+  }
+
+  // Add methods for alignment of multiple elements
+  void alignElementsHorizontally(String alignment) {
+    if (_layout == null || selectedElements.length <= 1) return;
+
+    // Calculate bounds
+    double minX = double.infinity;
+    double maxX = -double.infinity;
+    double totalWidth = 0;
+
+    for (final element in selectedElements) {
+      minX = min(minX, element.x);
+      maxX = max(maxX, element.x + element.width);
+      totalWidth += element.width;
+    }
+
+    double width = maxX - minX;
+
+    // Save starting state for undo
+    _saveToHistory();
+
+    // Apply alignment
+    for (final element in selectedElements) {
+      double newX;
+
+      switch (alignment) {
+        case 'start':
+          newX = minX;
+          break;
+        case 'center':
+          newX = minX + (width - element.width) / 2;
+          break;
+        case 'end':
+          newX = maxX - element.width;
+          break;
+        case 'distribute':
+          // Implement distribute logic if needed
+          continue;
+        default:
+          continue;
+      }
+
+      updateElementPosition(element.id, Offset(newX, element.y));
+    }
+
+    // Save ending state for undo
+    _saveToHistory();
+  }
+
+  void alignElementsVertically(String alignment) {
+    if (_layout == null || selectedElements.length <= 1) return;
+
+    // Calculate bounds
+    double minY = double.infinity;
+    double maxY = -double.infinity;
+    double totalHeight = 0;
+
+    for (final element in selectedElements) {
+      minY = min(minY, element.y);
+      maxY = max(maxY, element.y + element.height);
+      totalHeight += element.height;
+    }
+
+    double height = maxY - minY;
+
+    // Save starting state for undo
+    _saveToHistory();
+
+    // Apply alignment
+    for (final element in selectedElements) {
+      double newY;
+
+      switch (alignment) {
+        case 'start':
+          newY = minY;
+          break;
+        case 'center':
+          newY = minY + (height - element.height) / 2;
+          break;
+        case 'end':
+          newY = maxY - element.height;
+          break;
+        case 'distribute':
+          // Implement distribute logic if needed
+          continue;
+        default:
+          continue;
+      }
+
+      updateElementPosition(element.id, Offset(element.x, newY));
+    }
+
+    // Save ending state for undo
+    _saveToHistory();
+  }
+
+  // Add method to delete multiple elements
+  void deleteSelectedElements() {
+    if (_layout == null || _selectedElementIds.isEmpty) return;
+
+    // Save state for undo
+    _saveToHistory();
+
+    // Make a copy to avoid modifying during iteration
+    final selectedIds = {..._selectedElementIds};
+
+    for (final id in selectedIds) {
+      final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
+      if (elementIndex >= 0) {
+        _layout!.elements.removeAt(elementIndex);
+      }
+    }
+
+    // Clear selection
+    _selectedElement = null;
+    _selectedElementIds.clear();
+
     notifyListeners();
   }
 
