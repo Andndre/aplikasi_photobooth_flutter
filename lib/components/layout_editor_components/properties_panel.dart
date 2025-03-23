@@ -255,42 +255,6 @@ class _SwitchPropertyRow extends StatelessWidget {
   }
 }
 
-// Helper widget to display a property
-class _DisplayProperty extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _DisplayProperty({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 14)),
-          ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              child: Text(value),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // Main properties panel class
 class PropertiesPanel extends StatelessWidget {
   final LayoutElement element;
