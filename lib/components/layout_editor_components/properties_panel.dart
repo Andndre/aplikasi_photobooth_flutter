@@ -391,6 +391,74 @@ class PropertiesPanel extends StatelessWidget {
                     },
                   ),
 
+                  // Add Page Alignment section
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0, bottom: 4.0),
+                    child: Text(
+                      'Page Alignment',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const SizedBox(width: 80), // Same width as labels
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.align_horizontal_center,
+                                  size: 20,
+                                ),
+                                style: IconButton.styleFrom(
+                                  side: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline.withOpacity(0.5),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  editorProvider.centerElementInCanvas(
+                                    element.id,
+                                    true,
+                                    false,
+                                  );
+                                },
+                                tooltip: 'Center Horizontally',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.align_vertical_center,
+                                  size: 20,
+                                ),
+                                style: IconButton.styleFrom(
+                                  side: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline.withOpacity(0.5),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  editorProvider.centerElementInCanvas(
+                                    element.id,
+                                    false,
+                                    true,
+                                  );
+                                },
+                                tooltip: 'Center Vertically',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
                   // Visibility and Lock
                   _SwitchPropertyRow(
                     label: 'Visible',

@@ -1739,4 +1739,35 @@ class LayoutEditorProvider with ChangeNotifier {
 
     return null;
   }
+
+  void centerElementInCanvas(String elementId, bool horizontal, bool vertical) {
+    final element = getElementById(elementId);
+    if (element == null) return;
+
+    final canvasWidth = layout!.width.toDouble();
+    final canvasHeight = layout!.height.toDouble();
+
+    double newX = element.x;
+    double newY = element.y;
+
+    if (horizontal) {
+      newX = (canvasWidth - element.width) / 2;
+    }
+
+    if (vertical) {
+      newY = (canvasHeight - element.height) / 2;
+    }
+
+    updateElementPosition(elementId, Offset(newX, newY));
+  }
+
+  // Add getElementById method
+  LayoutElement? getElementById(String id) {
+    if (_layout == null) return null;
+    try {
+      return _layout!.elements.firstWhere((element) => element.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
 }
