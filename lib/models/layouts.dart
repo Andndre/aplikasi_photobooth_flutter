@@ -1,9 +1,11 @@
 // Base class for all layout elements
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:screenshot/screenshot.dart';
 
 abstract class LayoutElement {
   String id;
@@ -364,6 +366,64 @@ class Layouts {
     bool includeBackground = true,
   }) async {
     try {
+      // Create screenshot controller
+      final screenshotController = ScreenshotController();
+
+      // Build the layout widget
+      final layoutWidget = buildLayoutPreviewWidget(
+        photoFilePaths: photoFilePaths,
+        includeBackground: includeBackground,
+      );
+
+      // Calculate dimensions with multiplier
+      final exportWidth = (width * resolutionMultiplier).toInt();
+      final exportHeight = (height * resolutionMultiplier).toInt();
+
+      // Capture the widget as a Uint8List
+      final Uint8List imageBytes = await screenshotController.captureFromWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Material(
+            color: Colors.transparent,
+            child: Transform.scale(
+              scale: resolutionMultiplier,
+              child: layoutWidget,
+            ),
+          ),
+        ),
+        pixelRatio: 1.0, // We're already scaling the widget
+        context: null,
+        delay: const Duration(milliseconds: 100),
+        targetSize: Size(exportWidth.toDouble(), exportHeight.toDouble()),
+      );
+
+      // Write the image to a file
+      final file = File(exportPath);
+      await file.writeAsBytes(imageBytes);
+
+      return file;
+    } catch (e) {
+      print('Error exporting layout: $e');
+      // Fallback to the original method if the widget method fails
+      return _exportAsImageFallback(
+        exportPath: exportPath,
+        photoFilePaths: photoFilePaths,
+        resolutionMultiplier: resolutionMultiplier,
+        includeBackground: includeBackground,
+      );
+    }
+  }
+
+  // Fallback method using the original canvas approach
+  Future<File?> _exportAsImageFallback({
+    required String exportPath,
+    required List<String> photoFilePaths,
+    double resolutionMultiplier = 1.0,
+    bool includeBackground = true,
+  }) async {
+    // Original canvas-based method as a fallback
+    // ...existing canvas rendering code from the previous implementation...
+    try {
       // Create a recorder
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
@@ -509,8 +569,180 @@ class Layouts {
 
       return file;
     } catch (e) {
-      print('Error exporting layout: $e');
+      print('Error in fallback export: $e');
       return null;
+    }
+  }
+
+  // New method to create a widget representing the layout for export
+  Widget buildLayoutPreviewWidget({
+    required List<String> photoFilePaths,
+    bool includeBackground = true,
+  }) {
+    // Create a map of camera elements to photo paths
+    final cameraElements =
+        elements
+            .where((e) => e.type == 'camera' && e.isVisible)
+            .cast<CameraElement>()
+            .toList();
+
+    Map<String, String> cameraPhotos = {};
+    for (
+      int i = 0;
+      i < cameraElements.length && i < photoFilePaths.length;
+      i++
+    ) {
+      cameraPhotos[cameraElements[i].id] = photoFilePaths[i];
+    }
+
+    return Container(
+      width: width.toDouble(),
+      height: height.toDouble(),
+      color:
+          includeBackground ? _hexToColor(backgroundColor) : Colors.transparent,
+      child: Stack(
+        children:
+            elements.where((e) => e.isVisible).map((element) {
+              // Skip group elements as we'll render their children individually
+              if (element.type == 'group') return const SizedBox.shrink();
+
+              return Positioned(
+                left: element.x,
+                top: element.y,
+                width: element.width,
+                height: element.height,
+                child: Transform.rotate(
+                  angle: element.rotation * (pi / 180),
+                  child: _buildElementWidget(element, cameraPhotos),
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
+
+  // Helper method to build appropriate widget for each element type
+  Widget _buildElementWidget(
+    LayoutElement element,
+    Map<String, String> cameraPhotos,
+  ) {
+    switch (element.type) {
+      case 'image':
+        return _buildImageWidget(element as ImageElement);
+      case 'text':
+        return _buildTextWidget(element as TextElement);
+      case 'camera':
+        final cameraElement = element as CameraElement;
+        final photoPath = cameraPhotos[cameraElement.id];
+        return photoPath != null && photoPath.isNotEmpty
+            ? _buildCameraWithImageWidget(cameraElement, photoPath)
+            : _buildCameraPlaceholderWidget(cameraElement);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // Widget for image elements
+  Widget _buildImageWidget(ImageElement element) {
+    try {
+      final file = File(element.path);
+      if (file.existsSync()) {
+        return Opacity(
+          opacity: element.opacity,
+          child: Image.file(file, fit: BoxFit.fill),
+        );
+      }
+    } catch (e) {
+      print('Error loading image: $e');
+    }
+    // Fallback if image can't be loaded
+    return Container(
+      color: Colors.grey.withOpacity(0.3),
+      child: const Center(
+        child: Icon(Icons.image_not_supported, color: Colors.grey),
+      ),
+    );
+  }
+
+  // Widget for text elements
+  Widget _buildTextWidget(TextElement element) {
+    return Container(
+      width: element.width,
+      height: element.height,
+      color:
+          element.backgroundColor != 'transparent'
+              ? _hexToColor(element.backgroundColor)
+              : Colors.transparent,
+      alignment: _getTextAlignment(element.alignment),
+      child: Text(
+        element.text,
+        style: TextStyle(
+          color: _hexToColor(element.color),
+          fontSize: element.fontSize,
+          fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          fontFamily: element.fontFamily,
+        ),
+        textAlign: _getTextAlign(element.alignment),
+      ),
+    );
+  }
+
+  // Widget for camera elements with an image
+  Widget _buildCameraWithImageWidget(CameraElement element, String imagePath) {
+    try {
+      final file = File(imagePath);
+      if (file.existsSync()) {
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+          ),
+          child: Image.file(file, fit: BoxFit.cover),
+        );
+      }
+    } catch (e) {
+      print('Error loading camera image: $e');
+    }
+    // Fallback to placeholder if image can't be loaded
+    return _buildCameraPlaceholderWidget(element);
+  }
+
+  // Widget for camera placeholders
+  Widget _buildCameraPlaceholderWidget(CameraElement element) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.2),
+        border: Border.all(color: Colors.blue, width: 2),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.camera_alt, size: 48, color: Colors.blue),
+          const SizedBox(height: 8),
+          Text(
+            element.label,
+            style: const TextStyle(color: Colors.blue),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper for getting text alignment for Container
+  Alignment _getTextAlignment(String alignment) {
+    if (alignment.contains('top')) {
+      if (alignment.contains('Left')) return Alignment.topLeft;
+      if (alignment.contains('Right')) return Alignment.topRight;
+      return Alignment.topCenter;
+    } else if (alignment.contains('bottom')) {
+      if (alignment.contains('Left')) return Alignment.bottomLeft;
+      if (alignment.contains('Right')) return Alignment.bottomRight;
+      return Alignment.bottomCenter;
+    } else {
+      if (alignment.contains('Left')) return Alignment.centerLeft;
+      if (alignment.contains('Right')) return Alignment.centerRight;
+      return Alignment.center;
     }
   }
 
@@ -550,7 +782,7 @@ class Layouts {
     }
   }
 
-  // Helper to render a text element
+  // Helper to render a text element - improved implementation
   static void _renderTextElement(
     Canvas canvas,
     TextElement element,
@@ -570,25 +802,106 @@ class Layouts {
         canvas.drawRect(rect, bgPaint);
       }
 
-      // Create text style
-      final textStyle = TextStyle(
-        color: _hexToColor(element.color),
-        fontSize: element.fontSize * resolutionMultiplier,
-        fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
-        fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
-        fontFamily: element.fontFamily,
+      // Create text style with correct color
+      final color = _hexToColor(element.color);
+
+      // Create a TextPainter to properly handle text rendering
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: element.text,
+          style: TextStyle(
+            color: color,
+            fontSize: element.fontSize * resolutionMultiplier,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+            fontFamily: element.fontFamily,
+            // The package will handle Google Fonts when rendering
+          ),
+        ),
+        textAlign: _getTextAlign(element.alignment),
+        textDirection: TextDirection.ltr,
       );
 
-      // Create paragraph style based on alignment
+      // Layout the text within the constraints
+      textPainter.layout(maxWidth: width);
+
+      // Position the text based on the alignment
+      double dx = x;
+      double dy = y;
+
+      // Handle horizontal alignment
+      if (element.alignment.contains('center') &&
+          !element.alignment.contains('Left') &&
+          !element.alignment.contains('Right')) {
+        dx = x + (width - textPainter.width) / 2;
+      } else if (element.alignment.contains('Right')) {
+        dx = x + width - textPainter.width;
+      }
+
+      // Handle vertical alignment
+      if (element.alignment.contains('center')) {
+        dy = y + (height - textPainter.height) / 2;
+      } else if (element.alignment.contains('bottom')) {
+        dy = y + height - textPainter.height;
+      }
+
+      // Draw the text
+      textPainter.paint(canvas, Offset(dx, dy));
+    } catch (e) {
+      print('Error rendering text element: $e');
+
+      // Fallback rendering method if the above fails
+      _renderTextElementFallback(
+        canvas,
+        element,
+        x,
+        y,
+        width,
+        height,
+        resolutionMultiplier,
+      );
+    }
+  }
+
+  // Fallback method for text rendering using basic paragraph builder
+  static void _renderTextElementFallback(
+    Canvas canvas,
+    TextElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+    double resolutionMultiplier,
+  ) {
+    try {
+      // Create a rect for the background if needed
+      final rect = Rect.fromLTWH(x, y, width, height);
+
+      // Draw background if not transparent
+      if (element.backgroundColor != 'transparent') {
+        final bgPaint = Paint()..color = _hexToColor(element.backgroundColor);
+        canvas.drawRect(rect, bgPaint);
+      }
+
+      // Create basic paragraph style based on alignment
       final paragraphStyle = ui.ParagraphStyle(
         textAlign: _getTextAlign(element.alignment),
         textDirection: TextDirection.ltr,
       );
 
+      // Create text style
+      final textStyle = ui.TextStyle(
+        color: _hexToColor(element.color),
+        fontSize: element.fontSize * resolutionMultiplier,
+        fontWeight: element.isBold ? ui.FontWeight.bold : ui.FontWeight.normal,
+        fontStyle: element.isItalic ? ui.FontStyle.italic : ui.FontStyle.normal,
+        fontFamily: element.fontFamily,
+      );
+
       // Build paragraph
       final paragraphBuilder =
           ui.ParagraphBuilder(paragraphStyle)
-            ..pushStyle(textStyle as ui.TextStyle)
+            ..pushStyle(textStyle)
             ..addText(element.text);
 
       final paragraph = paragraphBuilder.build();
@@ -605,7 +918,22 @@ class Layouts {
       // Draw text
       canvas.drawParagraph(paragraph, Offset(x, dy));
     } catch (e) {
-      print('Error rendering text element: $e');
+      print('Error in fallback text rendering: $e');
+
+      // Last resort - draw a simple rectangle with basic text
+      final paint = Paint()..color = _hexToColor(element.color);
+      final textPaint =
+          Paint()
+            ..color = _hexToColor(element.color)
+            ..style = PaintingStyle.fill;
+
+      canvas.drawRect(
+        Rect.fromLTWH(x, y, width, height),
+        Paint()..color = _hexToColor(element.backgroundColor),
+      );
+
+      // Draw a simple text representation
+      canvas.drawCircle(Offset(x + width / 2, y + height / 2), 10, paint);
     }
   }
 

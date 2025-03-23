@@ -124,7 +124,6 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
 
         return KeyEventResult.ignored;
       },
-      // Fix the PopScope implementation
       child: PopScope(
         canPop: !_hasUnsavedChanges,
         onPopInvokedWithResult: (didPop, result) async {

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
+import 'package:widgets_to_image/widgets_to_image.dart';
 import '../models/layouts.dart';
 
 /// A utility widget to render a layout with specified photos
@@ -21,6 +22,9 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
   String? _errorMessage;
   double _resolutionMultiplier = 1.0;
   bool _includeBackground = true;
+  // Replace ScreenshotController with WidgetsToImageController
+  final WidgetsToImageController _widgetsToImageController =
+      WidgetsToImageController();
 
   @override
   void initState() {
@@ -160,6 +164,33 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
               ),
             ),
 
+            // Add preview section above export options
+            const Divider(height: 32),
+            Text('Preview', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: widget.layout.width / widget.layout.height,
+                  // Use WidgetsToImage instead of Screenshot
+                  child: WidgetsToImage(
+                    controller: _widgetsToImageController,
+                    child: widget.layout.buildLayoutPreviewWidget(
+                      photoFilePaths:
+                          _photoFilePaths.where((p) => p.isNotEmpty).toList(),
+                      includeBackground: _includeBackground,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
             // Export options section
             const Divider(height: 32),
             Row(
@@ -269,7 +300,7 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     }
   }
 
-  // Export the layout with selected photos
+  // Updated export method using WidgetsToImage
   Future<void> _exportLayout() async {
     // Choose export location
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
@@ -290,43 +321,53 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     });
 
     try {
-      // Get non-empty photo paths
-      final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
+      // Approach 1: Try to use the controller's capture method first
+      final bytes = await _widgetsToImageController.capture();
 
-      // Export using the model's method
-      final file = await widget.layout.exportAsImage(
-        exportPath: exportPath,
-        photoFilePaths: photos,
-        resolutionMultiplier: _resolutionMultiplier,
-        includeBackground: _includeBackground,
-      );
+      if (bytes != null) {
+        // If we got bytes from the controller, scale them if needed and save to file
+        if (_resolutionMultiplier != 1.0) {
+          // If scaling is needed, use the model's export method which handles scaling
+          final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
 
-      if (file != null && await file.exists()) {
-        // Show success
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Layout exported successfully to $_exportPath'),
-              action: SnackBarAction(
-                label: 'OPEN',
-                onPressed: () {
-                  // Open the file or folder - platform specific
-                  if (Platform.isWindows) {
-                    Process.run('explorer.exe', ['/select,', _exportPath!]);
-                  } else if (Platform.isMacOS) {
-                    Process.run('open', ['-R', _exportPath!]);
-                  } else if (Platform.isLinux) {
-                    Process.run('xdg-open', [path.dirname(_exportPath!)]);
-                  }
-                },
-              ),
-            ),
+          final file = await widget.layout.exportAsImage(
+            exportPath: exportPath,
+            photoFilePaths: photos,
+            resolutionMultiplier: _resolutionMultiplier,
+            includeBackground: _includeBackground,
           );
+
+          if (file != null && await file.exists()) {
+            _showExportSuccess(context);
+          } else {
+            setState(() {
+              _errorMessage = 'Failed to create export file with scaling.';
+            });
+          }
+        } else {
+          // No scaling needed, just write bytes to file
+          final file = File(exportPath);
+          await file.writeAsBytes(bytes);
+          _showExportSuccess(context);
         }
       } else {
-        setState(() {
-          _errorMessage = 'Failed to create export file.';
-        });
+        // Fallback to model export method if capture returns null
+        final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
+
+        final file = await widget.layout.exportAsImage(
+          exportPath: exportPath,
+          photoFilePaths: photos,
+          resolutionMultiplier: _resolutionMultiplier,
+          includeBackground: _includeBackground,
+        );
+
+        if (file != null && await file.exists()) {
+          _showExportSuccess(context);
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to create export file.';
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -336,6 +377,30 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
       setState(() {
         _isExporting = false;
       });
+    }
+  }
+
+  // Helper method to show success message
+  void _showExportSuccess(BuildContext context) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Layout exported successfully to $_exportPath'),
+          action: SnackBarAction(
+            label: 'OPEN',
+            onPressed: () {
+              // Open the file or folder - platform specific
+              if (Platform.isWindows) {
+                Process.run('explorer.exe', ['/select,', _exportPath!]);
+              } else if (Platform.isMacOS) {
+                Process.run('open', ['-R', _exportPath!]);
+              } else if (Platform.isLinux) {
+                Process.run('xdg-open', [path.dirname(_exportPath!)]);
+              }
+            },
+          ),
+        ),
+      );
     }
   }
 }

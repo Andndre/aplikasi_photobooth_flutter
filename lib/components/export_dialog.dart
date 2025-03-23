@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
+import 'package:screenshot/screenshot.dart';
 import '../models/layouts.dart';
 import '../providers/layout_editor.dart';
 
@@ -28,6 +28,7 @@ class _ExportDialogState extends State<ExportDialog> {
   bool _includeSamplePhotos = true;
   String? _exportPath;
   String? _errorMessage;
+  final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +145,31 @@ class _ExportDialogState extends State<ExportDialog> {
                   style: const TextStyle(color: Colors.red, fontSize: 12),
                 ),
               ),
+
+            // Add a preview section
+            const SizedBox(height: 16),
+            _buildSectionHeader('Preview'),
+            Container(
+              height: 150,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: widget.layout.width / widget.layout.height,
+                  child: Screenshot(
+                    controller: _screenshotController,
+                    child: widget.layout.buildLayoutPreviewWidget(
+                      photoFilePaths:
+                          [], // Empty list for sample photos in preview
+                      includeBackground: _includeBackground,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -243,44 +269,87 @@ class _ExportDialogState extends State<ExportDialog> {
     });
 
     try {
-      // Export the layout using the provider's method
-      final file = await provider.exportLayoutAsImage(
-        exportPath: _exportPath!,
-        resolutionMultiplier: _resolutionMultiplier,
-        includeBackground: _includeBackground,
-        includeSamplePhotos: _includeSamplePhotos,
-      );
+      // Use the ScreenshotController directly for quick preview captures
+      if (_includeSamplePhotos) {
+        // Export the layout using the provider's method with sample photos
+        final file = await provider.exportLayoutAsImage(
+          exportPath: _exportPath!,
+          resolutionMultiplier: _resolutionMultiplier,
+          includeBackground: _includeBackground,
+          includeSamplePhotos: _includeSamplePhotos,
+        );
 
-      // Check if the file was successfully created
-      if (file != null && await file.exists()) {
-        // Close the dialog and show a success message
-        if (context.mounted) {
-          Navigator.of(context).pop();
+        // Handle file success/failure...
+        if (file != null && await file.exists()) {
+          // Close the dialog and show a success message
+          if (context.mounted) {
+            Navigator.of(context).pop();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Layout exported successfully to $_exportPath'),
-              action: SnackBarAction(
-                label: 'OPEN',
-                onPressed: () {
-                  // Open the file or folder - platform specific
-                  if (Platform.isWindows) {
-                    Process.run('explorer.exe', ['/select,', _exportPath!]);
-                  } else if (Platform.isMacOS) {
-                    Process.run('open', ['-R', _exportPath!]);
-                  } else if (Platform.isLinux) {
-                    Process.run('xdg-open', [path.dirname(_exportPath!)]);
-                  }
-                },
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Layout exported successfully to $_exportPath'),
+                action: SnackBarAction(
+                  label: 'OPEN',
+                  onPressed: () {
+                    // Open the file or folder - platform specific
+                    if (Platform.isWindows) {
+                      Process.run('explorer.exe', ['/select,', _exportPath!]);
+                    } else if (Platform.isMacOS) {
+                      Process.run('open', ['-R', _exportPath!]);
+                    } else if (Platform.isLinux) {
+                      Process.run('xdg-open', [path.dirname(_exportPath!)]);
+                    }
+                  },
+                ),
               ),
-            ),
-          );
+            );
+          }
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to create the export file.';
+            _isExporting = false;
+          });
         }
       } else {
-        setState(() {
-          _errorMessage = 'Failed to create the export file.';
-          _isExporting = false;
-        });
+        // For no sample photos, directly use the widget method
+        final Uint8List? imageBytes = await _screenshotController.capture(
+          pixelRatio: _resolutionMultiplier,
+        );
+
+        if (imageBytes != null) {
+          // Save the bytes to file
+          final file = File(_exportPath!);
+          await file.writeAsBytes(imageBytes);
+
+          // Handle success...
+          if (context.mounted) {
+            Navigator.of(context).pop();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Layout exported successfully to $_exportPath'),
+                action: SnackBarAction(
+                  label: 'OPEN',
+                  onPressed: () {
+                    // Open the file or folder - platform specific
+                    if (Platform.isWindows) {
+                      Process.run('explorer.exe', ['/select,', _exportPath!]);
+                    } else if (Platform.isMacOS) {
+                      Process.run('open', ['-R', _exportPath!]);
+                    } else if (Platform.isLinux) {
+                      Process.run('xdg-open', [path.dirname(_exportPath!)]);
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to create the export file.';
+            _isExporting = false;
+          });
+        }
       }
     } catch (e) {
       setState(() {
