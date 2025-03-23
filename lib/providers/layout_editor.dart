@@ -972,8 +972,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null) return;
 
     final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
-    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'text')
+    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'text') {
       return;
+    }
 
     final element = _layout!.elements[elementIndex] as TextElement;
 

@@ -1740,25 +1740,3 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     );
   }
 }
-
-TextAlign _getTextAlignment(String alignment) {
-  switch (alignment) {
-    case 'topLeft':
-    case 'centerLeft':
-    case 'bottomLeft':
-    case 'left':
-      return TextAlign.left;
-
-    case 'topRight':
-    case 'centerRight':
-    case 'bottomRight':
-    case 'right':
-      return TextAlign.right;
-
-    case 'topCenter':
-    case 'center':
-    case 'bottomCenter':
-    default:
-      return TextAlign.center;
-  }
-}
