@@ -25,6 +25,20 @@ class SelectionOverlay extends StatelessWidget {
     final currentScale =
         editorProvider.transformationController.value.getMaxScaleOnAxis();
 
+    // Check if this element is part of a group
+    bool isInGroup = false;
+    if (editorProvider.layout != null) {
+      for (final le in editorProvider.layout!.elements) {
+        if (le.type == 'group') {
+          final group = le as GroupElement;
+          if (group.childIds.contains(element.id)) {
+            isInGroup = true;
+            break;
+          }
+        }
+      }
+    }
+
     // Calculate the inverse scale to counter the zoom effect
     final inverseScale = 1 / currentScale;
 

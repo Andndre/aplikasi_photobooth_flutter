@@ -194,155 +194,12 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                 child: CustomPaint(painter: GridPainter()),
                               ),
 
-                            // Elements
-                            ...layout.elements.map((element) {
-                              // Invisible element must be wrapped in Positioned to be valid in a Stack
-                              if (!element.isVisible) {
-                                // Use SizedBox.shrink() for invisible elements
-                                return Positioned(
-                                  left: 0,
-                                  top: 0,
-                                  width: 0, // Explicitly set width
-                                  height: 0, // Explicitly set height
-                                  child: SizedBox.shrink(),
-                                );
-                              }
+                            // First render all non-group elements and groups
+                            ..._buildNonGroupElements(layout, editorProvider),
 
-                              // Ensure the element has valid dimensions
-                              double width = max(10.0, element.width);
-                              double height = max(10.0, element.height);
-
-                              return Positioned(
-                                left: element.x,
-                                top: element.y,
-                                width:
-                                    width, // Explicitly set width on the Positioned widget
-                                height:
-                                    height, // Explicitly set height on the Positioned widget
-                                child: GestureDetector(
-                                  behavior:
-                                      HitTestBehavior
-                                          .opaque, // This ensures touches are captured
-                                  onTap: () {
-                                    // Support multi-selection with either Ctrl or Shift key
-                                    final isMultiSelectModifier =
-                                        HardwareKeyboard
-                                            .instance
-                                            .isControlPressed ||
-                                        HardwareKeyboard
-                                            .instance
-                                            .isShiftPressed;
-
-                                    if (!element.isLocked) {
-                                      editorProvider.selectElement(
-                                        element,
-                                        addToSelection: isMultiSelectModifier,
-                                      );
-                                    }
-                                  },
-                                  onPanStart:
-                                      element.isLocked
-                                          ? null
-                                          : (details) {
-                                            // Start dragging the element
-                                            setState(() {
-                                              _draggedElement = element;
-                                              _lastFocalPoint =
-                                                  details.localPosition;
-                                            });
-
-                                            // When starting a drag on any element, disable panning
-                                            editorProvider.startDrag();
-
-                                            // Make sure this element is selected
-                                            if (editorProvider
-                                                    .selectedElement
-                                                    ?.id !=
-                                                element.id) {
-                                              editorProvider.selectElement(
-                                                element,
-                                              );
-                                            }
-                                          },
-                                  onPanUpdate:
-                                      element.isLocked
-                                          ? null
-                                          : (details) {
-                                            // Update the element position while dragging
-                                            if (_draggedElement?.id ==
-                                                element.id) {
-                                              final delta =
-                                                  details.localPosition -
-                                                  _lastFocalPoint;
-                                              final newPosition =
-                                                  Offset(element.x, element.y) +
-                                                  delta;
-
-                                              // Update the element position in the provider
-                                              // For groups, this will also update child positions
-                                              editorProvider
-                                                  .updateElementPosition(
-                                                    element.id,
-                                                    newPosition,
-                                                  );
-
-                                              // Update the last focal point
-                                              setState(() {
-                                                _lastFocalPoint =
-                                                    details.localPosition;
-                                              });
-                                            }
-                                          },
-                                  onPanEnd:
-                                      element.isLocked
-                                          ? null
-                                          : (details) {
-                                            // End dragging
-                                            setState(() {
-                                              _draggedElement = null;
-                                            });
-                                            editorProvider.stopDrag();
-                                          },
-                                  child: SizedBox(
-                                    width: width,
-                                    height: height,
-                                    child: ElementWidget(element: element),
-                                  ),
-                                ),
-                              );
-                            }),
-
-                            // Selection overlays for all selected elements
-                            ...editorProvider.selectedElements.map((element) {
-                              // Don't show overlay for invisible elements
-                              if (!element.isVisible)
-                                return const SizedBox.shrink();
-
-                              return Positioned(
-                                left: element.x,
-                                top: element.y,
-                                width: max(10.0, element.width),
-                                height: max(10.0, element.height),
-                                child: custom_overlay.SelectionOverlay(
-                                  element: element,
-                                  isPrimary:
-                                      element.id ==
-                                      editorProvider.selectedElement?.id,
-                                  onResize: (size) {
-                                    editorProvider.updateElementSize(
-                                      element.id,
-                                      size,
-                                    );
-                                  },
-                                  onRotate: (rotation) {
-                                    editorProvider.updateElementRotation(
-                                      element.id,
-                                      rotation,
-                                    );
-                                  },
-                                ),
-                              );
-                            }),
+                            // Then render selection overlays for all elements
+                            // Note: This ensures overlays appear on top of all elements
+                            ..._buildSelectionOverlays(editorProvider),
                           ],
                         ),
                       ),
@@ -355,6 +212,380 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
         ),
       ),
     );
+  }
+
+  // New method to build all non-group elements and the groups themselves
+  List<Widget> _buildNonGroupElements(
+    Layouts layout,
+    LayoutEditorProvider editorProvider,
+  ) {
+    return layout.elements.map((element) {
+      // Invisible element must be wrapped in Positioned to be valid in a Stack
+      if (!element.isVisible) {
+        // Use SizedBox.shrink() for invisible elements
+        return Positioned(
+          left: 0,
+          top: 0,
+          width: 0, // Explicitly set width
+          height: 0, // Explicitly set height
+          child: SizedBox.shrink(),
+        );
+      }
+
+      // Ensure the element has valid dimensions
+      double width = max(10.0, element.width);
+      double height = max(10.0, element.height);
+
+      // Check if this element is a group
+      if (element.type == 'group') {
+        final groupElement = element as GroupElement;
+        final isGroupSelected = editorProvider.isElementSelected(
+          groupElement.id,
+        );
+
+        return Positioned(
+          left: groupElement.x,
+          top: groupElement.y,
+          width: width,
+          height: height,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              // Support multi-selection with either Ctrl or Shift key
+              final isMultiSelectModifier =
+                  HardwareKeyboard.instance.isControlPressed ||
+                  HardwareKeyboard.instance.isShiftPressed;
+
+              if (!groupElement.isLocked) {
+                editorProvider.selectElement(
+                  groupElement,
+                  addToSelection: isMultiSelectModifier,
+                );
+              }
+            },
+            onPanStart:
+                groupElement.isLocked
+                    ? null
+                    : (details) {
+                      // Start dragging the group
+                      setState(() {
+                        _draggedElement = groupElement;
+                        _lastFocalPoint = details.localPosition;
+                      });
+
+                      // When starting a drag on any element, disable panning
+                      editorProvider.startDrag();
+
+                      // Make sure this group is selected
+                      if (editorProvider.selectedElement?.id !=
+                          groupElement.id) {
+                        editorProvider.selectElement(groupElement);
+                      }
+                    },
+            onPanUpdate:
+                groupElement.isLocked
+                    ? null
+                    : (details) {
+                      // Update the group position while dragging
+                      if (_draggedElement?.id == groupElement.id) {
+                        final delta = details.localPosition - _lastFocalPoint;
+                        final newPosition =
+                            Offset(groupElement.x, groupElement.y) + delta;
+
+                        // Update the group position in the provider
+                        editorProvider.updateElementPosition(
+                          groupElement.id,
+                          newPosition,
+                        );
+
+                        // Update the last focal point
+                        setState(() {
+                          _lastFocalPoint = details.localPosition;
+                        });
+                      }
+                    },
+            onPanEnd:
+                groupElement.isLocked
+                    ? null
+                    : (details) {
+                      // End dragging
+                      setState(() {
+                        _draggedElement = null;
+                      });
+                      editorProvider.stopDrag();
+                    },
+            child: Stack(
+              children: [
+                // Render the group background
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color:
+                            isGroupSelected
+                                ? Colors.blue.withOpacity(0.7)
+                                : Colors.grey.withOpacity(0.2),
+                        width: isGroupSelected ? 1.5 : 0.5,
+                        style: BorderStyle.solid,
+                      ),
+                      color:
+                          isGroupSelected
+                              ? Colors.blue.withOpacity(0.05)
+                              : Colors.transparent,
+                    ),
+                  ),
+                ),
+
+                // Group label
+                Positioned(
+                  top: 5,
+                  left: 5,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          isGroupSelected
+                              ? Colors.blue.withOpacity(0.7)
+                              : Colors.grey.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      groupElement.name,
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+                ),
+
+                // Render all children elements inside the group
+                ..._buildGroupChildElements(
+                  groupElement,
+                  editorProvider,
+                  isGroupSelected,
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // Regular (non-group) elements
+        return Positioned(
+          left: element.x,
+          top: element.y,
+          width: width,
+          height: height,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              // Support multi-selection with either Ctrl or Shift key
+              final isMultiSelectModifier =
+                  HardwareKeyboard.instance.isControlPressed ||
+                  HardwareKeyboard.instance.isShiftPressed;
+
+              if (!element.isLocked) {
+                editorProvider.selectElement(
+                  element,
+                  addToSelection: isMultiSelectModifier,
+                );
+              }
+            },
+            onPanStart:
+                element.isLocked
+                    ? null
+                    : (details) {
+                      // Start dragging the element
+                      setState(() {
+                        _draggedElement = element;
+                        _lastFocalPoint = details.localPosition;
+                      });
+
+                      // When starting a drag on any element, disable panning
+                      editorProvider.startDrag();
+
+                      // Make sure this element is selected
+                      if (editorProvider.selectedElement?.id != element.id) {
+                        editorProvider.selectElement(element);
+                      }
+                    },
+            onPanUpdate:
+                element.isLocked
+                    ? null
+                    : (details) {
+                      // Update the element position while dragging
+                      if (_draggedElement?.id == element.id) {
+                        final delta = details.localPosition - _lastFocalPoint;
+                        final newPosition =
+                            Offset(element.x, element.y) + delta;
+
+                        // Update the element position in the provider
+                        editorProvider.updateElementPosition(
+                          element.id,
+                          newPosition,
+                        );
+
+                        // Update the last focal point
+                        setState(() {
+                          _lastFocalPoint = details.localPosition;
+                        });
+                      }
+                    },
+            onPanEnd:
+                element.isLocked
+                    ? null
+                    : (details) {
+                      // End dragging
+                      setState(() {
+                        _draggedElement = null;
+                      });
+                      editorProvider.stopDrag();
+                    },
+            child: ElementWidget(element: element),
+          ),
+        );
+      }
+    }).toList();
+  }
+
+  // Add new method to build child elements inside a group
+  List<Widget> _buildGroupChildElements(
+    GroupElement groupElement,
+    LayoutEditorProvider editorProvider,
+    bool isGroupSelected,
+  ) {
+    final childElements = editorProvider.getGroupChildren(groupElement.id);
+
+    return childElements.map((childElement) {
+      // Skip invisible elements
+      if (!childElement.isVisible) {
+        return SizedBox.shrink();
+      }
+
+      // Calculate child's position relative to group
+      final relativeX = childElement.x - groupElement.x;
+      final relativeY = childElement.y - groupElement.y;
+
+      // Check if this child is selected
+      final isChildSelected = editorProvider.isElementSelected(childElement.id);
+
+      return Positioned(
+        left: relativeX,
+        top: relativeY,
+        width: childElement.width,
+        height: childElement.height,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            // If the group is already selected, select the child element instead
+            if (isGroupSelected || isChildSelected) {
+              final isMultiSelectModifier =
+                  HardwareKeyboard.instance.isControlPressed ||
+                  HardwareKeyboard.instance.isShiftPressed;
+
+              if (!childElement.isLocked) {
+                editorProvider.selectElement(
+                  childElement,
+                  addToSelection: isMultiSelectModifier,
+                );
+              }
+            }
+          },
+          onPanStart:
+              childElement.isLocked
+                  ? null
+                  : (details) {
+                    // Only allow dragging the child if the group is selected first
+                    // or the child itself is already selected
+                    if (isGroupSelected || isChildSelected) {
+                      // Start dragging the child element
+                      setState(() {
+                        _draggedElement = childElement;
+                        _lastFocalPoint = details.localPosition;
+                      });
+
+                      // When starting a drag, disable panning
+                      editorProvider.startDrag();
+
+                      // Select the child element if not already selected
+                      if (editorProvider.selectedElement?.id !=
+                          childElement.id) {
+                        editorProvider.selectElement(childElement);
+                      }
+                    }
+                  },
+          onPanUpdate:
+              childElement.isLocked
+                  ? null
+                  : (details) {
+                    // Update the child element position while dragging
+                    if (_draggedElement?.id == childElement.id) {
+                      final delta = details.localPosition - _lastFocalPoint;
+
+                      // Calculate the absolute position (not relative to group)
+                      final newPosition =
+                          Offset(childElement.x, childElement.y) + delta;
+
+                      // Update the child element position in the provider
+                      editorProvider.updateElementPosition(
+                        childElement.id,
+                        newPosition,
+                      );
+
+                      // Update the last focal point
+                      setState(() {
+                        _lastFocalPoint = details.localPosition;
+                      });
+                    }
+                  },
+          onPanEnd:
+              childElement.isLocked
+                  ? null
+                  : (details) {
+                    // End dragging
+                    setState(() {
+                      _draggedElement = null;
+                    });
+                    editorProvider.stopDrag();
+                  },
+          child: ElementWidget(element: childElement, isGroupChild: true),
+        ),
+      );
+    }).toList();
+  }
+
+  // New method to build selection overlays
+  List<Widget> _buildSelectionOverlays(LayoutEditorProvider editorProvider) {
+    if (editorProvider.layout == null) return [];
+
+    List<Widget> overlays = [];
+
+    for (final element in editorProvider.selectedElements) {
+      // Skip invisible elements
+      if (!element.isVisible) continue;
+
+      // Add selection overlay
+      overlays.add(
+        Positioned(
+          left: element.x,
+          top: element.y,
+          width: max(10.0, element.width),
+          height: max(10.0, element.height),
+          child: custom_overlay.SelectionOverlay(
+            element: element,
+            isPrimary: element.id == editorProvider.selectedElement?.id,
+            onResize: (size) {
+              editorProvider.updateElementSize(element.id, size);
+            },
+            onRotate: (rotation) {
+              editorProvider.updateElementRotation(element.id, rotation);
+            },
+          ),
+        ),
+      );
+    }
+
+    return overlays;
   }
 
   // New method for better zoom precision

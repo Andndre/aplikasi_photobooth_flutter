@@ -192,6 +192,22 @@ class LayoutEditorProvider with ChangeNotifier {
       return;
     }
 
+    // Check if the element is a child in a group before proceeding
+    bool isGroupChild = false;
+    String? parentGroupId;
+    if (_layout != null) {
+      for (final layoutElement in _layout!.elements) {
+        if (layoutElement.type == 'group') {
+          final groupElement = layoutElement as GroupElement;
+          if (groupElement.childIds.contains(element.id)) {
+            isGroupChild = true;
+            parentGroupId = groupElement.id;
+            break;
+          }
+        }
+      }
+    }
+
     if (addToSelection) {
       // Check if Shift key is being pressed for range selection
       final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
@@ -243,7 +259,7 @@ class LayoutEditorProvider with ChangeNotifier {
         }
       }
     } else {
-      // Standard single selection
+      // Standard single selection - clear all current selections first
       _selectedElement = element;
       _selectedElementIds.clear();
       _selectedElementIds.add(element.id);
@@ -708,8 +724,22 @@ class LayoutEditorProvider with ChangeNotifier {
       dy = newY - element.y;
     }
 
-    // REMOVED: The bounds checking that limited elements to the canvas area
-    // Allow positioning outside the canvas
+    // Find if this element is a child in a group
+    bool isChildInGroup = false;
+    GroupElement? parentGroup;
+
+    if (element.type != 'group') {
+      for (final le in _layout!.elements) {
+        if (le.type == 'group') {
+          final group = le as GroupElement;
+          if (group.childIds.contains(element.id)) {
+            isChildInGroup = true;
+            parentGroup = group;
+            break;
+          }
+        }
+      }
+    }
 
     // Update element position
     element.x = newX;
@@ -731,6 +761,10 @@ class LayoutEditorProvider with ChangeNotifier {
         }
       }
     }
+    // If element is a child in a group, auto-resize the group to contain it
+    else if (isChildInGroup && parentGroup != null) {
+      _updateGroupBoundingBox(parentGroup);
+    }
 
     // Update selected element reference if needed
     if (_selectedElement?.id == id) {
@@ -744,6 +778,60 @@ class LayoutEditorProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // New helper method to recalculate and update a group's bounding box
+  void _updateGroupBoundingBox(GroupElement group) {
+    if (_layout == null) return;
+
+    // Initialize with extreme values
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = double.negativeInfinity;
+    double maxY = double.negativeInfinity;
+
+    // Find bounds of all children
+    bool hasVisibleChildren = false;
+
+    for (final childId in group.childIds) {
+      final childElement = _findElementById(childId);
+      if (childElement != null && childElement.isVisible) {
+        hasVisibleChildren = true;
+
+        // Calculate the bounds including the child's own dimensions
+        final childLeft = childElement.x;
+        final childTop = childElement.y;
+        final childRight = childLeft + childElement.width;
+        final childBottom = childTop + childElement.height;
+
+        // Update min/max bounds
+        minX = math.min(minX, childLeft);
+        minY = math.min(minY, childTop);
+        maxX = math.max(maxX, childRight);
+        maxY = math.max(maxY, childBottom);
+      }
+    }
+
+    // Only update if we found visible children
+    if (hasVisibleChildren) {
+      // Add padding to the group bounding box for better visual appearance
+      const padding = 10.0;
+
+      // Update the group's position and size with padding
+      final newWidth = maxX - minX + (padding * 2);
+      final newHeight = maxY - minY + (padding * 2);
+
+      // Track the delta for the group's movement
+      final deltaX = minX - padding - group.x;
+      final deltaY = minY - padding - group.y;
+
+      // Update the group
+      group.x = minX - padding;
+      group.y = minY - padding;
+      group.width = newWidth;
+      group.height = newHeight;
+    }
+  }
+
+  // Also update the resizing method to handle groups
   void updateElementSize(String id, Size size) {
     if (_layout == null) return;
 
@@ -784,11 +872,37 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Ensure minimum size
-    width = width.clamp(10, _layout!.width - element.x);
-    height = height.clamp(10, _layout!.height - element.y);
+    width = width.clamp(10.0, double.infinity);
+    height = height.clamp(10.0, double.infinity);
 
+    // Store original size for calculations
+    final originalWidth = element.width;
+    final originalHeight = element.height;
+
+    // Update element dimensions
     element.width = width;
     element.height = height;
+
+    // If this is a group, we need to handle children appropriately
+    if (element.type == 'group') {
+      final groupElement = element as GroupElement;
+
+      // Calculate scale factors for proportional resizing
+      final scaleX = width / originalWidth;
+      final scaleY = height / originalHeight;
+
+      // If the resize is significant, update all children positions and sizes
+      if ((scaleX - 1.0).abs() > 0.01 || (scaleY - 1.0).abs() > 0.01) {
+        _resizeGroupChildren(groupElement, scaleX, scaleY);
+      }
+    }
+    // Check if this element is part of a group and update the group's bounds
+    else {
+      final parentGroup = getParentGroup(id);
+      if (parentGroup != null) {
+        _updateGroupBoundingBox(parentGroup);
+      }
+    }
 
     if (_selectedElement?.id == id) {
       _selectedElement = element;
@@ -798,6 +912,31 @@ class LayoutEditorProvider with ChangeNotifier {
     _saveToHistory();
 
     notifyListeners();
+  }
+
+  // New helper method for resizing a group's children
+  void _resizeGroupChildren(GroupElement group, double scaleX, double scaleY) {
+    // Get the group's center for scaling calculations
+    final groupCenterX = group.x + (group.width / (2 * scaleX));
+    final groupCenterY = group.y + (group.height / (2 * scaleY));
+
+    // Update all child elements
+    for (final childId in group.childIds) {
+      final childElement = _findElementById(childId);
+      if (childElement != null) {
+        // Calculate distance from center (vector from center to element)
+        final dX = childElement.x - groupCenterX;
+        final dY = childElement.y - groupCenterY;
+
+        // Scale position relative to the center
+        childElement.x = groupCenterX + (dX * scaleX);
+        childElement.y = groupCenterY + (dY * scaleY);
+
+        // Scale dimensions
+        childElement.width *= scaleX;
+        childElement.height *= scaleY;
+      }
+    }
   }
 
   void updateElementRotation(String id, double rotation) {
@@ -1542,5 +1681,37 @@ class LayoutEditorProvider with ChangeNotifier {
       }
     }
     return false;
+  }
+
+  // Method to check if element is a child in any group
+  bool isElementInGroup(String elementId) {
+    if (_layout == null) return false;
+
+    for (final element in _layout!.elements) {
+      if (element.type == 'group') {
+        final group = element as GroupElement;
+        if (group.childIds.contains(elementId)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // Method to get the parent group of an element
+  GroupElement? getParentGroup(String elementId) {
+    if (_layout == null) return null;
+
+    for (final element in _layout!.elements) {
+      if (element.type == 'group') {
+        final group = element as GroupElement;
+        if (group.childIds.contains(elementId)) {
+          return group;
+        }
+      }
+    }
+
+    return null;
   }
 }

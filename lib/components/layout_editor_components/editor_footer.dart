@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
 
 class EditorFooter extends StatelessWidget {
-  const EditorFooter({Key? key}) : super(key: key);
+  const EditorFooter({super.key});
 
   @override
   Widget build(BuildContext context) {

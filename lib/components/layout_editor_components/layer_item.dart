@@ -14,13 +14,32 @@ class LayerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fix: Use listen: false to avoid rebuilds during drag operations
+    // Use listen: true to ensure the widget rebuilds when selection changes
     final editorProvider = Provider.of<LayoutEditorProvider>(
       context,
-      listen: false,
+      listen: true,
     );
-    // Don't redefine isSelected since it's passed as a parameter now
-    // Just use the parameter directly
+
+    // Always get the current selection state directly from the provider
+    // This ensures we have the most up-to-date selection status
+    final isCurrentlySelected = editorProvider.isElementSelected(element.id);
+
+    // Determine if element is in a group
+    bool isInGroup = false;
+    String? parentGroupId;
+
+    if (editorProvider.layout != null) {
+      for (final layoutElement in editorProvider.layout!.elements) {
+        if (layoutElement.type == 'group') {
+          final groupElement = layoutElement as GroupElement;
+          if (groupElement.childIds.contains(element.id)) {
+            isInGroup = true;
+            parentGroupId = groupElement.id;
+            break;
+          }
+        }
+      }
+    }
 
     String elementName;
     IconData elementIcon;
@@ -61,126 +80,141 @@ class LayerItem extends StatelessWidget {
     // Add expand/collapse functionality for groups
     final bool isExpanded = editorProvider.isGroupExpanded(element.id);
 
+    // Define highlight colors based on selection state
+    final Color selectedBgColor = Theme.of(
+      context,
+    ).colorScheme.primaryContainer.withOpacity(0.7);
+    final Color defaultBgColor = Colors.transparent;
+    final Color selectedTextColor = Theme.of(context).colorScheme.primary;
+    // final Color defaultTextColor = element.isVisible ? null : Colors.grey;
+
     // Wrap the ListTile with a GestureDetector for right-click context menu
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
-          onSecondaryTap: () {
-            // Show context menu on right-click
-            _showContextMenu(context, editorProvider);
-          },
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.only(
-              left: isGroup ? 4 : 8,
-              right: 8,
-              top: 0,
-              bottom: 0,
-            ),
-            selected: isSelected,
-            selectedTileColor: Colors.transparent,
-            // Add a drag handle at the start
-            leading: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isGroup)
-                  IconButton(
-                    icon: Icon(
-                      isExpanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 16,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    onPressed: () {
-                      editorProvider.toggleGroupExpansion(element.id);
-                    },
-                  ),
-                if (!element.isLocked)
-                  Icon(
-                    Icons.drag_handle,
-                    size: 16,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.5),
-                  ),
-                const SizedBox(width: 4),
-                Icon(
-                  elementIcon,
-                  color:
-                      element.isVisible
-                          ? (isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : null)
-                          : Colors.grey,
-                ),
-              ],
-            ),
-            title: Text(
-              elementName,
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color:
-                    isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : (!element.isVisible ? Colors.grey : null),
-                decoration:
-                    !element.isVisible ? TextDecoration.lineThrough : null,
-              ),
-            ),
-            // Keep visibility and lock toggles, but remove checkbox for multi-select
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    element.isVisible ? Icons.visibility : Icons.visibility_off,
-                    size: 18,
-                  ),
-                  tooltip: element.isVisible ? 'Hide' : 'Show',
-                  onPressed: () {
-                    editorProvider.toggleElementVisibility(element.id);
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 30,
-                    minHeight: 30,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    element.isLocked ? Icons.lock : Icons.lock_open,
-                    size: 18,
-                  ),
-                  tooltip: element.isLocked ? 'Unlock' : 'Lock',
-                  onPressed: () {
-                    editorProvider.toggleElementLock(element.id);
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 30,
-                    minHeight: 30,
-                  ),
-                ),
-              ],
-            ),
-            // Layer sidebar uses ctrl modifier for multi-selection
-            onTap: () {
-              // Check if Ctrl key is pressed for multi-select
-              final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
-
-              editorProvider.selectElement(
-                element,
-                addToSelection: isCtrlPressed,
-              );
-            },
-            onLongPress: () {
-              // Show context menu on long press for mobile support
+        Container(
+          // Apply background color based on selection state - use the current selection state
+          color: isCurrentlySelected ? selectedBgColor : defaultBgColor,
+          child: GestureDetector(
+            onSecondaryTap: () {
+              // Show context menu on right-click
               _showContextMenu(context, editorProvider);
             },
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.only(
+                left: isGroup ? 4 : 8,
+                right: 8,
+                top: 0,
+                bottom: 0,
+              ),
+              // Don't use ListTile's selected property as we're handling highlighting ourselves
+              selected: false,
+              selectedTileColor: Colors.transparent,
+              // Add a drag handle at the start
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isGroup)
+                    IconButton(
+                      icon: Icon(
+                        isExpanded ? Icons.expand_more : Icons.chevron_right,
+                        size: 16,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 20,
+                        minHeight: 20,
+                      ),
+                      onPressed: () {
+                        editorProvider.toggleGroupExpansion(element.id);
+                      },
+                    ),
+                  if (!element.isLocked)
+                    Icon(
+                      Icons.drag_handle,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.5),
+                    ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    elementIcon,
+                    color:
+                        element.isVisible
+                            ? (isCurrentlySelected ? selectedTextColor : null)
+                            : Colors.grey,
+                  ),
+                ],
+              ),
+              title: Text(
+                elementName,
+                style: TextStyle(
+                  fontWeight:
+                      isCurrentlySelected ? FontWeight.bold : FontWeight.normal,
+                  color:
+                      isCurrentlySelected
+                          ? selectedTextColor
+                          : (!element.isVisible ? Colors.grey : null),
+                  decoration:
+                      !element.isVisible ? TextDecoration.lineThrough : null,
+                ),
+              ),
+              // Keep visibility and lock toggles, but remove checkbox for multi-select
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      element.isVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      size: 18,
+                    ),
+                    tooltip: element.isVisible ? 'Hide' : 'Show',
+                    onPressed: () {
+                      editorProvider.toggleElementVisibility(element.id);
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 30,
+                      minHeight: 30,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      element.isLocked ? Icons.lock : Icons.lock_open,
+                      size: 18,
+                    ),
+                    tooltip: element.isLocked ? 'Unlock' : 'Lock',
+                    onPressed: () {
+                      editorProvider.toggleElementLock(element.id);
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 30,
+                      minHeight: 30,
+                    ),
+                  ),
+                ],
+              ),
+              // Layer sidebar uses ctrl modifier for multi-selection
+              onTap: () {
+                // Check if Ctrl key is pressed for multi-select
+                final isCtrlPressed =
+                    HardwareKeyboard.instance.isControlPressed;
+
+                editorProvider.selectElement(
+                  element,
+                  addToSelection: isCtrlPressed,
+                );
+              },
+              onLongPress: () {
+                // Show context menu on long press for mobile support
+                _showContextMenu(context, editorProvider);
+              },
+            ),
           ),
         ),
 
@@ -213,10 +247,12 @@ class LayerItem extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children:
             childElements.map((child) {
-              return LayerItem(
-                element: child,
-                isSelected: editorProvider.isElementSelected(child.id),
+              // Always check selection state directly from the provider
+              final isChildSelected = editorProvider.isElementSelected(
+                child.id,
               );
+
+              return LayerItem(element: child, isSelected: isChildSelected);
             }).toList(),
       ),
     );
@@ -404,8 +440,6 @@ class LayerItem extends StatelessWidget {
           ),
     );
   }
-
-  // Existing _showLayerOptions method can be removed
 
   void _editTextElement(
     BuildContext context,

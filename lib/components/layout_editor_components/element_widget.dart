@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'dart:math'; // Make sure to import this
+import 'dart:math';
 import '../../models/layouts.dart';
+import 'package:provider/provider.dart';
+import '../../providers/layout_editor.dart';
 
 class ElementWidget extends StatelessWidget {
   final LayoutElement element;
+  final bool isGroupChild;
 
-  const ElementWidget({super.key, required this.element});
+  const ElementWidget({
+    super.key,
+    required this.element,
+    this.isGroupChild = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Get the editor provider to check if this element is selected
+    final editorProvider = Provider.of<LayoutEditorProvider>(context);
+    final isSelected = editorProvider.isElementSelected(element.id);
+
     // Ensure width and height are at least 10 pixels
     final safeWidth = max(10.0, element.width);
     final safeHeight = max(10.0, element.height);
@@ -19,12 +30,19 @@ class ElementWidget extends StatelessWidget {
       child: SizedBox(
         width: safeWidth,
         height: safeHeight,
-        child: _buildElementContent(),
+        child: _buildElementContent(context, isSelected),
       ),
     );
   }
 
-  Widget _buildElementContent() {
+  Widget _buildElementContent(BuildContext context, bool isSelected) {
+    // For group elements, we'll handle rendering differently since
+    // the canvas will now handle the group rendering and interactions
+    if (element.type == 'group' && !isGroupChild) {
+      // Return a simple container since the actual group rendering is handled in the canvas
+      return Container(decoration: BoxDecoration(color: Colors.transparent));
+    }
+
     switch (element.type) {
       case 'image':
         final imageElement = element as ImageElement;
@@ -55,21 +73,13 @@ class ElementWidget extends StatelessWidget {
           width: max(10.0, element.width),
           height: max(10.0, element.height),
           color: _hexToColor(textElement.backgroundColor),
-          alignment: _getElementAlignment(
-            textElement.alignment,
-          ), // Use alignment property for Container
+          alignment: _getElementAlignment(textElement.alignment),
           padding: const EdgeInsets.all(4.0),
           child: Text(
-            textElement.text.isEmpty
-                ? ' '
-                : textElement.text, // Ensure text is never empty
+            textElement.text.isEmpty ? ' ' : textElement.text,
             style: TextStyle(
               color: _hexToColor(textElement.color),
-              fontSize:
-                  max(
-                    8.0,
-                    textElement.fontSize,
-                  ).toDouble(), // Fixed: ensuring it's a double
+              fontSize: max(8.0, textElement.fontSize).toDouble(),
               fontWeight:
                   textElement.isBold ? FontWeight.bold : FontWeight.normal,
               fontStyle:
@@ -80,10 +90,8 @@ class ElementWidget extends StatelessWidget {
                       : textElement.fontFamily,
               decoration: TextDecoration.none,
             ),
-            textAlign: _getTextAlignment(
-              textElement.alignment,
-            ), // Keep textAlign for text widget
-            overflow: TextOverflow.visible, // Use visible instead of clip
+            textAlign: _getTextAlignment(textElement.alignment),
+            overflow: TextOverflow.visible,
           ),
         );
 
@@ -115,48 +123,6 @@ class ElementWidget extends StatelessWidget {
                   color: Colors.blue.withOpacity(0.7),
                   child: Text(
                     cameraElement.label,
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-
-      case 'group':
-        final groupElement = element as GroupElement;
-        return Container(
-          decoration: BoxDecoration(
-            // border: Border.all(
-            //   color: Colors.blue.withOpacity(0.5),
-            //   width: 1.5,
-            //   style: BorderStyle.none,
-            // ),
-            // color: Colors.blue.withOpacity(0.05),
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Icon(
-                  Icons.folder_outlined,
-                  size: min(element.width, element.height) / 4,
-                  color: Colors.blue.withOpacity(0.2),
-                ),
-              ),
-              Positioned(
-                top: 5,
-                left: 5,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    groupElement.name,
                     style: const TextStyle(color: Colors.white, fontSize: 10),
                   ),
                 ),
