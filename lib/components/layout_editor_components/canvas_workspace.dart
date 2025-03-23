@@ -147,7 +147,7 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
               boundaryMargin: EdgeInsets.all(max(canvasWidth, canvasHeight)),
               minScale:
                   0.1, // Increased minimum scale to prevent excessive zoom out
-              maxScale: 5.0,
+              maxScale: 1.0, // Changed from 5.0 to 1.0
               // Fix: Only enable panning when we're not dragging an element or using middle mouse
               panEnabled: !_isMiddleMousePanning && !editorProvider.isDragging,
               onInteractionUpdate: (details) {
@@ -322,6 +322,9 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                         _draggedElement = null;
                       });
                       editorProvider.stopDrag();
+
+                      // Save history state when dragging finishes - use public method
+                      editorProvider.saveToHistory();
                     },
             child: Stack(
               children: [
@@ -449,6 +452,9 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                         _draggedElement = null;
                       });
                       editorProvider.stopDrag();
+
+                      // Save history state when dragging finishes - use public method
+                      editorProvider.saveToHistory();
                     },
             child: ElementWidget(element: element),
           ),
@@ -572,6 +578,9 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                       _draggedElement = null;
                     });
                     editorProvider.stopDrag();
+
+                    // Save history state when dragging finishes - use public method
+                    editorProvider.saveToHistory();
                   },
           child: ElementWidget(element: childElement, isGroupChild: true),
         ),
@@ -638,6 +647,9 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
 
     // Combine the matrices using multiplication
     final combinedMatrix = matrix * newMatrix;
+
+    // Ensure targetScale doesn't exceed 1.0
+    targetScale = targetScale.clamp(0.1, 1.0);
 
     // Update the controller with the new matrix
     provider.transformationController.value = combinedMatrix;

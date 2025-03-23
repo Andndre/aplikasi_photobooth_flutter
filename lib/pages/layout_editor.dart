@@ -90,6 +90,12 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
 
         // Try to handle the shortcut in the provider first
         if (editorProvider.handleKeyboardShortcut(event)) {
+          // If it's a save shortcut (Ctrl+S), then also save the layout
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.keyS &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _saveLayout(context);
+          }
           return KeyEventResult.handled;
         }
 
@@ -333,13 +339,6 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
         setState(() {
           _hasUnsavedChanges = false;
         });
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Layout saved successfully')),
-        );
-
-        // Remove Navigator.pop() to stay on the current screen
       }
     }
   }

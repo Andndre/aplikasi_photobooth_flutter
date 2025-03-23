@@ -4,11 +4,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vector_math/vector_math_64.dart';
+import 'package:vector_math/vector_math_64.dart' as vector_math;
 import '../models/layouts.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 enum EditMode { select, move, text, image, camera }
 
@@ -74,13 +79,13 @@ class LayoutEditorProvider with ChangeNotifier {
 
     // Reset history when loading a new layout
     _resetHistory();
-    _saveToHistory(); // Save initial state
+    saveToHistory(); // Save initial state
 
     notifyListeners();
   }
 
-  // Method to save current state to history
-  void _saveToHistory() {
+  // Method to save current state to history - change from private to public
+  void saveToHistory() {
     // Don't save if we're in the middle of an undo/redo operation
     if (_isUndoRedoOperation) return;
     if (_layout == null) return;
@@ -102,6 +107,11 @@ class LayoutEditorProvider with ChangeNotifier {
       _history.removeAt(0);
       _historyIndex--;
     }
+  }
+
+  // Remove this method or make it redirect to the public version
+  void _saveToHistory() {
+    saveToHistory();
   }
 
   // Reset history
@@ -193,21 +203,21 @@ class LayoutEditorProvider with ChangeNotifier {
       return;
     }
 
-    // Check if the element is a child in a group before proceeding
-    bool isGroupChild = false;
-    String? parentGroupId;
-    if (_layout != null) {
-      for (final layoutElement in _layout!.elements) {
-        if (layoutElement.type == 'group') {
-          final groupElement = layoutElement as GroupElement;
-          if (groupElement.childIds.contains(element.id)) {
-            isGroupChild = true;
-            parentGroupId = groupElement.id;
-            break;
-          }
-        }
-      }
-    }
+    // // Check if the element is a child in a group before proceeding
+    // bool isGroupChild = false;
+    // String? parentGroupId;
+    // if (_layout != null) {
+    //   for (final layoutElement in _layout!.elements) {
+    //     if (layoutElement.type == 'group') {
+    //       final groupElement = layoutElement as GroupElement;
+    //       if (groupElement.childIds.contains(element.id)) {
+    //         isGroupChild = true;
+    //         parentGroupId = groupElement.id;
+    //         break;
+    //       }
+    //     }
+    //   }
+    // }
 
     if (addToSelection) {
       // Check if Shift key is being pressed for range selection
@@ -323,7 +333,7 @@ class LayoutEditorProvider with ChangeNotifier {
     double width = maxX - minX;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Apply alignment
     for (final element in selectedElements) {
@@ -350,7 +360,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   void alignElementsVertically(String alignment) {
@@ -370,7 +380,7 @@ class LayoutEditorProvider with ChangeNotifier {
     double height = maxY - minY;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Apply alignment
     for (final element in selectedElements) {
@@ -397,7 +407,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   // Add methods for distribution of multiple elements
@@ -405,7 +415,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || selectedElements.length < 3) return;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Sort elements by x position
     final elements = [...selectedElements];
@@ -440,14 +450,14 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   void distributeElementsVertically() {
     if (_layout == null || selectedElements.length < 3) return;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Sort elements by y position
     final elements = [...selectedElements];
@@ -482,7 +492,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   // Add method to delete multiple elements
@@ -490,7 +500,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || _selectedElementIds.isEmpty) return;
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Make a copy to avoid modifying during iteration
     final selectedIds = {..._selectedElementIds};
@@ -540,7 +550,7 @@ class LayoutEditorProvider with ChangeNotifier {
   }
 
   void setScale(double newScale) {
-    _scale = newScale.clamp(0.1, 5.0);
+    _scale = newScale.clamp(0.1, 1.0); // Changed from 5.0 to 1.0
     notifyListeners();
   }
 
@@ -604,7 +614,7 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = newElement;
 
       // Save state for undo/redo
-      _saveToHistory();
+      saveToHistory();
 
       notifyListeners();
     });
@@ -653,7 +663,7 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = newElement;
 
       // Save state for undo/redo
-      _saveToHistory();
+      saveToHistory();
 
       notifyListeners();
     } catch (e) {
@@ -689,7 +699,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _selectedElement = newElement;
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -769,9 +779,6 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
-
-    // Save state for undo/redo
-    _saveToHistory();
 
     // Explicitly notify listeners to ensure UI updates
     notifyListeners();
@@ -907,8 +914,8 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
-    // Save state for undo/redo
-    _saveToHistory();
+    // Remove the save to history call from here
+    // We'll save history only when resizing is completed, not during resize
 
     notifyListeners();
   }
@@ -952,7 +959,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1024,7 +1031,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1081,7 +1088,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1103,7 +1110,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1122,7 +1129,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1141,7 +1148,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1159,7 +1166,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1236,7 +1243,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1255,7 +1262,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.backgroundColor = color;
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     // Force notification to all listeners
     notifyListeners();
@@ -1271,7 +1278,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.add(element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1286,7 +1293,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(0, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1303,7 +1310,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(elementIndex + 1, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1318,7 +1325,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(elementIndex - 1, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1329,7 +1336,10 @@ class LayoutEditorProvider with ChangeNotifier {
     final currentScale = transformationController.value.getMaxScaleOnAxis();
 
     // Calculate target scale
-    final targetScale = (currentScale * factor).clamp(0.1, 5.0);
+    final targetScale = (currentScale * factor).clamp(
+      0.1,
+      1.0,
+    ); // Changed from 5.0 to 1.0
 
     // Instead of using transformationController.view (which doesn't exist),
     // we'll use a different approach to get a focal point for zooming
@@ -1385,8 +1395,8 @@ class LayoutEditorProvider with ChangeNotifier {
     final centerY = canvasHeight / 2;
 
     // Calculate center of the viewport in screen coordinates
-    final viewportCenterX = availableWidth / 2;
-    final viewportCenterY = availableHeight / 2;
+    final viewportCenterX = availableWidth / _scale;
+    final viewportCenterY = availableHeight / _scale;
 
     // Create a transformation that:
     // 1. Scales with the calculated scale
@@ -1395,7 +1405,7 @@ class LayoutEditorProvider with ChangeNotifier {
         Matrix4.identity()
           ..scale(_scale)
           ..setTranslation(
-            Vector3(
+            vector_math.Vector3(
               viewportCenterX / _scale - centerX,
               viewportCenterY / _scale - centerY,
               0.0,
@@ -1421,8 +1431,11 @@ class LayoutEditorProvider with ChangeNotifier {
     // Calculate the point in scene coordinates before zooming
     final focalPointScene = transformationController.toScene(focalPoint);
 
-    // Calculate the scale change
-    final scaleChange = targetScale / currentScale;
+    // Calculate the scale change (ensure we don't exceed 1.0)
+    final scaleChange = (targetScale / currentScale).clamp(
+      0.1,
+      1.0 / currentScale,
+    );
 
     // Create a transformation matrix for this zoom operation
     final zoomMatrix =
@@ -1505,7 +1518,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(newIndex, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1546,7 +1559,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || selectedElementIds.length <= 1) return;
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Get all selected elements
     final selectedElements =
@@ -1590,7 +1603,7 @@ class LayoutEditorProvider with ChangeNotifier {
     selectElement(groupElement);
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1604,7 +1617,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     final group = _selectedElement as GroupElement;
     final childIds = List<String>.from(group.childIds);
@@ -1623,7 +1636,7 @@ class LayoutEditorProvider with ChangeNotifier {
     selectElements(childElements);
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1649,7 +1662,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1704,8 +1717,39 @@ class LayoutEditorProvider with ChangeNotifier {
         ungroupSelectedElements();
         return true;
       }
+
+      // Undo/Redo shortcuts
+      if (HardwareKeyboard.instance.isControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyZ) {
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          redo();
+        } else {
+          undo();
+        }
+        return true;
+      }
+
+      // CTRL + S to save layout
+      if (HardwareKeyboard.instance.isControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyS) {
+        saveLayout();
+        return true;
+      }
     }
     return false;
+  }
+
+  // Method to save the current layout state - to be called from the editor screen
+  void saveLayout() {
+    // Don't attempt to save if no layout is loaded
+    if (_layout == null) return;
+
+    // Set the save operation flag - this method doesn't actually perform the save
+    // It merely marks the current state as the "saved" state for the editor to handle
+    saveToHistory();
+
+    // Notify listeners about the save request
+    notifyListeners();
   }
 
   // Method to check if element is a child in any group
@@ -1769,5 +1813,427 @@ class LayoutEditorProvider with ChangeNotifier {
     } catch (e) {
       return null;
     }
+  }
+
+  // New method to render and export the layout as an image
+  Future<File?> exportLayoutAsImage({
+    required String exportPath,
+    required double resolutionMultiplier,
+    bool includeBackground = true,
+    bool includeSamplePhotos = true,
+  }) async {
+    if (_layout == null) return null;
+
+    try {
+      // Create a recorder
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      // Calculate dimensions
+      final width = (_layout!.width * resolutionMultiplier).toDouble();
+      final height = (_layout!.height * resolutionMultiplier).toDouble();
+
+      // Draw background if needed
+      if (includeBackground) {
+        final bgColor = _hexToColor(_layout!.backgroundColor);
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, width, height),
+          Paint()..color = bgColor,
+        );
+      }
+
+      // Sort elements by their order in the layout
+      final elements = [..._layout!.elements];
+
+      // Load the sample photo for camera slots if needed
+      ui.Image? samplePhoto;
+      if (includeSamplePhotos) {
+        samplePhoto = await _loadSamplePhoto();
+      }
+
+      // Draw each element
+      for (final element in elements) {
+        // Skip invisible elements
+        if (!element.isVisible) continue;
+
+        // Skip group elements as we'll render their children individually
+        if (element.type == 'group') continue;
+
+        // Scale the element's position and size
+        final x = element.x * resolutionMultiplier;
+        final y = element.y * resolutionMultiplier;
+        final elementWidth = element.width * resolutionMultiplier;
+        final elementHeight = element.height * resolutionMultiplier;
+
+        // Save the current canvas state before applying transformations
+        canvas.save();
+
+        // Apply rotation if needed
+        if (element.rotation != 0) {
+          // Calculate center of the element for rotation
+          final centerX = x + (elementWidth / 2);
+          final centerY = y + (elementHeight / 2);
+
+          // Translate to center, rotate, then translate back
+          canvas.translate(centerX, centerY);
+          canvas.rotate((element.rotation * pi) / 180);
+          canvas.translate(-centerX, -centerY);
+        }
+
+        // Render based on element type
+        switch (element.type) {
+          case 'image':
+            await _renderImageElement(
+              canvas,
+              element as ImageElement,
+              x,
+              y,
+              elementWidth,
+              elementHeight,
+            );
+            break;
+
+          case 'text':
+            _renderTextElement(
+              canvas,
+              element as TextElement,
+              x,
+              y,
+              elementWidth,
+              elementHeight,
+              resolutionMultiplier,
+            );
+            break;
+
+          case 'camera':
+            if (includeSamplePhotos && samplePhoto != null) {
+              _renderCameraElement(
+                canvas,
+                element as CameraElement,
+                samplePhoto,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+              );
+            } else {
+              _renderCameraPlaceholder(
+                canvas,
+                element as CameraElement,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+              );
+            }
+            break;
+        }
+
+        // Restore the canvas state after rendering this element
+        canvas.restore();
+      }
+
+      // End recording and convert to image
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(width.round(), height.round());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) {
+        return null;
+      }
+
+      // Create file and write image data
+      final file = File(exportPath);
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      return file;
+    } catch (e) {
+      print('Error exporting layout: $e');
+      return null;
+    }
+  }
+
+  // Helper to load a sample photo for camera slots
+  Future<ui.Image?> _loadSamplePhoto() async {
+    try {
+      // First try to look for an existing image element and use that
+      if (_layout != null) {
+        for (final element in _layout!.elements) {
+          if (element.type == 'image') {
+            final imageElement = element as ImageElement;
+            final file = File(imageElement.path);
+            if (await file.exists()) {
+              final bytes = await file.readAsBytes();
+              final codec = await ui.instantiateImageCodec(bytes);
+              final frame = await codec.getNextFrame();
+              return frame.image;
+            }
+          }
+        }
+      }
+
+      // If no image found, use a default placeholder from assets
+      // This would require adding a sample image to your assets
+      // For simplicity, we'll create a simple placeholder image
+      final pictureRecorder = ui.PictureRecorder();
+      final canvas = Canvas(pictureRecorder);
+      final paint = Paint()..color = Colors.blue.shade200;
+
+      // Draw a blue rectangle with placeholder text
+      canvas.drawRect(Rect.fromLTWH(0, 0, 300, 300), paint);
+
+      // Add some text
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'Sample Photo',
+          style: TextStyle(color: Colors.white, fontSize: 24),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(150 - textPainter.width / 2, 150 - textPainter.height / 2),
+      );
+
+      final picture = pictureRecorder.endRecording();
+      return await picture.toImage(300, 300);
+    } catch (e) {
+      print('Error loading sample photo: $e');
+      return null;
+    }
+  }
+
+  // Helper to render an image element
+  Future<void> _renderImageElement(
+    Canvas canvas,
+    ImageElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) async {
+    try {
+      final file = File(element.path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+
+        // Draw with opacity
+        final paint =
+            Paint()
+              ..filterQuality = FilterQuality.high
+              ..isAntiAlias = true
+              ..color = Colors.white.withOpacity(element.opacity);
+
+        canvas.drawImageRect(
+          image,
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+          Rect.fromLTWH(x, y, width, height),
+          paint,
+        );
+      }
+    } catch (e) {
+      print('Error rendering image element: $e');
+    }
+  }
+
+  // Helper to render a text element
+  void _renderTextElement(
+    Canvas canvas,
+    TextElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+    double resolutionMultiplier,
+  ) {
+    try {
+      // Create a rect for the background if needed
+      final rect = Rect.fromLTWH(x, y, width, height);
+
+      // Draw background if not transparent
+      if (element.backgroundColor != 'transparent') {
+        final bgPaint = Paint()..color = _hexToColor(element.backgroundColor);
+        canvas.drawRect(rect, bgPaint);
+      }
+
+      // Create text style
+      final textStyle = TextStyle(
+        color: _hexToColor(element.color),
+        fontSize: element.fontSize * resolutionMultiplier,
+        fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+        fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+        fontFamily: element.fontFamily,
+      );
+
+      // Create paragraph style based on alignment
+      final paragraphStyle = ui.ParagraphStyle(
+        textAlign: _getTextAlign(element.alignment),
+        textDirection: TextDirection.ltr,
+      );
+
+      // Build paragraph
+      final paragraphBuilder =
+          ui.ParagraphBuilder(paragraphStyle)
+            ..pushStyle(textStyle as ui.TextStyle)
+            ..addText(element.text);
+
+      final paragraph = paragraphBuilder.build();
+      paragraph.layout(ui.ParagraphConstraints(width: width));
+
+      // Position paragraph according to vertical alignment
+      double dy = y;
+      if (element.alignment.contains('center')) {
+        dy = y + (height - paragraph.height) / 2;
+      } else if (element.alignment.contains('bottom')) {
+        dy = y + height - paragraph.height;
+      }
+
+      // Draw text
+      canvas.drawParagraph(paragraph, Offset(x, dy));
+    } catch (e) {
+      print('Error rendering text element: $e');
+    }
+  }
+
+  // Helper to render a camera element with sample photo
+  void _renderCameraElement(
+    Canvas canvas,
+    CameraElement element,
+    ui.Image samplePhoto,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    try {
+      // Draw the sample photo inside the camera slot
+      final paint =
+          Paint()
+            ..filterQuality = FilterQuality.high
+            ..isAntiAlias = true;
+
+      canvas.drawImageRect(
+        samplePhoto,
+        Rect.fromLTWH(
+          0,
+          0,
+          samplePhoto.width.toDouble(),
+          samplePhoto.height.toDouble(),
+        ),
+        Rect.fromLTWH(x, y, width, height),
+        paint,
+      );
+
+      // Draw a border and label
+      final borderPaint =
+          Paint()
+            ..color = Colors.white.withOpacity(0.7)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0;
+
+      canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+      // Add label
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: element.label,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12 * (width / 300), // Scale font with element size
+            shadows: [
+              Shadow(
+                offset: const Offset(1, 1),
+                blurRadius: 3,
+                color: Colors.black.withOpacity(0.7),
+              ),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x + 5, y + height - textPainter.height - 5),
+      );
+    } catch (e) {
+      print('Error rendering camera element: $e');
+      _renderCameraPlaceholder(canvas, element, x, y, width, height);
+    }
+  }
+
+  // Helper to render a placeholder for camera elements
+  void _renderCameraPlaceholder(
+    Canvas canvas,
+    CameraElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    // Blue rect with camera icon
+    final bgPaint = Paint()..color = Colors.blue.withOpacity(0.2);
+    final borderPaint =
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+    // Draw camera icon
+    final iconPainter = TextPainter(
+      text: const TextSpan(text: '📷', style: TextStyle(fontSize: 24)),
+      textDirection: TextDirection.ltr,
+    );
+    iconPainter.layout();
+    iconPainter.paint(
+      canvas,
+      Offset(
+        x + (width - iconPainter.width) / 2,
+        y + (height - iconPainter.height) / 2,
+      ),
+    );
+
+    // Add label
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: element.label,
+        style: const TextStyle(color: Colors.blue, fontSize: 12),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(x + 5, y + height - textPainter.height - 5),
+    );
+  }
+
+  // Helper to convert text alignment string to TextAlign
+  TextAlign _getTextAlign(String alignment) {
+    if (alignment.contains('Left')) {
+      return TextAlign.left;
+    } else if (alignment.contains('Right')) {
+      return TextAlign.right;
+    } else {
+      return TextAlign.center;
+    }
+  }
+
+  // Helper to convert hex color to Color
+  Color _hexToColor(String hexColor) {
+    if (hexColor == 'transparent') return Colors.transparent;
+
+    hexColor = hexColor.replaceAll('#', '');
+    if (hexColor.length == 6) {
+      hexColor = 'FF$hexColor';
+    }
+    return Color(int.parse(hexColor, radix: 16));
   }
 }
