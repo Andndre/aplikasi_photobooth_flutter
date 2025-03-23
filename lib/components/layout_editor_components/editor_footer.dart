@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
+import '../../models/layouts.dart';
 
 class EditorFooter extends StatelessWidget {
   const EditorFooter({super.key});
@@ -12,6 +13,17 @@ class EditorFooter extends StatelessWidget {
 
     if (layout == null) {
       return const SizedBox.shrink();
+    }
+
+    // Count how many Google Fonts are used in the layout
+    int googleFontsCount = 0;
+    for (final element in layout.elements) {
+      if (element.type == 'text') {
+        final textElement = element as TextElement;
+        if (textElement.isGoogleFont) {
+          googleFontsCount++;
+        }
+      }
     }
 
     return Container(
@@ -55,6 +67,21 @@ class EditorFooter extends StatelessWidget {
             ),
 
           const Spacer(),
+
+          // Google Fonts usage info
+          if (googleFontsCount > 0)
+            Row(
+              children: [
+                Icon(Icons.font_download, size: 16, color: Colors.blue),
+                const SizedBox(width: 4),
+                Text(
+                  'Using $googleFontsCount Google Font${googleFontsCount > 1 ? 's' : ''}',
+                  style: TextStyle(fontSize: 12, color: Colors.blue),
+                ),
+              ],
+            ),
+
+          const SizedBox(width: 16),
 
           // Zoom level display
           Text(

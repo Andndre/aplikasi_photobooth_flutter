@@ -1,4 +1,3 @@
-
 // Base class for all layout elements
 abstract class LayoutElement {
   String id;
@@ -61,9 +60,7 @@ class ImageElement extends LayoutElement {
     super.rotation,
     super.isLocked,
     super.isVisible,
-  }) : super(
-         type: 'image',
-       );
+  }) : super(type: 'image');
 
   @override
   Map<String, dynamic> toJson() {
@@ -110,6 +107,7 @@ class TextElement extends LayoutElement {
   bool isBold;
   bool isItalic;
   String alignment;
+  bool isGoogleFont; // New property to track if this is a Google Font
 
   TextElement({
     required super.id,
@@ -124,7 +122,8 @@ class TextElement extends LayoutElement {
     this.backgroundColor = 'transparent',
     this.isBold = false,
     this.isItalic = false,
-    this.alignment = 'topLeft', // Changed from 'center' to 'topLeft'
+    this.alignment = 'topLeft',
+    this.isGoogleFont = false, // Default to false for system fonts
     super.rotation,
     super.isLocked,
     super.isVisible,
@@ -150,6 +149,7 @@ class TextElement extends LayoutElement {
       'isBold': isBold,
       'isItalic': isItalic,
       'alignment': alignment,
+      'isGoogleFont': isGoogleFont, // Add to JSON serialization
     };
   }
 
@@ -170,8 +170,8 @@ class TextElement extends LayoutElement {
       backgroundColor: json['backgroundColor'] as String? ?? 'transparent',
       isBold: json['isBold'] as bool? ?? false,
       isItalic: json['isItalic'] as bool? ?? false,
-      alignment:
-          json['alignment'] as String? ?? 'topLeft', // Changed default here too
+      alignment: json['alignment'] as String? ?? 'topLeft',
+      isGoogleFont: json['isGoogleFont'] as bool? ?? false, // Parse from JSON
     );
   }
 }
@@ -189,9 +189,7 @@ class CameraElement extends LayoutElement {
     super.rotation,
     super.isLocked,
     super.isVisible,
-  }) : super(
-         type: 'camera',
-       );
+  }) : super(type: 'camera');
 
   @override
   Map<String, dynamic> toJson() {
@@ -239,9 +237,7 @@ class GroupElement extends LayoutElement {
     super.rotation,
     super.isVisible,
     super.isLocked,
-  }) : super(
-         type: 'group',
-       );
+  }) : super(type: 'group');
 
   factory GroupElement.fromJson(Map<String, dynamic> json) {
     return GroupElement(

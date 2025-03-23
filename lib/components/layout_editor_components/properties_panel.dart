@@ -1,9 +1,9 @@
-
 import 'package:aplikasi_photobooth_flutter/providers/layout_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/layouts.dart';
 
 // Common widgets
@@ -1525,7 +1525,8 @@ class CustomFontSelector extends StatefulWidget {
   final String currentFont;
   final Function(String) onFontSelected;
 
-  const CustomFontSelector({super.key, 
+  const CustomFontSelector({
+    super.key,
     required this.currentFont,
     required this.onFontSelected,
   });
@@ -1535,7 +1536,8 @@ class CustomFontSelector extends StatefulWidget {
 }
 
 class _CustomFontSelectorState extends State<CustomFontSelector> {
-  List<String> allFonts = [
+  // Built-in system fonts
+  List<String> systemFonts = [
     'Arial',
     'Helvetica',
     'Roboto',
@@ -1559,14 +1561,19 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     'Corbel',
     'Franklin Gothic',
     'Segoe UI',
-    'Open Sans',
-    'Lato',
-    'Montserrat',
   ];
+
+  // List to hold Google Fonts
+  List<String> googleFontsList = [];
+
+  // Combined list of all fonts
+  List<String> get allFonts => [...systemFonts, ...googleFontsList];
 
   final TextEditingController _controller = TextEditingController();
   bool _isDropdownVisible = false;
   String _searchText = '';
+  bool _isLoading = false;
+  bool _googleFontsLoaded = false;
 
   // Add a focus node for the search field
   final FocusNode _searchFocusNode = FocusNode();
@@ -1575,12 +1582,41 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
   void initState() {
     super.initState();
     _controller.text = widget.currentFont;
+
+    // Pre-fetch Google Fonts list when the widget initializes
+    _loadGoogleFonts();
+  }
+
+  // Load Google Fonts asynchronously
+  Future<void> _loadGoogleFonts() async {
+    if (_googleFontsLoaded) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Get all available Google Fonts
+      final availableFonts = GoogleFonts.asMap().keys.toList();
+
+      // Update the state with the fetched fonts
+      setState(() {
+        googleFontsList = availableFonts;
+        _googleFontsLoaded = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading Google Fonts: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _searchFocusNode.dispose(); // Dispose the focus node
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -1591,6 +1627,11 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     return allFonts
         .where((font) => font.toLowerCase().contains(_searchText.toLowerCase()))
         .toList();
+  }
+
+  // Helper to check if a font is a Google Font
+  bool _isGoogleFont(String fontName) {
+    return googleFontsList.contains(fontName);
   }
 
   @override
@@ -1637,6 +1678,11 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                 Future.delayed(Duration.zero, () {
                   _searchFocusNode.requestFocus();
                 });
+
+                // Make sure Google Fonts are loaded
+                if (!_googleFontsLoaded) {
+                  _loadGoogleFonts();
+                }
               }
             });
           },
@@ -1666,7 +1712,7 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                   child: TextField(
                     focusNode: _searchFocusNode,
                     autofocus: true,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Search fonts...',
                       prefixIcon: Icon(Icons.search, size: 20),
                       contentPadding: EdgeInsets.symmetric(
@@ -1675,17 +1721,26 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                       ),
                       isDense: true,
                       border: OutlineInputBorder(),
+                      // Show loading indicator while fetching Google Fonts
+                      suffixIcon:
+                          _isLoading
+                              ? Container(
+                                width: 20,
+                                height: 20,
+                                padding: EdgeInsets.all(8),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : null,
                     ),
                     onChanged: (value) {
                       setState(() {
                         _searchText = value;
                       });
                     },
-                    // Add onSubmitted to handle Enter key press
                     onSubmitted: (value) {
-                      // Get filtered fonts
                       final filteredFonts = _getFilteredFonts();
-                      // If there are any results, select the first one
                       if (filteredFonts.isNotEmpty) {
                         final firstFont = filteredFonts.first;
                         setState(() {
@@ -1698,44 +1753,126 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                   ),
                 ),
 
-                // Fonts list
+                // Fonts list with sections
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _getFilteredFonts().length,
-                    itemBuilder: (context, index) {
-                      final font = _getFilteredFonts()[index];
-                      final isSelected = font == widget.currentFont;
+                  constraints: const BoxConstraints(
+                    maxHeight: 300,
+                  ), // Increased height for better browsing
+                  child:
+                      _isLoading && !_googleFontsLoaded
+                          ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text('Loading Google Fonts...'),
+                              ],
+                            ),
+                          )
+                          : ListView(
+                            shrinkWrap: true,
+                            children: [
+                              // Header for system fonts
+                              if (_getFilteredFonts().any(
+                                (font) => systemFonts.contains(font),
+                              ))
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(
+                                    'System Fonts',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
 
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          font,
-                          style: TextStyle(
-                            fontFamily: font,
-                            fontWeight:
-                                isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                              // System fonts list
+                              ..._getFilteredFonts()
+                                  .where((font) => systemFonts.contains(font))
+                                  .map((font) => _buildFontListTile(font)),
+
+                              // Header for Google fonts
+                              if (_getFilteredFonts().any(
+                                (font) => googleFontsList.contains(font),
+                              ))
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'Google Fonts',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(
+                                        Icons.cloud_download,
+                                        size: 16,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              // Google fonts list
+                              ..._getFilteredFonts()
+                                  .where(
+                                    (font) => googleFontsList.contains(font),
+                                  )
+                                  .map((font) => _buildFontListTile(font)),
+                            ],
                           ),
-                        ),
-                        selected: isSelected,
-                        onTap: () {
-                          setState(() {
-                            _controller.text = font;
-                            _isDropdownVisible = false;
-                            widget.onFontSelected(font);
-                          });
-                        },
-                      );
-                    },
-                  ),
                 ),
               ],
             ),
           ),
       ],
+    );
+  }
+
+  // Helper method to build font list tile with proper styling
+  Widget _buildFontListTile(String font) {
+    final isSelected = font == _controller.text;
+    final isGoogleFont = _isGoogleFont(font);
+
+    return ListTile(
+      dense: true,
+      title: Text(
+        font,
+        style:
+            isGoogleFont
+                ? GoogleFonts.getFont(
+                  font,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                )
+                : TextStyle(
+                  fontFamily: font,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+      ),
+      selected: isSelected,
+      trailing:
+          isGoogleFont
+              ? Icon(Icons.cloud, size: 16, color: Colors.blue[300])
+              : null,
+      onTap: () {
+        setState(() {
+          _controller.text = font;
+          _isDropdownVisible = false;
+          widget.onFontSelected(font);
+        });
+      },
     );
   }
 }

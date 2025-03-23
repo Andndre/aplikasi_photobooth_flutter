@@ -8,6 +8,7 @@ import 'package:vector_math/vector_math_64.dart';
 import '../models/layouts.dart';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:google_fonts/google_fonts.dart';
 
 enum EditMode { select, move, text, image, camera }
 
@@ -966,6 +967,7 @@ class LayoutEditorProvider with ChangeNotifier {
     bool? isBold,
     bool? isItalic,
     String? alignment,
+    bool? isGoogleFont, // New parameter
   }) {
     if (_layout == null) return;
 
@@ -977,7 +979,25 @@ class LayoutEditorProvider with ChangeNotifier {
     final element = _layout!.elements[elementIndex] as TextElement;
 
     if (text != null) element.text = text;
-    if (fontFamily != null) element.fontFamily = fontFamily;
+    if (fontFamily != null) {
+      element.fontFamily = fontFamily;
+
+      // Auto-detect if this is a Google Font
+      if (isGoogleFont == null) {
+        // Check if font exists in Google Fonts registry
+        try {
+          final isAvailableInGoogleFonts = GoogleFonts.asMap().containsKey(
+            fontFamily,
+          );
+          element.isGoogleFont = isAvailableInGoogleFonts;
+        } catch (e) {
+          // If there's an error checking, assume it's not a Google Font
+          element.isGoogleFont = false;
+        }
+      } else {
+        element.isGoogleFont = isGoogleFont;
+      }
+    }
     if (fontSize != null) element.fontSize = fontSize;
     if (color != null) element.color = color;
 
@@ -997,6 +1017,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (isBold != null) element.isBold = isBold;
     if (isItalic != null) element.isItalic = isItalic;
     if (alignment != null) element.alignment = alignment;
+    if (isGoogleFont != null) element.isGoogleFont = isGoogleFont;
 
     if (_selectedElement?.id == id) {
       _selectedElement = element;

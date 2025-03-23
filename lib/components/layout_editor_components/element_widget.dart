@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../models/layouts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class ElementWidget extends StatelessWidget {
   final LayoutElement element;
@@ -69,6 +70,54 @@ class ElementWidget extends StatelessWidget {
 
       case 'text':
         final textElement = element as TextElement;
+
+        // Create the text style, using Google Fonts if specified
+        TextStyle textStyle;
+        if (textElement.isGoogleFont) {
+          try {
+            // Use Google Fonts with the specified fontFamily
+            textStyle = GoogleFonts.getFont(
+              textElement.fontFamily,
+              color: _hexToColor(textElement.color),
+              fontSize: max(8.0, textElement.fontSize).toDouble(),
+              fontWeight:
+                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
+              fontStyle:
+                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
+            );
+          } catch (e) {
+            // Fallback to system font if Google Font fails to load
+            print(
+              'Error loading Google Font: ${textElement.fontFamily}. Using system font instead.',
+            );
+            textStyle = TextStyle(
+              color: _hexToColor(textElement.color),
+              fontSize: max(8.0, textElement.fontSize).toDouble(),
+              fontWeight:
+                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
+              fontStyle:
+                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
+              fontFamily: 'Arial',
+              decoration: TextDecoration.none,
+            );
+          }
+        } else {
+          // Use system font
+          textStyle = TextStyle(
+            color: _hexToColor(textElement.color),
+            fontSize: max(8.0, textElement.fontSize).toDouble(),
+            fontWeight:
+                textElement.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle:
+                textElement.isItalic ? FontStyle.italic : FontStyle.normal,
+            fontFamily:
+                textElement.fontFamily.isEmpty
+                    ? 'Arial'
+                    : textElement.fontFamily,
+            decoration: TextDecoration.none,
+          );
+        }
+
         return Container(
           width: max(10.0, element.width),
           height: max(10.0, element.height),
@@ -77,19 +126,7 @@ class ElementWidget extends StatelessWidget {
           padding: const EdgeInsets.all(4.0),
           child: Text(
             textElement.text.isEmpty ? ' ' : textElement.text,
-            style: TextStyle(
-              color: _hexToColor(textElement.color),
-              fontSize: max(8.0, textElement.fontSize).toDouble(),
-              fontWeight:
-                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
-              fontStyle:
-                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-              fontFamily:
-                  textElement.fontFamily.isEmpty
-                      ? 'Arial'
-                      : textElement.fontFamily,
-              decoration: TextDecoration.none,
-            ),
+            style: textStyle,
             textAlign: _getTextAlignment(textElement.alignment),
             overflow: TextOverflow.visible,
           ),
