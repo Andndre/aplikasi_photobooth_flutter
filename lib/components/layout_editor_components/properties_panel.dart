@@ -735,44 +735,13 @@ class PropertiesPanel extends StatelessWidget {
               ),
             ),
 
-            // Font size
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Font Size', style: TextStyle(fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Slider(
-                          value: fontSize,
-                          min: 8,
-                          max: 72,
-                          divisions: 64,
-                          onChanged: (value) {
-                            setState(() {
-                              fontSize = value;
-                            });
-                            editorProvider.updateTextElement(
-                              element.id,
-                              fontSize: value,
-                            );
-                          },
-                        ),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '${fontSize.round()}px',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            // Font size - Replace Slider with NumberPropertyRow
+            _NumberPropertyRow(
+              label: 'Font Size',
+              value: element.fontSize,
+              onChanged: (value) {
+                editorProvider.updateTextElement(element.id, fontSize: value);
+              },
             ),
 
             // Font style
@@ -1988,44 +1957,6 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                         });
                       }
                     },
-                  ),
-                ),
-
-                // Font categories
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Chip(
-                          avatar: Icon(
-                            Icons.computer_outlined,
-                            size: 18,
-                            color: Colors.green[700],
-                          ),
-                          label: Text(
-                            'System Fonts (${_systemFontsLoaded ? systemFonts.where((font) => font.toLowerCase().contains(_searchText.toLowerCase())).length : "..."})',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          backgroundColor: Colors.green[50],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Chip(
-                          avatar: Icon(
-                            Icons.cloud_outlined,
-                            size: 18,
-                            color: Colors.blue[700],
-                          ),
-                          label: Text(
-                            'Google Fonts (${_googleFontsLoaded ? googleFontsList.where((font) => font.toLowerCase().contains(_searchText.toLowerCase())).length : "..."})',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          backgroundColor: Colors.blue[50],
-                        ),
-                      ),
-                    ],
                   ),
                 ),
 
