@@ -1587,63 +1587,61 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     }
 
     try {
-      final fontsDir = Directory('C:\\Windows\\Fonts');
-      if (await fontsDir.exists()) {
-        List<FileSystemEntity> fontFiles = await fontsDir.list().toList();
-        Set<String> fontNames = {};
+      Set<String> fontNames = {};
 
-        for (var file in fontFiles) {
-          if (file is File) {
-            String path = file.path.toLowerCase();
-            if (path.endsWith('.ttf') ||
-                path.endsWith('.otf') ||
-                path.endsWith('.ttc')) {
-              // Extract filename without extension
-              String rawName = file.path.split('\\').last;
+      // Load fonts from both system and user directories
+      final directories = [
+        Directory('C:\\Windows\\Fonts'),
+        Directory(
+          '${Platform.environment['USERPROFILE']}\\AppData\\Local\\Microsoft\\Windows\\Fonts',
+        ),
+      ];
 
-              // Clean up font name more thoroughly
-              String fontName = _extractFontFamilyName(rawName);
+      for (var dir in directories) {
+        if (await dir.exists()) {
+          List<FileSystemEntity> fontFiles = await dir.list().toList();
 
-              // Only add if name is not empty after cleaning
-              if (fontName.isNotEmpty) {
-                fontNames.add(fontName);
-                // Store the full path for later use
-                fontPaths[fontName] = file.path;
+          for (var file in fontFiles) {
+            if (file is File) {
+              String path = file.path.toLowerCase();
+              if (path.endsWith('.ttf') ||
+                  path.endsWith('.otf') ||
+                  path.endsWith('.ttc')) {
+                String rawName = file.path.split('\\').last;
+                String fontName = _extractFontFamilyName(rawName);
 
-                // Also add the raw name (without extension) as fallback
-                String rawNameWithoutExt = rawName.replaceAll(
-                  RegExp(r'\.(ttf|otf|ttc)$', caseSensitive: false),
-                  '',
-                );
-                if (rawNameWithoutExt.isNotEmpty) {
-                  fontNames.add(rawNameWithoutExt);
-                  fontPaths[rawNameWithoutExt] = file.path;
+                if (fontName.isNotEmpty) {
+                  fontNames.add(fontName);
+                  fontPaths[fontName] = file.path;
+
+                  String rawNameWithoutExt = rawName.replaceAll(
+                    RegExp(r'\.(ttf|otf|ttc)$', caseSensitive: false),
+                    '',
+                  );
+                  if (rawNameWithoutExt.isNotEmpty) {
+                    fontNames.add(rawNameWithoutExt);
+                    fontPaths[rawNameWithoutExt] = file.path;
+                  }
                 }
               }
             }
           }
         }
-
-        // Convert to sorted list
-        List<String> sortedFonts = fontNames.toList()..sort();
-
-        // Update the state
-        setState(() {
-          systemFonts = sortedFonts;
-          _systemFontsLoaded = true;
-          if (_googleFontsLoaded) {
-            _isLoading = false;
-          }
-        });
-
-        print('Loaded ${sortedFonts.length} system fonts');
-
-        // Preload all system fonts
-        await _preloadAllSystemFonts();
-      } else {
-        print('Windows Fonts directory not found');
-        _setDefaultFonts();
       }
+
+      // Convert to sorted list
+      List<String> sortedFonts = fontNames.toList()..sort();
+
+      setState(() {
+        systemFonts = sortedFonts;
+        _systemFontsLoaded = true;
+        if (_googleFontsLoaded) {
+          _isLoading = false;
+        }
+      });
+
+      print('Loaded ${sortedFonts.length} system fonts');
+      await _preloadAllSystemFonts();
     } catch (e) {
       print('Error loading system fonts: $e');
       _setDefaultFonts();

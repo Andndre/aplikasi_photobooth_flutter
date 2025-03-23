@@ -37,13 +37,21 @@ class ElementWidget extends StatelessWidget {
 
   Future<String?> _loadFontFamily(String fontName) async {
     try {
-      final fontFile = File('C:\\Windows\\Fonts\\$fontName.ttf');
-      if (await fontFile.exists()) {
-        final fontLoader = FontLoader(fontName);
-        final bytes = await fontFile.readAsBytes();
-        fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
-        await fontLoader.load();
-        return fontName;
+      // Check both system and user font directories
+      final directories = [
+        'C:\\Windows\\Fonts',
+        '${Platform.environment['USERPROFILE']}\\AppData\\Local\\Microsoft\\Windows\\Fonts',
+      ];
+
+      for (var dir in directories) {
+        final fontFile = File('$dir\\$fontName.ttf');
+        if (await fontFile.exists()) {
+          final fontLoader = FontLoader(fontName);
+          final bytes = await fontFile.readAsBytes();
+          fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
+          await fontLoader.load();
+          return fontName;
+        }
       }
       return null;
     } catch (e) {
