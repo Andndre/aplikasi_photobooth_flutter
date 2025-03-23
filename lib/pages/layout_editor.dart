@@ -173,45 +173,58 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
             children: [
               // Main content in an Expanded widget
               Expanded(
-                child: Row(
+                child: Stack(
                   children: [
-                    // Left sidebar with layers
-                    SizedBox(width: 250, child: LayersSidebar()),
+                    // Main row with sidebars and canvas
+                    Row(
+                      children: [
+                        // Left sidebar with layers
+                        SizedBox(width: 250, child: LayersSidebar()),
 
-                    // Main canvas area
-                    Expanded(
-                      flex: 3,
-                      child: Center(
-                        child: Stack(
-                          children: [
-                            // Canvas workspace
-                            Positioned.fill(child: CanvasWorkspace()),
+                        // Main canvas area
+                        Expanded(
+                          flex: 3,
+                          child: Center(
+                            child: Stack(
+                              children: [
+                                // Canvas workspace
+                                Positioned.fill(child: CanvasWorkspace()),
 
-                            // Zoom controls
-                            Positioned(
-                              right: 16,
-                              bottom: 80,
-                              child: ZoomControls(),
+                                // Zoom controls
+                                Positioned(
+                                  right: 16,
+                                  bottom: 80,
+                                  child: ZoomControls(),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+
+                        // Right sidebar with properties panel
+                        SizedBox(
+                          width: 280,
+                          child:
+                              editorProvider.hasMultipleElementsSelected
+                                  ? MultiSelectionPropertiesPanel(
+                                    selectedElements:
+                                        editorProvider.selectedElements,
+                                  )
+                                  : editorProvider.selectedElement != null
+                                  ? PropertiesPanel(
+                                    element: editorProvider.selectedElement!,
+                                  )
+                                  : BackgroundPropertiesPanel(),
+                        ),
+                      ],
                     ),
 
-                    // Right sidebar with properties panel
-                    SizedBox(
-                      width: 280,
-                      child:
-                          editorProvider.hasMultipleElementsSelected
-                              ? MultiSelectionPropertiesPanel(
-                                selectedElements:
-                                    editorProvider.selectedElements,
-                              )
-                              : editorProvider.selectedElement != null
-                              ? PropertiesPanel(
-                                element: editorProvider.selectedElement!,
-                              )
-                              : BackgroundPropertiesPanel(),
+                    // Floating toolbar positioned at the bottom center of the canvas
+                    Positioned(
+                      left: 260,
+                      // right: 0,
+                      bottom: 10,
+                      child: Center(child: FloatingToolbar()),
                     ),
                   ],
                 ),
@@ -221,8 +234,7 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
               const EditorFooter(),
             ],
           ),
-          // Remove bottomNavigationBar to prevent conflict with EditorFooter
-          // bottomNavigationBar: ToolbarContainer(),
+          // Remove bottomNavigationBar to use the floating toolbar instead
         ),
       ),
     );
@@ -333,79 +345,122 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
   }
 }
 
-class ToolbarContainer extends StatelessWidget {
-  const ToolbarContainer({Key? key}) : super(key: key);
+// Create a new FloatingToolbar component
+class FloatingToolbar extends StatefulWidget {
+  const FloatingToolbar({super.key});
+
+  @override
+  State<FloatingToolbar> createState() => _FloatingToolbarState();
+}
+
+class _FloatingToolbarState extends State<FloatingToolbar> {
+  bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
     final editorProvider = Provider.of<LayoutEditorProvider>(context);
 
-    return Container(
-      height: 80,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: _isExpanded ? 150 : 50, // Increased width when expanded
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-        ),
+        borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildToolbarButton(
-            context,
-            icon: Icons.pan_tool,
-            label: 'Select',
-            isSelected: editorProvider.editMode == EditMode.select,
-            onPressed: () => editorProvider.setEditMode(EditMode.select),
-          ),
-          _buildToolbarButton(
-            context,
-            icon: Icons.text_fields,
-            label: 'Text',
-            isSelected: editorProvider.editMode == EditMode.text,
-            onPressed: () {
-              editorProvider.setEditMode(EditMode.text);
-              editorProvider.addTextElement();
-            },
-          ),
-          _buildToolbarButton(
-            context,
-            icon: Icons.image,
-            label: 'Image',
-            isSelected: editorProvider.editMode == EditMode.image,
-            onPressed: () async {
-              editorProvider.setEditMode(EditMode.image);
-              final result = await FilePicker.platform.pickFiles(
-                type: FileType.image,
-                allowMultiple: false,
-              );
+      // Wrap with Material to properly clip during animation
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias, // Add clipping to prevent overflow
+        borderRadius: BorderRadius.circular(15),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              _isExpanded
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+          children: [
+            // Add expand/collapse toggle button
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    _isExpanded ? Icons.chevron_left : Icons.chevron_right,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isExpanded = !_isExpanded;
+                    });
+                  },
+                  tooltip: _isExpanded ? 'Collapse' : 'Expand',
+                  iconSize: 18,
+                ),
+              ),
+            ),
 
-              if (result != null &&
-                  result.files.isNotEmpty &&
-                  result.files.first.path != null) {
-                editorProvider.addImageElement(result.files.first.path!);
-              }
-            },
-          ),
-          _buildToolbarButton(
-            context,
-            icon: Icons.camera_alt,
-            label: 'Camera',
-            isSelected: editorProvider.editMode == EditMode.camera,
-            onPressed: () {
-              editorProvider.setEditMode(EditMode.camera);
-              editorProvider.addCameraElement();
-            },
-          ),
-        ],
+            // Divider between toggle and tools
+            Divider(height: 1, thickness: 1, indent: 15, endIndent: 15),
+
+            // Tool buttons
+            _buildToolbarButton(
+              context,
+              icon: Icons.pan_tool,
+              label: 'Select',
+              isSelected: editorProvider.editMode == EditMode.select,
+              onPressed: () => editorProvider.setEditMode(EditMode.select),
+            ),
+            _buildToolbarButton(
+              context,
+              icon: Icons.text_fields,
+              label: 'Text',
+              isSelected: editorProvider.editMode == EditMode.text,
+              onPressed: () {
+                editorProvider.setEditMode(EditMode.text);
+                editorProvider.addTextElement();
+              },
+            ),
+            _buildToolbarButton(
+              context,
+              icon: Icons.image,
+              label: 'Image',
+              isSelected: editorProvider.editMode == EditMode.image,
+              onPressed: () async {
+                editorProvider.setEditMode(EditMode.image);
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.image,
+                  allowMultiple: false,
+                );
+
+                if (result != null &&
+                    result.files.isNotEmpty &&
+                    result.files.first.path != null) {
+                  editorProvider.addImageElement(result.files.first.path!);
+                }
+              },
+            ),
+            _buildToolbarButton(
+              context,
+              icon: Icons.camera_alt,
+              label: 'Camera',
+              isSelected: editorProvider.editMode == EditMode.camera,
+              onPressed: () {
+                editorProvider.setEditMode(EditMode.camera);
+                editorProvider.addCameraElement();
+              },
+            ),
+
+            // Add extra space at bottom
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -418,31 +473,65 @@ class ToolbarContainer extends StatelessWidget {
     required VoidCallback onPressed,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(icon),
-            onPressed: onPressed,
-            color: isSelected ? Theme.of(context).colorScheme.primary : null,
-            tooltip: label,
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color:
-                  isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.7),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child:
+          _isExpanded
+              ? InkWell(
+                onTap: onPressed,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 11.0,
+                  ),
+                  child: Row(
+                    // mainAxisAlignment: MainAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18,
+                        color:
+                            isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                      ),
+                      const SizedBox(width: 8),
+                      // Wrap text in Flexible to prevent overflow
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight:
+                                isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                          ),
+                          overflow:
+                              TextOverflow.ellipsis, // Handle text overflow
+                          softWrap: false, // Make sure text stays on one line
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              : IconButton(
+                icon: Icon(icon),
+                onPressed: onPressed,
+                color:
+                    isSelected ? Theme.of(context).colorScheme.primary : null,
+                tooltip: label,
+                iconSize: 18,
+                padding: const EdgeInsets.all(8),
+              ),
     );
   }
 }

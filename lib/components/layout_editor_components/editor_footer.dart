@@ -1,116 +1,98 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
-import '../../models/layouts.dart';
 
 class EditorFooter extends StatelessWidget {
   const EditorFooter({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<LayoutEditorProvider>(
-      builder: (context, editorProvider, _) {
-        final layout = editorProvider.layout;
+    final editorProvider = Provider.of<LayoutEditorProvider>(context);
+    final layout = editorProvider.layout;
 
-        if (layout == null) {
-          return const SizedBox(height: 0);
-        }
+    if (layout == null) {
+      return const SizedBox.shrink();
+    }
 
-        // Count each element type
-        final imageCount =
-            layout.elements.where((e) => e.type == 'image').length;
-        final textCount = layout.elements.where((e) => e.type == 'text').length;
-        final cameraCount =
-            layout.elements.where((e) => e.type == 'camera').length;
-        final selectedCount = editorProvider.selectedElementIds.length;
-
-        // Calculate zoom percentage
-        final zoomPercentage = (editorProvider.scale * 100).toStringAsFixed(0);
-
-        return Container(
-          height: 28,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            border: Border(
-              top: BorderSide(color: Theme.of(context).dividerColor),
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
+      child: Row(
+        children: [
+          // Canvas dimensions
+          Text(
+            'Canvas: ${layout.width} × ${layout.height}px',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          child: Row(
-            children: [
-              const SizedBox(width: 12),
 
-              // Layout name and dimensions
-              Text(
-                layout.name,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+          const SizedBox(width: 16),
+
+          // Selected element info
+          if (editorProvider.selectedElement != null)
+            Text(
+              'Selected: ${_getElementTypeLabel(editorProvider.selectedElement!.type)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 8),
-              Text(
-                '${layout.width}×${layout.height}px',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+
+          // Multiple selection info
+          if (editorProvider.hasMultipleElementsSelected)
+            Text(
+              '(${editorProvider.selectedElementIds.length} items)',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
+            ),
 
-              const Spacer(),
+          const Spacer(),
 
-              // Element counts section
-              if (selectedCount > 0)
-                _buildCountBadge(
-                  context,
-                  'Selected: $selectedCount',
-                  selectedCount > 0
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-
-              const SizedBox(width: 8),
-              _buildCountBadge(context, 'Images: $imageCount', Colors.green),
-              const SizedBox(width: 8),
-              _buildCountBadge(context, 'Text: $textCount', Colors.orange),
-              const SizedBox(width: 8),
-              _buildCountBadge(context, 'Camera: $cameraCount', Colors.blue),
-              const SizedBox(width: 8),
-              _buildCountBadge(
-                context,
-                'Total: ${layout.elements.length}',
-                Colors.grey,
-              ),
-
-              const SizedBox(width: 12),
-              const VerticalDivider(width: 1),
-              const SizedBox(width: 12),
-
-              // Zoom indicator
-              const Icon(Icons.zoom_in, size: 14, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text('$zoomPercentage%', style: const TextStyle(fontSize: 12)),
-
-              const SizedBox(width: 16),
-            ],
+          // Zoom level display
+          Text(
+            '${(editorProvider.scale * 100).toStringAsFixed(0)}%',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-        );
-      },
+
+          // Toggle grid button (optional in footer)
+          IconButton(
+            icon: Icon(
+              editorProvider.showGrid ? Icons.grid_on : Icons.grid_off,
+              size: 16,
+            ),
+            tooltip: editorProvider.showGrid ? 'Hide Grid' : 'Show Grid',
+            onPressed: editorProvider.toggleGrid,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildCountBadge(BuildContext context, String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+  String _getElementTypeLabel(String type) {
+    switch (type) {
+      case 'image':
+        return 'Image';
+      case 'text':
+        return 'Text';
+      case 'camera':
+        return 'Camera';
+      case 'group':
+        return 'Group';
+      default:
+        return 'Element';
+    }
   }
 }
