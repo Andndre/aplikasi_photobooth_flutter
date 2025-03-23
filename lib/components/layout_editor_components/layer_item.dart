@@ -27,7 +27,9 @@ class LayerItem extends StatelessWidget {
     switch (element.type) {
       case 'image':
         final imageElement = element as ImageElement;
-        elementName = 'Image: ${imageElement.path.split('/').last}';
+        // Extract just the filename instead of the full path
+        final filename = imageElement.path.split('/').last.split('\\').last;
+        elementName = filename;
         elementIcon = Icons.image;
         break;
       case 'text':

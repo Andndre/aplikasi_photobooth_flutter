@@ -1,8 +1,9 @@
 import 'dart:math';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vector_math/vector_math_64.dart'; // Add this import for Vector3
+import 'package:vector_math/vector_math_64.dart';
 import '../models/layouts.dart';
 import 'dart:io';
 
@@ -25,6 +26,16 @@ class LayoutEditorProvider with ChangeNotifier {
   final TransformationController transformationController =
       TransformationController();
 
+  // Add history tracking for undo/redo
+  List<String> _history = [];
+  int _historyIndex = -1;
+  static const int _maxHistorySize = 50;
+  bool _isUndoRedoOperation = false;
+
+  // Getter for undo/redo state
+  bool get canUndo => _historyIndex > 0;
+  bool get canRedo => _historyIndex < _history.length - 1;
+
   Layouts? get layout => _layout;
   LayoutElement? get selectedElement => _selectedElement;
   EditMode get editMode => _editMode;
@@ -40,7 +51,111 @@ class LayoutEditorProvider with ChangeNotifier {
     _selectedElement = null;
     _scale = 1.0;
     _offset = Offset.zero;
+
+    // Reset history when loading a new layout
+    _resetHistory();
+    _saveToHistory(); // Save initial state
+
     notifyListeners();
+  }
+
+  // Method to save current state to history
+  void _saveToHistory() {
+    // Don't save if we're in the middle of an undo/redo operation
+    if (_isUndoRedoOperation) return;
+    if (_layout == null) return;
+
+    // Convert current layout to JSON string
+    final jsonString = jsonEncode(_layout!.toJson());
+
+    // If we're not at the end of the history, truncate it
+    if (_historyIndex < _history.length - 1) {
+      _history = _history.sublist(0, _historyIndex + 1);
+    }
+
+    // Add current state to history
+    _history.add(jsonString);
+    _historyIndex = _history.length - 1;
+
+    // Limit history size
+    if (_history.length > _maxHistorySize) {
+      _history.removeAt(0);
+      _historyIndex--;
+    }
+  }
+
+  // Reset history
+  void _resetHistory() {
+    _history = [];
+    _historyIndex = -1;
+  }
+
+  // Implement undo
+  bool undo() {
+    if (!canUndo) return false;
+
+    _isUndoRedoOperation = true;
+    _historyIndex--;
+
+    // Load the previous state
+    final previousState = _history[_historyIndex];
+    final previousLayout = Layouts.fromJson(jsonDecode(previousState));
+
+    // Preserve selected element if possible
+    final selectedId = _selectedElement?.id;
+
+    _layout = previousLayout;
+
+    // Try to reselect the previously selected element
+    if (selectedId != null) {
+      _selectedElement = _findElementById(selectedId);
+    } else {
+      _selectedElement = null;
+    }
+
+    _isUndoRedoOperation = false;
+    notifyListeners();
+    return true;
+  }
+
+  // Implement redo
+  bool redo() {
+    if (!canRedo) return false;
+
+    _isUndoRedoOperation = true;
+    _historyIndex++;
+
+    // Load the next state
+    final nextState = _history[_historyIndex];
+    final nextLayout = Layouts.fromJson(jsonDecode(nextState));
+
+    // Preserve selected element if possible
+    final selectedId = _selectedElement?.id;
+
+    _layout = nextLayout;
+
+    // Try to reselect the previously selected element
+    if (selectedId != null) {
+      _selectedElement = _findElementById(selectedId);
+    } else {
+      _selectedElement = null;
+    }
+
+    _isUndoRedoOperation = false;
+    notifyListeners();
+    return true;
+  }
+
+  // Helper method to find an element by ID without casting null
+  LayoutElement? _findElementById(String id) {
+    if (_layout == null) return null;
+
+    try {
+      return _layout!.elements.firstWhere((e) => e.id == id);
+    } catch (e) {
+      // Element not found
+      return null;
+    }
   }
 
   void setEditMode(EditMode mode) {
@@ -146,6 +261,10 @@ class LayoutEditorProvider with ChangeNotifier {
 
       _layout!.elements.add(newElement);
       _selectedElement = newElement;
+
+      // Save state for undo/redo
+      _saveToHistory();
+
       notifyListeners();
     });
   }
@@ -191,6 +310,10 @@ class LayoutEditorProvider with ChangeNotifier {
     try {
       _layout!.elements.add(newElement);
       _selectedElement = newElement;
+
+      // Save state for undo/redo
+      _saveToHistory();
+
       notifyListeners();
     } catch (e) {
       print('Error adding text element: $e');
@@ -223,6 +346,10 @@ class LayoutEditorProvider with ChangeNotifier {
 
     _layout!.elements.add(newElement);
     _selectedElement = newElement;
+
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -259,6 +386,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     // Explicitly notify listeners to ensure UI updates
     notifyListeners();
@@ -314,6 +444,9 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -329,6 +462,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -377,6 +513,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -430,6 +569,9 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -448,6 +590,9 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -463,6 +608,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -480,6 +628,9 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -494,6 +645,9 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = null;
     }
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -569,6 +723,9 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = newElement;
     }
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -585,6 +742,9 @@ class LayoutEditorProvider with ChangeNotifier {
     // Update layout background
     _layout!.backgroundColor = color;
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     // Force notification to all listeners
     notifyListeners();
   }
@@ -598,6 +758,9 @@ class LayoutEditorProvider with ChangeNotifier {
     final element = _layout!.elements.removeAt(elementIndex);
     _layout!.elements.add(element);
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -609,6 +772,9 @@ class LayoutEditorProvider with ChangeNotifier {
 
     final element = _layout!.elements.removeAt(elementIndex);
     _layout!.elements.insert(0, element);
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -623,6 +789,9 @@ class LayoutEditorProvider with ChangeNotifier {
     final element = _layout!.elements.removeAt(elementIndex);
     _layout!.elements.insert(elementIndex + 1, element);
 
+    // Save state for undo/redo
+    _saveToHistory();
+
     notifyListeners();
   }
 
@@ -634,6 +803,9 @@ class LayoutEditorProvider with ChangeNotifier {
 
     final element = _layout!.elements.removeAt(elementIndex);
     _layout!.elements.insert(elementIndex - 1, element);
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
@@ -818,6 +990,9 @@ class LayoutEditorProvider with ChangeNotifier {
 
     // Insert it at the new position
     _layout!.elements.insert(newIndex, element);
+
+    // Save state for undo/redo
+    _saveToHistory();
 
     notifyListeners();
   }
