@@ -407,58 +407,47 @@ class PropertiesPanel extends StatelessWidget {
                   // Element actions
                   const _SectionHeader(title: 'Actions'),
 
-                  // Delete and Duplicate buttons
-                  Row(
+                  // Replace the grid layout with a column of buttons
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.delete, size: 18),
-                          label: const Text('Delete'),
-                          onPressed: () {
-                            editorProvider.deleteElement(element.id);
-                          },
-                        ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.copy, size: 18),
+                        label: const Text('Duplicate Element'),
+                        onPressed: () {
+                          editorProvider.copyElement(element.id);
+                          editorProvider.pasteElement();
+                        },
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.copy, size: 18),
-                          label: const Text('Duplicate'),
-                          onPressed: () {
-                            editorProvider.copyElement(element.id);
-                            editorProvider.pasteElement();
-                          },
-                        ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.vertical_align_top, size: 18),
+                        label: const Text('Bring to Front'),
+                        onPressed: () {
+                          editorProvider.bringToFront(element.id);
+                        },
                       ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Arrange buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.vertical_align_top, size: 18),
-                          label: const Text('Bring to Front'),
-                          onPressed: () {
-                            editorProvider.bringToFront(element.id);
-                          },
-                        ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.vertical_align_bottom, size: 18),
+                        label: const Text('Send to Back'),
+                        onPressed: () {
+                          editorProvider.sendToBack(element.id);
+                        },
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.vertical_align_bottom,
-                            size: 18,
-                          ),
-                          label: const Text('Send to Back'),
-                          onPressed: () {
-                            editorProvider.sendToBack(element.id);
-                          },
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete Element'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.errorContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onErrorContainer,
                         ),
+                        onPressed: () {
+                          editorProvider.deleteElement(element.id);
+                        },
                       ),
                     ],
                   ),

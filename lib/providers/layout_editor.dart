@@ -382,6 +382,91 @@ class LayoutEditorProvider with ChangeNotifier {
     _saveToHistory();
   }
 
+  // Add methods for distribution of multiple elements
+  void distributeElementsHorizontally() {
+    if (_layout == null || selectedElements.length < 3) return;
+
+    // Save starting state for undo
+    _saveToHistory();
+
+    // Sort elements by x position
+    final elements = [...selectedElements];
+    elements.sort((a, b) => a.x.compareTo(b.x));
+
+    // Calculate total available space
+    final leftmost = elements.first.x;
+    final rightmost = elements.last.x + elements.last.width;
+    final totalWidth = rightmost - leftmost;
+
+    // Calculate element widths sum
+    double elementsWidth = 0;
+    for (final element in elements) {
+      elementsWidth += element.width;
+    }
+
+    // Calculate the gap between elements
+    final gap = (totalWidth - elementsWidth) / (elements.length - 1);
+
+    // Apply distribution
+    double currentX = leftmost;
+    for (int i = 0; i < elements.length; i++) {
+      final element = elements[i];
+
+      // Skip the first element as it stays in place
+      if (i > 0) {
+        updateElementPosition(element.id, Offset(currentX, element.y));
+      }
+
+      // Move to next position
+      currentX += element.width + gap;
+    }
+
+    // Save ending state for undo
+    _saveToHistory();
+  }
+
+  void distributeElementsVertically() {
+    if (_layout == null || selectedElements.length < 3) return;
+
+    // Save starting state for undo
+    _saveToHistory();
+
+    // Sort elements by y position
+    final elements = [...selectedElements];
+    elements.sort((a, b) => a.y.compareTo(b.y));
+
+    // Calculate total available space
+    final topmost = elements.first.y;
+    final bottommost = elements.last.y + elements.last.height;
+    final totalHeight = bottommost - topmost;
+
+    // Calculate element heights sum
+    double elementsHeight = 0;
+    for (final element in elements) {
+      elementsHeight += element.height;
+    }
+
+    // Calculate the gap between elements
+    final gap = (totalHeight - elementsHeight) / (elements.length - 1);
+
+    // Apply distribution
+    double currentY = topmost;
+    for (int i = 0; i < elements.length; i++) {
+      final element = elements[i];
+
+      // Skip the first element as it stays in place
+      if (i > 0) {
+        updateElementPosition(element.id, Offset(element.x, currentY));
+      }
+
+      // Move to next position
+      currentY += element.height + gap;
+    }
+
+    // Save ending state for undo
+    _saveToHistory();
+  }
+
   // Add method to delete multiple elements
   void deleteSelectedElements() {
     if (_layout == null || _selectedElementIds.isEmpty) return;

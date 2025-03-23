@@ -9,6 +9,7 @@ import '../components/layout_editor_components/canvas_workspace.dart';
 import '../components/layout_editor_components/zoom_controls.dart';
 import '../components/layout_editor_components/layers_sidebar.dart';
 import '../components/layout_editor_components/properties_panel.dart';
+import '../components/layout_editor_components/multi_selection_properties_panel.dart'; // Add this import
 import '../components/layout_editor_components/background_properties_panel.dart';
 import '../components/layout_editor_components/editor_footer.dart'; // Add this import
 // Use a prefix for this import to avoid conflicts
@@ -181,7 +182,12 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
                     SizedBox(
                       width: 280,
                       child:
-                          editorProvider.selectedElement != null
+                          editorProvider.hasMultipleElementsSelected
+                              ? MultiSelectionPropertiesPanel(
+                                selectedElements:
+                                    editorProvider.selectedElements,
+                              )
+                              : editorProvider.selectedElement != null
                               ? PropertiesPanel(
                                 element: editorProvider.selectedElement!,
                               )
