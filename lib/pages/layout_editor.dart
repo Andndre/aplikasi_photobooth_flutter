@@ -124,10 +124,10 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
 
         return KeyEventResult.ignored;
       },
-      // Replace WillPopScope with PopScope
-      child: PopScope<dynamic>(
-        canPop: !_hasUnsavedChanges, // Only allow popping if no unsaved changes
-        onPopInvokedWithResult: (didPop, dynamic result) async {
+      // Fix the PopScope implementation
+      child: PopScope(
+        canPop: !_hasUnsavedChanges,
+        onPopInvokedWithResult: (didPop, result) async {
           // If didPop is true, the pop was allowed and already happened
           if (didPop) {
             return;
@@ -136,9 +136,11 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
           // If we have unsaved changes, show the dialog
           if (_hasUnsavedChanges) {
             final bool? shouldPop = await _showUnsavedChangesDialog(context);
-            // If user confirmed saving/discarding and the context is still valid
+
+            // If user confirmed (either saved or discarded) and the context is still valid
             if (context.mounted && shouldPop == true) {
-              Navigator.of(context).pop(result);
+              // This will pop without the usual check since we're manually handling it
+              Navigator.of(context).pop();
             }
           }
         },
@@ -246,7 +248,7 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
     );
   }
 
-  // Add method to show the confirmation dialog
+  // Modify the dialog to correctly handle the Discard option
   Future<bool?> _showUnsavedChangesDialog(BuildContext context) async {
     // Capture the editorProvider before showing the dialog
     final editorProvider = Provider.of<LayoutEditorProvider>(
@@ -267,18 +269,19 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
               'You have unsaved changes. Do you want to save them before leaving?',
             ),
             actions: [
+              // Update the Discard button to return true without saving
               TextButton(
                 onPressed:
                     () => Navigator.of(
                       dialogContext,
-                    ).pop(false), // Don't save, continue navigation
+                    ).pop(true), // Return true to allow navigation
                 child: const Text('Discard'),
               ),
               TextButton(
                 onPressed:
                     () => Navigator.of(
                       dialogContext,
-                    ).pop(null), // Cancel navigation
+                    ).pop(false), // Return false to cancel navigation
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
@@ -306,7 +309,7 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
                     }
                   }
 
-                  // Close the dialog and continue navigation
+                  // Close the dialog and allow navigation
                   if (dialogContext.mounted) {
                     Navigator.of(dialogContext).pop(true);
                   }

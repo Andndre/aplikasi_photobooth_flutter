@@ -87,6 +87,13 @@ class SelectionOverlay extends StatelessWidget {
                 );
                 onRotate(angle * (180 / pi));
               },
+              onPanEnd: (_) {
+                final editorProvider = Provider.of<LayoutEditorProvider>(
+                  context,
+                  listen: false,
+                );
+                editorProvider.saveToHistory();
+              },
               child: Container(
                 width: 12,
                 height: 12,
@@ -179,6 +186,7 @@ class SelectionOverlay extends StatelessWidget {
         },
         onPanEnd: (details) {
           editorProvider.stopResize();
+          editorProvider.saveToHistory();
         },
         child: Container(
           width: 12, // Larger handle
