@@ -24,6 +24,7 @@ class LayerItem extends StatelessWidget {
 
     String elementName;
     IconData elementIcon;
+    bool isGroup = false;
 
     switch (element.type) {
       case 'image':
@@ -46,102 +47,182 @@ class LayerItem extends StatelessWidget {
         elementName = cameraElement.label;
         elementIcon = Icons.camera_alt;
         break;
+      case 'group':
+        final groupElement = element as GroupElement;
+        elementName = groupElement.name;
+        elementIcon = Icons.folder;
+        isGroup = true;
+        break;
       default:
         elementName = 'Unknown element';
         elementIcon = Icons.help;
     }
 
+    // Add expand/collapse functionality for groups
+    final bool isExpanded = editorProvider.isGroupExpanded(element.id);
+
     // Wrap the ListTile with a GestureDetector for right-click context menu
-    return GestureDetector(
-      onSecondaryTap: () {
-        // Show context menu on right-click
-        _showContextMenu(context, editorProvider);
-      },
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-        selected: isSelected,
-        selectedTileColor: Colors.transparent,
-        // Add a drag handle at the start
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!element.isLocked)
-              Icon(
-                Icons.drag_handle,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-            const SizedBox(width: 4),
-            Icon(
-              elementIcon,
-              color:
-                  element.isVisible
-                      ? (isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : null)
-                      : Colors.grey,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onSecondaryTap: () {
+            // Show context menu on right-click
+            _showContextMenu(context, editorProvider);
+          },
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.only(
+              left: isGroup ? 4 : 8,
+              right: 8,
+              top: 0,
+              bottom: 0,
             ),
-          ],
-        ),
-        title: Text(
-          elementName,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color:
-                isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : (!element.isVisible ? Colors.grey : null),
-            decoration: !element.isVisible ? TextDecoration.lineThrough : null,
+            selected: isSelected,
+            selectedTileColor: Colors.transparent,
+            // Add a drag handle at the start
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isGroup)
+                  IconButton(
+                    icon: Icon(
+                      isExpanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 16,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    onPressed: () {
+                      editorProvider.toggleGroupExpansion(element.id);
+                    },
+                  ),
+                if (!element.isLocked)
+                  Icon(
+                    Icons.drag_handle,
+                    size: 16,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                const SizedBox(width: 4),
+                Icon(
+                  elementIcon,
+                  color:
+                      element.isVisible
+                          ? (isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : null)
+                          : Colors.grey,
+                ),
+              ],
+            ),
+            title: Text(
+              elementName,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color:
+                    isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : (!element.isVisible ? Colors.grey : null),
+                decoration:
+                    !element.isVisible ? TextDecoration.lineThrough : null,
+              ),
+            ),
+            // Keep visibility and lock toggles, but remove checkbox for multi-select
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    element.isVisible ? Icons.visibility : Icons.visibility_off,
+                    size: 18,
+                  ),
+                  tooltip: element.isVisible ? 'Hide' : 'Show',
+                  onPressed: () {
+                    editorProvider.toggleElementVisibility(element.id);
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 30,
+                    minHeight: 30,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    element.isLocked ? Icons.lock : Icons.lock_open,
+                    size: 18,
+                  ),
+                  tooltip: element.isLocked ? 'Unlock' : 'Lock',
+                  onPressed: () {
+                    editorProvider.toggleElementLock(element.id);
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 30,
+                    minHeight: 30,
+                  ),
+                ),
+              ],
+            ),
+            // Layer sidebar uses ctrl modifier for multi-selection
+            onTap: () {
+              // Check if Ctrl key is pressed for multi-select
+              final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+
+              editorProvider.selectElement(
+                element,
+                addToSelection: isCtrlPressed,
+              );
+            },
+            onLongPress: () {
+              // Show context menu on long press for mobile support
+              _showContextMenu(context, editorProvider);
+            },
           ),
         ),
-        // Keep visibility and lock toggles, but remove checkbox for multi-select
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(
-                element.isVisible ? Icons.visibility : Icons.visibility_off,
-                size: 18,
-              ),
-              tooltip: element.isVisible ? 'Hide' : 'Show',
-              onPressed: () {
-                editorProvider.toggleElementVisibility(element.id);
-              },
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-            ),
-            IconButton(
-              icon: Icon(
-                element.isLocked ? Icons.lock : Icons.lock_open,
-                size: 18,
-              ),
-              tooltip: element.isLocked ? 'Unlock' : 'Lock',
-              onPressed: () {
-                editorProvider.toggleElementLock(element.id);
-              },
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-            ),
-            // More options button removed in favor of right-click menu
-          ],
-        ),
-        // Layer sidebar uses ctrl modifier for multi-selection
-        onTap: () {
-          // Check if Ctrl key is pressed for multi-select
-          final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
 
-          editorProvider.selectElement(element, addToSelection: isCtrlPressed);
-        },
-        onLongPress: () {
-          // Show context menu on long press for mobile support
-          _showContextMenu(context, editorProvider);
-        },
+        // Show children if this is an expanded group
+        if (isGroup && isExpanded)
+          _buildGroupChildren(context, element as GroupElement, editorProvider),
+      ],
+    );
+  }
+
+  // New method to build group children list
+  Widget _buildGroupChildren(
+    BuildContext context,
+    GroupElement group,
+    LayoutEditorProvider editorProvider,
+  ) {
+    final childElements = editorProvider.getGroupChildren(group.id);
+
+    return Container(
+      margin: const EdgeInsets.only(left: 16),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children:
+            childElements.map((child) {
+              return LayerItem(
+                element: child,
+                isSelected: editorProvider.isElementSelected(child.id),
+              );
+            }).toList(),
       ),
     );
   }
 
-  // Method to show context menu - can be called from right-click or long press
+  // Method to show context menu - updated to include group options
   void _showContextMenu(
     BuildContext context,
     LayoutEditorProvider editorProvider,
@@ -149,6 +230,9 @@ class LayerItem extends StatelessWidget {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
+
+    // Add group-specific menu items
+    final isGroup = element.type == 'group';
 
     showMenu(
       context: context,
@@ -189,6 +273,28 @@ class LayerItem extends StatelessWidget {
             ],
           ),
         ),
+        if (isGroup)
+          PopupMenuItem(
+            value: 'ungroup',
+            child: Row(
+              children: [
+                Icon(Icons.group_remove, size: 18),
+                const SizedBox(width: 8),
+                const Text('Ungroup'),
+              ],
+            ),
+          ),
+        if (isGroup)
+          PopupMenuItem(
+            value: 'renameGroup',
+            child: Row(
+              children: [
+                Icon(Icons.edit, size: 18),
+                const SizedBox(width: 8),
+                const Text('Rename Group'),
+              ],
+            ),
+          ),
         if (element.type == 'text')
           PopupMenuItem(
             value: 'editText',
@@ -243,6 +349,12 @@ class LayerItem extends StatelessWidget {
         case 'sendToBack':
           editorProvider.sendToBack(element.id);
           break;
+        case 'ungroup':
+          editorProvider.ungroupSelectedElements();
+          break;
+        case 'renameGroup':
+          _renameGroup(context, editorProvider, element as GroupElement);
+          break;
         case 'editText':
           _editTextElement(context, editorProvider, element as TextElement);
           break;
@@ -251,6 +363,46 @@ class LayerItem extends StatelessWidget {
           break;
       }
     });
+  }
+
+  // Add a method to handle group renaming
+  void _renameGroup(
+    BuildContext context,
+    LayoutEditorProvider editorProvider,
+    GroupElement group,
+  ) {
+    final TextEditingController nameController = TextEditingController(
+      text: group.name,
+    );
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Rename Group'),
+            content: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Group Name',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  editorProvider.updateGroupName(group.id, nameController.text);
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Rename'),
+              ),
+            ],
+          ),
+    );
   }
 
   // Existing _showLayerOptions method can be removed
@@ -263,369 +415,40 @@ class LayerItem extends StatelessWidget {
     final TextEditingController textController = TextEditingController(
       text: element.text,
     );
-    final TextEditingController fontSearchController = TextEditingController();
 
-    // Set text selection to end to ensure cursor is at the end when editing
-    textController.selection = TextSelection.fromPosition(
-      TextPosition(offset: textController.text.length),
+    // Simple dialog to edit text content
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Edit Text'),
+            content: TextField(
+              controller: textController,
+              decoration: const InputDecoration(
+                labelText: 'Text Content',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  editorProvider.updateTextElement(
+                    element.id,
+                    text: textController.text,
+                  );
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
     );
-
-    String selectedFontFamily = element.fontFamily;
-    double fontSize = element.fontSize;
-    bool isBold = element.isBold;
-    bool isItalic = element.isItalic;
-    String alignment = element.alignment;
-    Color textColor = _hexToColor(element.color);
-    Color backgroundColor = _hexToColor(element.backgroundColor);
-
-    // List of common fonts
-    final List<String> commonFonts = [
-      'Arial',
-      'Helvetica',
-      'Roboto',
-      'Times New Roman',
-      'Courier New',
-      'Verdana',
-      'Georgia',
-      'Tahoma',
-      'Trebuchet MS',
-      'Impact',
-      'Comic Sans MS',
-      'Arial Black',
-      'Palatino',
-      'Garamond',
-      'Calibri',
-      'Cambria',
-      'Segoe UI',
-      'Open Sans',
-      'Lato',
-      'Montserrat',
-    ];
-
-    // For font list
-    List<String> allFonts = commonFonts;
-    List<String> filteredFonts = allFonts;
-    bool isLoadingFonts = true;
-
-    // Add this function to create a dropdown for font selection
-    Widget buildFontFamilyDropdown(
-      String currentFont,
-      Function(String) onFontChanged,
-      List<String> fonts,
-    ) {
-      return DropdownButtonFormField<String>(
-        value: currentFont,
-        isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Font Family',
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        ),
-        items:
-            fonts.map((font) {
-              return DropdownMenuItem<String>(
-                value: font,
-                child: Text(
-                  font,
-                  style: TextStyle(fontFamily: font),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-        onChanged: (value) {
-          if (value != null) {
-            onFontChanged(value);
-          }
-        },
-      );
-    }
-
-    // showDialog(
-    //   context: context,
-    //   builder:
-    //       (context) => StatefulBuilder(
-    //         builder: (context, setState) {
-    //           // Load system fonts when dialog opens
-    //           if (isLoadingFonts) {
-    //             _loadSystemFonts().then((fonts) {
-    //               setState(() {
-    //                 allFonts = fonts;
-    //                 filteredFonts = fonts;
-    //                 isLoadingFonts = false;
-    //               });
-    //             });
-    //           }
-
-    //           void filterFonts(String query) {
-    //             setState(() {
-    //               if (query.isEmpty) {
-    //                 filteredFonts = allFonts;
-    //               } else {
-    //                 filteredFonts =
-    //                     allFonts
-    //                         .where(
-    //                           (font) => font.toLowerCase().contains(
-    //                             query.toLowerCase(),
-    //                           ),
-    //                         )
-    //                         .toList();
-    //               }
-    //             });
-    //           }
-
-    //           return AlertDialog(
-    //             title: const Text('Edit Text'),
-    //             content: SingleChildScrollView(
-    //               child: Column(
-    //                 mainAxisSize: MainAxisSize.min,
-    //                 crossAxisAlignment: CrossAxisAlignment.start,
-    //                 children: [
-    //                   // Text input field with proper direction
-    //                   TextField(
-    //                     controller: textController,
-    //                     decoration: const InputDecoration(
-    //                       labelText: 'Text',
-    //                       border: OutlineInputBorder(),
-    //                     ),
-    //                     textDirection: TextDirection.ltr,
-    //                     maxLines: 3,
-    //                   ),
-
-    //                   const SizedBox(height: 16),
-
-    //                   // Font family with search
-    //                   const Text('Font Family'),
-    //                   const SizedBox(height: 4),
-    //                   buildFontFamilyDropdown(
-    //                     selectedFontFamily,
-    //                     (font) => setState(() => selectedFontFamily = font),
-    //                     commonFonts,
-    //                   ),
-
-    //                   const SizedBox(height: 8),
-
-    //                   // Font list
-    //                   Container(
-    //                     height: 150,
-    //                     decoration: BoxDecoration(
-    //                       border: Border.all(color: Colors.grey.shade300),
-    //                       borderRadius: BorderRadius.circular(4),
-    //                     ),
-    //                     child: ListView.builder(
-    //                       itemCount: filteredFonts.length,
-    //                       itemBuilder: (context, index) {
-    //                         final font = filteredFonts[index];
-    //                         final isSelected = font == selectedFontFamily;
-
-    //                         return ListTile(
-    //                           title: Text(
-    //                             font,
-    //                             style: TextStyle(
-    //                               fontFamily: font,
-    //                               fontWeight:
-    //                                   isSelected
-    //                                       ? FontWeight.bold
-    //                                       : FontWeight.normal,
-    //                             ),
-    //                           ),
-    //                           dense: true,
-    //                           selected: isSelected,
-    //                           onTap: () {
-    //                             setState(() {
-    //                               selectedFontFamily = font;
-    //                             });
-    //                           },
-    //                           trailing:
-    //                               isSelected
-    //                                   ? const Icon(Icons.check, size: 16)
-    //                                   : null,
-    //                         );
-    //                       },
-    //                     ),
-    //                   ),
-
-    //                   const SizedBox(height: 16),
-
-    //                   // Font size slider
-    //                   Row(
-    //                     children: [
-    //                       const Text('Size:'),
-    //                       Expanded(
-    //                         child: Slider(
-    //                           value: fontSize,
-    //                           min: 8,
-    //                           max: 72,
-    //                           divisions: 64,
-    //                           onChanged: (value) {
-    //                             setState(() {
-    //                               fontSize = value;
-    //                             });
-    //                           },
-    //                         ),
-    //                       ),
-    //                       Text('${fontSize.round()} px'),
-    //                     ],
-    //                   ),
-
-    //                   // Style options (bold, italic)
-    //                   Row(
-    //                     children: [
-    //                       const Text('Style:'),
-    //                       const SizedBox(width: 16),
-    //                       ChoiceChip(
-    //                         label: const Text('Bold'),
-    //                         selected: isBold,
-    //                         onSelected: (selected) {
-    //                           setState(() {
-    //                             isBold = selected;
-    //                           });
-    //                         },
-    //                       ),
-    //                       const SizedBox(width: 8),
-    //                       ChoiceChip(
-    //                         label: const Text('Italic'),
-    //                         selected: isItalic,
-    //                         onSelected: (selected) {
-    //                           setState(() {
-    //                             isItalic = selected;
-    //                           });
-    //                         },
-    //                       ),
-    //                     ],
-    //                   ),
-
-    //                   const SizedBox(height: 16),
-
-    //                   // Alignment options
-    //                   const Text('Alignment:'),
-    //                   Row(
-    //                     children: [
-    //                       Expanded(
-    //                         child: RadioListTile<String>(
-    //                           title: const Icon(Icons.format_align_left),
-    //                           value: 'left',
-    //                           groupValue: alignment,
-    //                           onChanged: (value) {
-    //                             setState(() {
-    //                               alignment = value!;
-    //                             });
-    //                           },
-    //                         ),
-    //                       ),
-    //                       Expanded(
-    //                         child: RadioListTile<String>(
-    //                           title: const Icon(Icons.format_align_center),
-    //                           value: 'center',
-    //                           groupValue: alignment,
-    //                           onChanged: (value) {
-    //                             setState(() {
-    //                               alignment = value!;
-    //                             });
-    //                           },
-    //                         ),
-    //                       ),
-    //                       Expanded(
-    //                         child: RadioListTile<String>(
-    //                           title: const Icon(Icons.format_align_right),
-    //                           value: 'right',
-    //                           groupValue: alignment,
-    //                           onChanged: (value) {
-    //                             setState(() {
-    //                               alignment = value!;
-    //                             });
-    //                           },
-    //                         ),
-    //                       ),
-    //                     ],
-    //                   ),
-
-    //                   const SizedBox(height: 16),
-
-    //                   // Color options
-    //                   Row(
-    //                     children: [
-    //                       Expanded(
-    //                         child: ElevatedButton(
-    //                           onPressed: () async {
-    //                             // Show color picker for text
-    //                             // ...existing color picker code...
-    //                           },
-    //                           child: Row(
-    //                             mainAxisAlignment: MainAxisAlignment.center,
-    //                             children: [
-    //                               Container(
-    //                                 width: 16,
-    //                                 height: 16,
-    //                                 decoration: BoxDecoration(
-    //                                   color: textColor,
-    //                                   border: Border.all(color: Colors.grey),
-    //                                 ),
-    //                               ),
-    //                               const SizedBox(width: 8),
-    //                               const Text('Text Color'),
-    //                             ],
-    //                           ),
-    //                         ),
-    //                       ),
-    //                       const SizedBox(width: 8),
-    //                       Expanded(
-    //                         child: ElevatedButton(
-    //                           onPressed: () async {
-    //                             // Show color picker for background
-    //                             // ...existing color picker code...
-    //                           },
-    //                           child: Row(
-    //                             mainAxisAlignment: MainAxisAlignment.center,
-    //                             children: [
-    //                               Container(
-    //                                 width: 16,
-    //                                 height: 16,
-    //                                 decoration: BoxDecoration(
-    //                                   color: backgroundColor,
-    //                                   border: Border.all(color: Colors.grey),
-    //                                 ),
-    //                               ),
-    //                               const SizedBox(width: 8),
-    //                               const Text('Background'),
-    //                             ],
-    //                           ),
-    //                         ),
-    //                       ),
-    //                     ],
-    //                   ),
-    //                 ],
-    //               ),
-    //             ),
-    //             actions: [
-    //               TextButton(
-    //                 onPressed: () => Navigator.of(context).pop(),
-    //                 child: const Text('Cancel'),
-    //               ),
-    //               TextButton(
-    //                 onPressed: () {
-    //                   // Update the text element
-    //                   editorProvider.updateTextElement(
-    //                     element.id,
-    //                     text: textController.text,
-    //                     fontFamily: selectedFontFamily,
-    //                     fontSize: fontSize,
-    //                     color:
-    //                         '#${textColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
-    //                     backgroundColor:
-    //                         '#${backgroundColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
-    //                     isBold: isBold,
-    //                     isItalic: isItalic,
-    //                     alignment: alignment,
-    //                   );
-    //                   Navigator.of(context).pop();
-    //                 },
-    //                 child: const Text('Apply'),
-    //               ),
-    //             ],
-    //           );
-    //         },
-    //       ),
-    // );
   }
 
   void _replaceImage(

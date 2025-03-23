@@ -278,6 +278,7 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                                                   delta;
 
                                               // Update the element position in the provider
+                                              // For groups, this will also update child positions
                                               editorProvider
                                                   .updateElementPosition(
                                                     element.id,

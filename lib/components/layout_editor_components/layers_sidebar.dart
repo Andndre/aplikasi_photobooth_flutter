@@ -332,7 +332,7 @@ class _LayersSidebarState extends State<LayersSidebar> {
                   ),
                 ),
 
-              // Bottom action bar with added Select All button
+              // Bottom action bar with Group button
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -376,17 +376,27 @@ class _LayersSidebarState extends State<LayersSidebar> {
                       ),
                     ),
                     const Spacer(),
-                    OutlinedButton(
-                      onPressed: () {
-                        // Group selected elements
-                        // (Advanced feature - could be implemented later)
-                      },
+                    OutlinedButton.icon(
+                      onPressed:
+                          editorProvider.selectedElementIds.length > 1
+                              ? () => editorProvider.groupSelectedElements()
+                              : editorProvider.isSelectedElementGroup
+                              ? () => editorProvider.ungroupSelectedElements()
+                              : null,
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      child: const Text(
-                        'Group',
-                        style: TextStyle(fontSize: 12),
+                      icon: Icon(
+                        editorProvider.isSelectedElementGroup
+                            ? Icons.group_remove
+                            : Icons.group_work,
+                        size: 16,
+                      ),
+                      label: Text(
+                        editorProvider.isSelectedElementGroup
+                            ? 'Ungroup'
+                            : 'Group',
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                   ],

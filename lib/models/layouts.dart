@@ -36,6 +36,8 @@ abstract class LayoutElement {
         return TextElement.fromJson(json);
       case 'camera':
         return CameraElement.fromJson(json);
+      case 'group':
+        return GroupElement.fromJson(json);
       default:
         throw Exception('Unknown element type: $type');
     }
@@ -236,6 +238,70 @@ class CameraElement extends LayoutElement {
       isVisible: json['isVisible'] as bool? ?? true,
       label: json['label'] as String? ?? 'Photo Spot',
     );
+  }
+}
+
+class GroupElement extends LayoutElement {
+  List<String> childIds; // IDs of child elements in this group
+  String name;
+
+  GroupElement({
+    required String id,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+    required this.childIds,
+    this.name = 'Group',
+    double rotation = 0.0,
+    bool isVisible = true,
+    bool isLocked = false,
+  }) : super(
+         id: id,
+         type: 'group',
+         x: x,
+         y: y,
+         width: width,
+         height: height,
+         rotation: rotation,
+         isVisible: isVisible,
+         isLocked: isLocked,
+       );
+
+  factory GroupElement.fromJson(Map<String, dynamic> json) {
+    return GroupElement(
+      id: json['id'] as String,
+      x: (json['x'] as num).toDouble(),
+      y: (json['y'] as num).toDouble(),
+      width: (json['width'] as num).toDouble(),
+      height: (json['height'] as num).toDouble(),
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+      isVisible: json['isVisible'] as bool? ?? true,
+      isLocked: json['isLocked'] as bool? ?? false,
+      childIds: List<String>.from(json['childIds'] as List),
+      name: json['name'] as String? ?? 'Group',
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    // Create a new map instead of using super.toJson() to avoid potential recursion
+    final Map<String, dynamic> json = {
+      'id': id,
+      'type': type,
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+      'rotation': rotation,
+      'isVisible': isVisible,
+      'isLocked': isLocked,
+      // Add group-specific properties
+      'childIds': childIds,
+      'name': name,
+    };
+
+    return json;
   }
 }
 

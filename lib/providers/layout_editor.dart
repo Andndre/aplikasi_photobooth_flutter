@@ -36,6 +36,9 @@ class LayoutEditorProvider with ChangeNotifier {
   static const int _maxHistorySize = 50;
   bool _isUndoRedoOperation = false;
 
+  // Track expanded state of groups
+  final Set<String> _expandedGroupIds = {};
+
   // Getter for undo/redo state
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
@@ -687,23 +690,48 @@ class LayoutEditorProvider with ChangeNotifier {
     // Ensure element isn't locked
     if (element.isLocked) return;
 
+    // Calculate the movement delta
+    var dx = position.dx - element.x;
+    var dy = position.dy - element.y;
+
     // Apply snapping if enabled
-    double dx = position.dx;
-    double dy = position.dy;
+    double newX = position.dx;
+    double newY = position.dy;
 
     if (_snapToGrid) {
       const gridSize = 10.0;
-      dx = (dx / gridSize).round() * gridSize;
-      dy = (dy / gridSize).round() * gridSize;
+      newX = (newX / gridSize).round() * gridSize;
+      newY = (newY / gridSize).round() * gridSize;
+
+      // Recalculate the delta with snapped coordinates
+      dx = newX - element.x;
+      dy = newY - element.y;
     }
 
     // Ensure element stays within layout bounds
-    dx = dx.clamp(0, _layout!.width - element.width);
-    dy = dy.clamp(0, _layout!.height - element.height);
+    newX = newX.clamp(0, _layout!.width - element.width);
+    newY = newY.clamp(0, _layout!.height - element.height);
 
     // Update element position
-    element.x = dx;
-    element.y = dy;
+    element.x = newX;
+    element.y = newY;
+
+    // If this is a group element, update all children positions
+    if (element.type == 'group') {
+      final groupElement = element as GroupElement;
+
+      // Update all child elements within the group
+      for (final childId in groupElement.childIds) {
+        final childIndex = _layout!.elements.indexWhere((e) => e.id == childId);
+        if (childIndex >= 0) {
+          final childElement = _layout!.elements[childIndex];
+
+          // Move each child element by the same delta as the group
+          childElement.x += dx;
+          childElement.y += dy;
+        }
+      }
+    }
 
     // Update selected element reference if needed
     if (_selectedElement?.id == id) {
@@ -1349,5 +1377,170 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  // Method to create a group from selected elements
+  void groupSelectedElements() {
+    if (_layout == null || selectedElementIds.length <= 1) return;
+
+    // Save state for undo
+    _saveToHistory();
+
+    // Get all selected elements
+    final selectedElements =
+        _layout!.elements
+            .where((e) => selectedElementIds.contains(e.id))
+            .toList();
+
+    // Calculate the bounding box that contains all selected elements
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = 0;
+    double maxY = 0;
+
+    for (final element in selectedElements) {
+      minX = min(minX, element.x);
+      minY = min(minY, element.y);
+      maxX = max(maxX, element.x + element.width);
+      maxY = max(maxY, element.y + element.height);
+    }
+
+    // Create a new group element
+    final groupId = _uuid.v4();
+    final groupElement = GroupElement(
+      id: groupId,
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      childIds: selectedElements.map((e) => e.id).toList(),
+      name: 'Group ${DateTime.now().millisecondsSinceEpoch % 1000}',
+    );
+
+    // Add the group to the layout
+    _layout!.elements.add(groupElement);
+
+    // DON'T update positions to be relative to the group
+    // We'll handle this internally during rendering
+    // This way elements keep their absolute coordinates
+
+    // Select the new group
+    selectElement(groupElement);
+
+    // Save state for undo
+    _saveToHistory();
+
+    notifyListeners();
+  }
+
+  // Method to ungroup a selected group
+  void ungroupSelectedElements() {
+    if (_layout == null ||
+        _selectedElement == null ||
+        _selectedElement!.type != 'group')
+      return;
+
+    // Save state for undo
+    _saveToHistory();
+
+    final group = _selectedElement as GroupElement;
+    final childIds = List<String>.from(group.childIds);
+
+    // Get all child elements
+    final childElements =
+        _layout!.elements.where((e) => childIds.contains(e.id)).toList();
+
+    // DON'T update positions - elements already have their correct absolute positions
+    // We're just removing the group container
+
+    // Remove the group from the layout
+    _layout!.elements.removeWhere((e) => e.id == group.id);
+
+    // Select the child elements
+    selectElements(childElements);
+
+    // Save state for undo
+    _saveToHistory();
+
+    notifyListeners();
+  }
+
+  // Helper to check if selected element is a group
+  bool get isSelectedElementGroup =>
+      _selectedElement != null && _selectedElement!.type == 'group';
+
+  // Method to update a group's name
+  void updateGroupName(String id, String name) {
+    if (_layout == null) return;
+
+    final elementIndex = _layout!.elements.indexWhere((e) => e.id == id);
+    if (elementIndex < 0 || _layout!.elements[elementIndex].type != 'group')
+      return;
+
+    final element = _layout!.elements[elementIndex] as GroupElement;
+    element.name = name;
+
+    if (_selectedElement?.id == id) {
+      _selectedElement = element;
+    }
+
+    // Save state for undo/redo
+    _saveToHistory();
+
+    notifyListeners();
+  }
+
+  // Check if a group is expanded
+  bool isGroupExpanded(String groupId) {
+    return _expandedGroupIds.contains(groupId);
+  }
+
+  // Toggle expansion state of a group
+  void toggleGroupExpansion(String groupId) {
+    if (_expandedGroupIds.contains(groupId)) {
+      _expandedGroupIds.remove(groupId);
+    } else {
+      _expandedGroupIds.add(groupId);
+    }
+    notifyListeners();
+  }
+
+  // Get all children of a group
+  List<LayoutElement> getGroupChildren(String groupId) {
+    if (_layout == null) return [];
+
+    // Find the group element
+    final groupElement =
+        _layout!.elements.firstWhere(
+              (e) => e.id == groupId && e.type == 'group',
+              orElse: () => throw Exception('Group not found'),
+            )
+            as GroupElement;
+
+    // Get all child elements
+    return _layout!.elements
+        .where((e) => groupElement.childIds.contains(e.id))
+        .toList();
+  }
+
+  // Method to handle keyboard shortcuts - updated to fix deprecated methods
+  bool handleKeyboardShortcut(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      // Check for Ctrl+G to group elements
+      if (HardwareKeyboard.instance.isControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyG) {
+        groupSelectedElements();
+        return true;
+      }
+
+      // Check for Ctrl+Shift+G to ungroup elements
+      if (HardwareKeyboard.instance.isControlPressed &&
+          HardwareKeyboard.instance.isShiftPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyG) {
+        ungroupSelectedElements();
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -123,6 +123,48 @@ class ElementWidget extends StatelessWidget {
           ),
         );
 
+      case 'group':
+        final groupElement = element as GroupElement;
+        return Container(
+          decoration: BoxDecoration(
+            // border: Border.all(
+            //   color: Colors.blue.withOpacity(0.5),
+            //   width: 1.5,
+            //   style: BorderStyle.none,
+            // ),
+            // color: Colors.blue.withOpacity(0.05),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  Icons.folder_outlined,
+                  size: min(element.width, element.height) / 4,
+                  color: Colors.blue.withOpacity(0.2),
+                ),
+              ),
+              Positioned(
+                top: 5,
+                left: 5,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    groupElement.name,
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
       default:
         return Container(
           color: Colors.red,

@@ -88,6 +88,11 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
           'physical: ${event.physicalKey.usbHidUsage}',
         );
 
+        // Try to handle the shortcut in the provider first
+        if (editorProvider.handleKeyboardShortcut(event)) {
+          return KeyEventResult.handled;
+        }
+
         // Check for Ctrl+S using both key types for robustness
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.keyS &&
@@ -96,6 +101,21 @@ class LayoutEditorScreenState extends State<LayoutEditorScreen> {
           _saveLayout(context);
           return KeyEventResult.handled;
         }
+
+        // Check for Ctrl+G to group elements
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.keyG &&
+            HardwareKeyboard.instance.isControlPressed) {
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            // Ctrl+Shift+G = Ungroup
+            editorProvider.ungroupSelectedElements();
+          } else {
+            // Ctrl+G = Group
+            editorProvider.groupSelectedElements();
+          }
+          return KeyEventResult.handled;
+        }
+
         return KeyEventResult.ignored;
       },
       // Replace WillPopScope with PopScope

@@ -1,11 +1,11 @@
 import 'dart:ui';
 
+import 'package:aplikasi_photobooth_flutter/providers/layout_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/layouts.dart';
-import '../../providers/layout_editor.dart';
 
 // Common widgets
 class _SectionHeader extends StatelessWidget {
@@ -401,6 +401,11 @@ class PropertiesPanel extends StatelessWidget {
                       element as CameraElement,
                       editorProvider,
                     ),
+                  if (element.type == 'group')
+                    _buildGroupProperties(
+                      element as GroupElement,
+                      editorProvider,
+                    ),
 
                   const SizedBox(height: 24),
 
@@ -435,6 +440,19 @@ class PropertiesPanel extends StatelessWidget {
                           editorProvider.sendToBack(element.id);
                         },
                       ),
+
+                      // Add ungroup button for groups
+                      if (element.type == 'group') ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.group_remove, size: 18),
+                          label: const Text('Ungroup Elements'),
+                          onPressed: () {
+                            editorProvider.ungroupSelectedElements();
+                          },
+                        ),
+                      ],
+
                       const SizedBox(height: 8),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.delete_outline, size: 18),
@@ -1229,6 +1247,146 @@ class PropertiesPanel extends StatelessWidget {
     );
   }
 
+  Widget _buildGroupProperties(
+    GroupElement element,
+    LayoutEditorProvider editorProvider,
+  ) {
+    final TextEditingController nameController = TextEditingController(
+      text: element.name,
+    );
+
+    // Get children to show stats
+    final childElements = editorProvider.getGroupChildren(element.id);
+    final imageCount = childElements.where((e) => e.type == 'image').length;
+    final textCount = childElements.where((e) => e.type == 'text').length;
+    final cameraCount = childElements.where((e) => e.type == 'camera').length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'Group Properties'),
+
+        // Group name field
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Group Name', style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 4),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  isDense: true,
+                ),
+                onChanged: (value) {
+                  editorProvider.updateGroupName(element.id, value);
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Group statistics
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Group Contents',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.image, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Images: $imageCount'),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.text_fields, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Text Elements: $textCount'),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.camera_alt, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Camera Spots: $cameraCount'),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Divider(),
+              Row(
+                children: [
+                  const Icon(Icons.layers, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Total Elements: ${childElements.length}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Help text
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'About Groups',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Groups allow you to organize and manipulate multiple elements together. '
+                'Move, resize, or rotate the group to affect all elements within it.',
+                style: TextStyle(fontSize: 12),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Tip: Press Ctrl+G to group elements and Ctrl+Shift+G to ungroup.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAlignmentButton({
     required BuildContext context,
     required IconData icon,
@@ -1300,6 +1458,8 @@ class PropertiesPanel extends StatelessWidget {
         return Icons.text_fields;
       case 'camera':
         return Icons.camera_alt;
+      case 'group':
+        return Icons.folder;
       default:
         return Icons.help_outline;
     }
@@ -1318,6 +1478,8 @@ class PropertiesPanel extends StatelessWidget {
         return text.length > 20 ? '${text.substring(0, 17)}...' : text;
       case 'camera':
         return (element as CameraElement).label;
+      case 'group':
+        return (element as GroupElement).name;
       default:
         return 'Unknown Element';
     }
