@@ -35,7 +35,9 @@ class LayerItem extends StatelessWidget {
       case 'text':
         final textElement = element as TextElement;
         elementName =
-            'Text: ${textElement.text.length > 15 ? '${textElement.text.substring(0, 15)}...' : textElement.text}';
+            textElement.text.length > 15
+                ? '${textElement.text.substring(0, 10)}...'
+                : textElement.text;
         elementIcon = Icons.text_fields;
         break;
       case 'camera':

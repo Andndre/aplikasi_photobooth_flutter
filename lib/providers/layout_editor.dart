@@ -289,7 +289,7 @@ class LayoutEditorProvider with ChangeNotifier {
     final safeX = pos.dx.clamp(0.0, _layout!.width - safeWidth);
     final safeY = pos.dy.clamp(0.0, _layout!.height - safeHeight);
 
-    // Create text element with transparent background by default
+    // Create text element with transparent background and topLeft alignment by default
     final newElement = TextElement(
       id: _uuid.v4(),
       x: safeX,
@@ -303,7 +303,7 @@ class LayoutEditorProvider with ChangeNotifier {
       backgroundColor: 'transparent', // Use 'transparent' instead of '#FFFFFF'
       isBold: false,
       isItalic: false,
-      alignment: 'center',
+      alignment: 'topLeft', // Changed from 'center' to 'topLeft'
       rotation: 0.0,
     );
 

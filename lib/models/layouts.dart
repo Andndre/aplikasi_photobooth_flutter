@@ -119,11 +119,11 @@ class TextElement extends LayoutElement {
   String alignment;
 
   TextElement({
-    required String id,
-    required double x,
-    required double y,
-    required double width,
-    required double height,
+    required super.id,
+    required super.x,
+    required super.y,
+    required super.width,
+    required super.height,
     required this.text,
     this.fontFamily = 'Arial',
     this.fontSize = 24.0,
@@ -131,21 +131,11 @@ class TextElement extends LayoutElement {
     this.backgroundColor = 'transparent',
     this.isBold = false,
     this.isItalic = false,
-    this.alignment = 'center',
-    double rotation = 0.0,
-    bool isLocked = false,
-    bool isVisible = true,
-  }) : super(
-         id: id,
-         type: 'text',
-         x: x,
-         y: y,
-         width: width,
-         height: height,
-         rotation: rotation,
-         isLocked: isLocked,
-         isVisible: isVisible,
-       );
+    this.alignment = 'topLeft', // Changed from 'center' to 'topLeft'
+    super.rotation,
+    super.isLocked,
+    super.isVisible,
+  }) : super(type: 'text');
 
   @override
   Map<String, dynamic> toJson() {
@@ -187,7 +177,8 @@ class TextElement extends LayoutElement {
       backgroundColor: json['backgroundColor'] as String? ?? 'transparent',
       isBold: json['isBold'] as bool? ?? false,
       isItalic: json['isItalic'] as bool? ?? false,
-      alignment: json['alignment'] as String? ?? 'center',
+      alignment:
+          json['alignment'] as String? ?? 'topLeft', // Changed default here too
     );
   }
 }
