@@ -40,10 +40,11 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
       return const Center(child: Text('No layout loaded'));
     }
 
-    // Calculate reasonable canvas dimensions with padding
+    // Increase canvas dimensions to allow for elements positioned far outside
     final canvasWidth =
-        layout.width.toDouble() + 3000; // Add extra space for panning
-    final canvasHeight = layout.height.toDouble() + 3000;
+        layout.width.toDouble() + 5000; // Increase from 3000 to 5000
+    final canvasHeight =
+        layout.height.toDouble() + 5000; // Increase from 3000 to 5000
 
     // Calculate initial position to center the canvas
     final canvasCenterX = canvasWidth / 2;

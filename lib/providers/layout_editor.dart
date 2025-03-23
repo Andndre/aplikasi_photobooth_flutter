@@ -708,9 +708,8 @@ class LayoutEditorProvider with ChangeNotifier {
       dy = newY - element.y;
     }
 
-    // Ensure element stays within layout bounds
-    newX = newX.clamp(0, _layout!.width - element.width);
-    newY = newY.clamp(0, _layout!.height - element.height);
+    // REMOVED: The bounds checking that limited elements to the canvas area
+    // Allow positioning outside the canvas
 
     // Update element position
     element.x = newX;
@@ -1437,8 +1436,9 @@ class LayoutEditorProvider with ChangeNotifier {
   void ungroupSelectedElements() {
     if (_layout == null ||
         _selectedElement == null ||
-        _selectedElement!.type != 'group')
+        _selectedElement!.type != 'group') {
       return;
+    }
 
     // Save state for undo
     _saveToHistory();
