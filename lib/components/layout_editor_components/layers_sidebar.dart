@@ -26,7 +26,7 @@ class _LayersSidebarState extends State<LayersSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    // Use Consumer for efficient rebuilds
+    // Use Consumer for efficient rebuilds that respond to selection changes
     return Consumer<LayoutEditorProvider>(
       builder: (context, editorProvider, _) {
         final layout = editorProvider.layout;
@@ -35,8 +35,23 @@ class _LayersSidebarState extends State<LayersSidebar> {
           return const Center(child: Text('No layout loaded'));
         }
 
+        // Create a set of element IDs that are children in any group
+        Set<String> childElementIds = {};
+        for (final element in layout.elements) {
+          if (element.type == 'group') {
+            final group = element as GroupElement;
+            childElementIds.addAll(group.childIds);
+          }
+        }
+
+        // Filter out elements that are part of groups
+        List<LayoutElement> topLevelElements =
+            layout.elements.where((element) {
+              return !childElementIds.contains(element.id);
+            }).toList();
+
         // Apply filtering and searching to elements
-        List<LayoutElement> filteredElements = layout.elements;
+        List<LayoutElement> filteredElements = topLevelElements;
 
         // Apply type filter if not "All"
         if (_activeFilter != 'All') {
@@ -65,6 +80,11 @@ class _LayersSidebarState extends State<LayersSidebar> {
                   case 'camera':
                     final cameraEl = element as CameraElement;
                     return cameraEl.label.toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    );
+                  case 'group':
+                    final groupEl = element as GroupElement;
+                    return groupEl.name.toLowerCase().contains(
                       _searchQuery.toLowerCase(),
                     );
                   default:
@@ -188,6 +208,16 @@ class _LayersSidebarState extends State<LayersSidebar> {
                         });
                       },
                     ),
+                    _buildFilterChip(
+                      context,
+                      'Group',
+                      _activeFilter == 'Group',
+                      () {
+                        setState(() {
+                          _activeFilter = 'Group';
+                        });
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -241,6 +271,7 @@ class _LayersSidebarState extends State<LayersSidebar> {
                     itemCount: reversedElements.length,
                     itemBuilder: (context, index) {
                       final element = reversedElements[index];
+                      // Get the current selection state directly from the provider
                       final isSelected = editorProvider.isElementSelected(
                         element.id,
                       );
@@ -254,39 +285,9 @@ class _LayersSidebarState extends State<LayersSidebar> {
                           enabled:
                               !element
                                   .isLocked, // Disable drag for locked elements
-                          child: GestureDetector(
-                            // Add behavior for Ctrl+click or Shift+click multi-select
-                            onTap: () {
-                              // Check if Ctrl or Shift key is pressed for multi-select
-                              final isMultiSelectModifier =
-                                  HardwareKeyboard.instance.isControlPressed ||
-                                  HardwareKeyboard.instance.isShiftPressed;
-
-                              editorProvider.selectElement(
-                                element,
-                                addToSelection: isMultiSelectModifier,
-                              );
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                vertical: 1.0,
-                                horizontal: 4.0,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    isSelected
-                                        ? Theme.of(context)
-                                            .colorScheme
-                                            .primaryContainer
-                                            .withOpacity(0.5)
-                                        : null,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: LayerItem(
-                                element: element,
-                                isSelected: isSelected,
-                              ),
-                            ),
+                          child: LayerItem(
+                            element: element,
+                            isSelected: isSelected,
                           ),
                         ),
                       );

@@ -25,6 +25,10 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
   // Add a key for the InteractiveViewer
   final _interactiveViewerKey = GlobalKey();
 
+  // Track group selection state to handle child selection on second click
+  String? _lastClickedGroupId;
+  DateTime _lastGroupClickTime = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -257,10 +261,15 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                   HardwareKeyboard.instance.isShiftPressed;
 
               if (!groupElement.isLocked) {
+                // Select the group
                 editorProvider.selectElement(
                   groupElement,
                   addToSelection: isMultiSelectModifier,
                 );
+
+                // Store the group ID and click time for group selection state
+                _lastClickedGroupId = groupElement.id;
+                _lastGroupClickTime = DateTime.now();
               }
             },
             onPanStart:
@@ -477,17 +486,33 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
-            // If the group is already selected, select the child element instead
-            if (isGroupSelected || isChildSelected) {
-              final isMultiSelectModifier =
-                  HardwareKeyboard.instance.isControlPressed ||
-                  HardwareKeyboard.instance.isShiftPressed;
+            // Support multi-selection with Ctrl or Shift key
+            final isMultiSelectModifier =
+                HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isShiftPressed;
 
+            // Check if this is the first or second click on the group
+            final isSecondClick =
+                _lastClickedGroupId == groupElement.id &&
+                DateTime.now().difference(_lastGroupClickTime).inMilliseconds <
+                    500;
+
+            // If second click or group already selected, select the child
+            if ((isGroupSelected && !isChildSelected) ||
+                isSecondClick ||
+                isMultiSelectModifier) {
               if (!childElement.isLocked) {
                 editorProvider.selectElement(
                   childElement,
                   addToSelection: isMultiSelectModifier,
                 );
+              }
+            } else {
+              // First click on group or group not selected, select the group
+              if (!groupElement.isLocked) {
+                editorProvider.selectElement(groupElement);
+                _lastClickedGroupId = groupElement.id;
+                _lastGroupClickTime = DateTime.now();
               }
             }
           },
