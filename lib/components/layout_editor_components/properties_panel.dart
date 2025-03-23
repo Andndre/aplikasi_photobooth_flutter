@@ -1,9 +1,11 @@
 import 'package:aplikasi_photobooth_flutter/providers/layout_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 import '../../models/layouts.dart';
 
 // Common widgets
@@ -1536,32 +1538,8 @@ class CustomFontSelector extends StatefulWidget {
 }
 
 class _CustomFontSelectorState extends State<CustomFontSelector> {
-  // Built-in system fonts
-  List<String> systemFonts = [
-    'Arial',
-    'Helvetica',
-    'Roboto',
-    'Times New Roman',
-    'Courier New',
-    'Verdana',
-    'Georgia',
-    'Tahoma',
-    'Trebuchet MS',
-    'Impact',
-    'Comic Sans MS',
-    'Arial Black',
-    'Palatino',
-    'Garamond',
-    'Bookman',
-    'Avant Garde',
-    'Calibri',
-    'Cambria',
-    'Candara',
-    'Consolas',
-    'Corbel',
-    'Franklin Gothic',
-    'Segoe UI',
-  ];
+  // Replace the hardcoded fonts list with an empty list that will be populated
+  List<String> systemFonts = [];
 
   // List to hold Google Fonts
   List<String> googleFontsList = [];
@@ -1574,17 +1552,143 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
   String _searchText = '';
   bool _isLoading = false;
   bool _googleFontsLoaded = false;
+  bool _systemFontsLoaded = false;
 
   // Add a focus node for the search field
   final FocusNode _searchFocusNode = FocusNode();
+
+  // Add map to store font file paths
+  Map<String, String> fontPaths = {};
 
   @override
   void initState() {
     super.initState();
     _controller.text = widget.currentFont;
 
+    // Load system fonts from Windows Fonts directory
+    _loadSystemFonts();
+
     // Pre-fetch Google Fonts list when the widget initializes
     _loadGoogleFonts();
+  }
+
+  // New method to load fonts from Windows Fonts directory with better detection
+  Future<void> _loadSystemFonts() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    if (!Platform.isWindows) {
+      _setDefaultFonts();
+      return;
+    }
+
+    try {
+      final fontsDir = Directory('C:\\Windows\\Fonts');
+      if (await fontsDir.exists()) {
+        List<FileSystemEntity> fontFiles = await fontsDir.list().toList();
+        Set<String> fontNames = {};
+
+        for (var file in fontFiles) {
+          if (file is File) {
+            String path = file.path.toLowerCase();
+            if (path.endsWith('.ttf') ||
+                path.endsWith('.otf') ||
+                path.endsWith('.ttc')) {
+              // Extract filename without extension
+              String rawName = file.path.split('\\').last;
+
+              // Clean up font name more thoroughly
+              String fontName = _extractFontFamilyName(rawName);
+
+              // Only add if name is not empty after cleaning
+              if (fontName.isNotEmpty) {
+                fontNames.add(fontName);
+                // Store the full path for later use
+                fontPaths[fontName] = file.path;
+
+                // Also add the raw name (without extension) as fallback
+                String rawNameWithoutExt = rawName.replaceAll(
+                  RegExp(r'\.(ttf|otf|ttc)$', caseSensitive: false),
+                  '',
+                );
+                if (rawNameWithoutExt.isNotEmpty) {
+                  fontNames.add(rawNameWithoutExt);
+                  fontPaths[rawNameWithoutExt] = file.path;
+                }
+              }
+            }
+          }
+        }
+
+        // Convert to sorted list
+        List<String> sortedFonts = fontNames.toList()..sort();
+
+        // Update the state
+        setState(() {
+          systemFonts = sortedFonts;
+          _systemFontsLoaded = true;
+          if (_googleFontsLoaded) {
+            _isLoading = false;
+          }
+        });
+
+        print('Loaded ${sortedFonts.length} system fonts');
+
+        // Try to preload the currently selected font if it's a system font
+        if (systemFonts.contains(widget.currentFont)) {
+          _preloadFont(widget.currentFont);
+        }
+      } else {
+        print('Windows Fonts directory not found');
+        _setDefaultFonts();
+      }
+    } catch (e) {
+      print('Error loading system fonts: $e');
+      _setDefaultFonts();
+    }
+  }
+
+  void _setDefaultFonts() {
+    setState(() {
+      systemFonts = ['Arial', 'Times New Roman', 'Helvetica', 'Courier New'];
+      _systemFontsLoaded = true;
+      if (_googleFontsLoaded) {
+        _isLoading = false;
+      }
+    });
+  }
+
+  // Helper method to clean up font names
+  String _cleanFontName(String name) {
+    // Remove common suffixes like Regular, Bold, Italic
+    final suffixes = [
+      'regular',
+      'bold',
+      'italic',
+      'light',
+      'medium',
+      'black',
+      'thin',
+    ];
+
+    // Convert underscores to spaces
+    name = name.replaceAll('_', ' ');
+
+    // Try to handle font naming conventions
+    for (var suffix in suffixes) {
+      if (name.toLowerCase().endsWith(suffix)) {
+        name = name.substring(0, name.length - suffix.length).trim();
+      }
+    }
+
+    // Handle common font family markers
+    if (name.contains('-')) {
+      // Many fonts use FamilyName-StyleName format
+      name = name.split('-').first.trim();
+    }
+
+    return name;
   }
 
   // Load Google Fonts asynchronously
@@ -1603,14 +1707,50 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
       setState(() {
         googleFontsList = availableFonts;
         _googleFontsLoaded = true;
-        _isLoading = false;
+        if (_systemFontsLoaded) {
+          _isLoading = false;
+        }
       });
     } catch (e) {
       print('Error loading Google Fonts: $e');
       setState(() {
-        _isLoading = false;
+        _googleFontsLoaded = true;
+        if (_systemFontsLoaded) {
+          _isLoading = false;
+        }
       });
     }
+  }
+
+  Future<void> _preloadFont(String fontName) async {
+    if (!fontPaths.containsKey(fontName)) return;
+
+    try {
+      final fontFile = File(fontPaths[fontName]!);
+      if (await fontFile.exists()) {
+        final fontLoader = FontLoader(fontName);
+        final bytes = await fontFile.readAsBytes();
+        fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
+        await fontLoader.load();
+      }
+    } catch (e) {
+      print('Error preloading font $fontName: $e');
+    }
+  }
+
+  // Update the font selection to preload the font
+  void _selectFont(String font) {
+    setState(() {
+      _controller.text = font;
+      _isDropdownVisible = false;
+    });
+
+    // Preload the font if it's a system font
+    if (systemFonts.contains(font)) {
+      _preloadFont(font);
+    }
+
+    widget.onFontSelected(font);
   }
 
   @override
@@ -1634,18 +1774,78 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
     return googleFontsList.contains(fontName);
   }
 
+  // Helper to check if a font is a System Font
+  bool _isSystemFont(String fontName) {
+    return systemFonts.contains(fontName);
+  }
+
+  // Helper to get appropriate TextStyle for font preview
+  TextStyle _getFontStyle(String fontName, {bool isBold = false}) {
+    if (_isGoogleFont(fontName)) {
+      return GoogleFonts.getFont(
+        fontName,
+        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+      );
+    } else {
+      return TextStyle(
+        fontFamily: fontName,
+        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+      );
+    }
+  }
+
+  String _extractFontFamilyName(String filename) {
+    // Remove file extension
+    String name = filename.replaceAll(
+      RegExp(r'\.(ttf|otf|ttc)$', caseSensitive: false),
+      '',
+    );
+
+    // Convert special characters to spaces
+    name = name.replaceAll(RegExp(r'[-_]'), ' ');
+
+    // Split into words
+    List<String> words = name.split(' ');
+
+    // Convert to title case and handle special cases
+    words =
+        words
+            .map((word) {
+              if (word.isEmpty) return '';
+              // Keep original casing for single characters (like iTerm)
+              if (word.length == 1) return word;
+              // Capitalize first letter, lowercase rest
+              return word[0].toUpperCase() + word.substring(1).toLowerCase();
+            })
+            .where((w) => w.isNotEmpty)
+            .toList();
+
+    // Join words back together
+    return words.join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Label for font family field
+        const Padding(
+          padding: EdgeInsets.only(bottom: 4.0),
+          child: Text('Font Family', style: TextStyle(fontSize: 12)),
+        ),
+
         // Font selector field
         TextField(
           controller: _controller,
           readOnly: true,
           decoration: InputDecoration(
-            labelText: 'Font Family',
+            hintText: 'Select a font...',
             border: const OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1658,6 +1858,7 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                         widget.onFontSelected('Arial');
                       });
                     },
+                    tooltip: 'Reset to default font',
                   ),
                 Icon(
                   _isDropdownVisible
@@ -1666,7 +1867,28 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                 ),
               ],
             ),
+            // Show font source indicator
+            prefixIcon:
+                _controller.text.isNotEmpty
+                    ? Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Icon(
+                        _isGoogleFont(_controller.text)
+                            ? Icons.cloud_outlined
+                            : Icons.computer_outlined,
+                        size: 18,
+                        color:
+                            _isGoogleFont(_controller.text)
+                                ? Colors.blue[300]
+                                : Colors.green[300],
+                      ),
+                    )
+                    : null,
           ),
+          style:
+              _controller.text.isNotEmpty
+                  ? _getFontStyle(_controller.text)
+                  : null,
           onTap: () {
             setState(() {
               _isDropdownVisible = !_isDropdownVisible;
@@ -1687,6 +1909,57 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
             });
           },
         ),
+
+        // Current font preview
+        if (_controller.text.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 8, bottom: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _isGoogleFont(_controller.text)
+                          ? Icons.cloud_outlined
+                          : Icons.computer_outlined,
+                      size: 14,
+                      color:
+                          _isGoogleFont(_controller.text)
+                              ? Colors.blue[300]
+                              : Colors.green[300],
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _isGoogleFont(_controller.text)
+                          ? "Google Font"
+                          : "System Font",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color:
+                            _isGoogleFont(_controller.text)
+                                ? Colors.blue[700]
+                                : Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'AaBbCcDdEeFf 123456',
+                  style: _getFontStyle(_controller.text),
+                ),
+              ],
+            ),
+          ),
 
         // Dropdown with search field
         if (_isDropdownVisible)
@@ -1714,21 +1987,21 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                     autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Search fonts...',
-                      prefixIcon: Icon(Icons.search, size: 20),
-                      contentPadding: EdgeInsets.symmetric(
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 4,
                       ),
                       isDense: true,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       // Show loading indicator while fetching Google Fonts
                       suffixIcon:
                           _isLoading
                               ? Container(
                                 width: 20,
                                 height: 20,
-                                padding: EdgeInsets.all(8),
-                                child: CircularProgressIndicator(
+                                padding: const EdgeInsets.all(8),
+                                child: const CircularProgressIndicator(
                                   strokeWidth: 2,
                                 ),
                               )
@@ -1753,14 +2026,50 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                   ),
                 ),
 
+                // Font categories
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Chip(
+                          avatar: Icon(
+                            Icons.computer_outlined,
+                            size: 18,
+                            color: Colors.green[700],
+                          ),
+                          label: Text(
+                            'System Fonts (${_systemFontsLoaded ? systemFonts.where((font) => font.toLowerCase().contains(_searchText.toLowerCase())).length : "..."})',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          backgroundColor: Colors.green[50],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Chip(
+                          avatar: Icon(
+                            Icons.cloud_outlined,
+                            size: 18,
+                            color: Colors.blue[700],
+                          ),
+                          label: Text(
+                            'Google Fonts (${_googleFontsLoaded ? googleFontsList.where((font) => font.toLowerCase().contains(_searchText.toLowerCase())).length : "..."})',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          backgroundColor: Colors.blue[50],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Fonts list with sections
                 Container(
-                  constraints: const BoxConstraints(
-                    maxHeight: 300,
-                  ), // Increased height for better browsing
+                  constraints: const BoxConstraints(maxHeight: 300),
                   child:
                       _isLoading && !_googleFontsLoaded
-                          ? Center(
+                          ? const Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -1773,19 +2082,35 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                           : ListView(
                             shrinkWrap: true,
                             children: [
-                              // Header for system fonts
-                              if (_getFilteredFonts().any(
-                                (font) => systemFonts.contains(font),
-                              ))
+                              // Header for system fonts - only show on Windows
+                              if (Platform.isWindows &&
+                                  _getFilteredFonts().any(
+                                    (font) => systemFonts.contains(font),
+                                  ))
                                 Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'System Fonts',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8.0,
+                                    vertical: 4.0,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.computer_outlined,
+                                        size: 16,
+                                        color: Colors.green[700],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Windows System Fonts (${systemFonts.length} detected)',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green[700],
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
 
@@ -1799,27 +2124,24 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
                                 (font) => googleFontsList.contains(font),
                               ))
                                 Padding(
-                                  padding: const EdgeInsets.all(8.0),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8.0,
+                                    vertical: 4.0,
+                                  ),
                                   child: Row(
                                     children: [
+                                      Icon(
+                                        Icons.cloud_outlined,
+                                        size: 16,
+                                        color: Colors.blue[700],
+                                      ),
+                                      const SizedBox(width: 8),
                                       Text(
                                         'Google Fonts',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
+                                          color: Colors.blue[700],
                                         ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Icon(
-                                        Icons.cloud_download,
-                                        size: 16,
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
                                       ),
                                     ],
                                   ),
@@ -1845,34 +2167,31 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
   Widget _buildFontListTile(String font) {
     final isSelected = font == _controller.text;
     final isGoogleFont = _isGoogleFont(font);
+    final iconColor = isGoogleFont ? Colors.blue[300] : Colors.green[300];
+    final icon = isGoogleFont ? Icons.cloud_outlined : Icons.computer_outlined;
 
     return ListTile(
       dense: true,
-      title: Text(
-        font,
-        style:
-            isGoogleFont
-                ? GoogleFonts.getFont(
-                  font,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                )
-                : TextStyle(
-                  fontFamily: font,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-      ),
+      title: Text(font, style: _getFontStyle(font, isBold: isSelected)),
       selected: isSelected,
+      leading: Icon(icon, size: 16, color: iconColor),
       trailing:
-          isGoogleFont
-              ? Icon(Icons.cloud, size: 16, color: Colors.blue[300])
+          isSelected
+              ? Icon(
+                Icons.check,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              )
               : null,
-      onTap: () {
-        setState(() {
-          _controller.text = font;
-          _isDropdownVisible = false;
-          widget.onFontSelected(font);
-        });
-      },
+      onTap: () => _selectFont(font),
+      tileColor:
+          isSelected
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              : null,
+      subtitle: Text(
+        'AaBbCc 123',
+        style: _getFontStyle(font).copyWith(fontSize: 10),
+      ),
     );
   }
 }

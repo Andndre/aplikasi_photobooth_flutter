@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/services.dart';
 import '../../models/layouts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/layout_editor.dart';
@@ -9,12 +10,10 @@ import 'package:google_fonts/google_fonts.dart';
 class ElementWidget extends StatelessWidget {
   final LayoutElement element;
   final bool isGroupChild;
+  // Add GoogleFonts list for checking
+  final List<String> googleFontsList = GoogleFonts.asMap().keys.toList();
 
-  const ElementWidget({
-    super.key,
-    required this.element,
-    this.isGroupChild = false,
-  });
+  ElementWidget({super.key, required this.element, this.isGroupChild = false});
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +33,23 @@ class ElementWidget extends StatelessWidget {
         child: _buildElementContent(context, isSelected),
       ),
     );
+  }
+
+  Future<String?> _loadFontFamily(String fontName) async {
+    try {
+      final fontFile = File('C:\\Windows\\Fonts\\$fontName.ttf');
+      if (await fontFile.exists()) {
+        final fontLoader = FontLoader(fontName);
+        final bytes = await fontFile.readAsBytes();
+        fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
+        await fontLoader.load();
+        return fontName;
+      }
+      return null;
+    } catch (e) {
+      print('Error loading font $fontName: $e');
+      return null;
+    }
   }
 
   Widget _buildElementContent(BuildContext context, bool isSelected) {
@@ -71,9 +87,9 @@ class ElementWidget extends StatelessWidget {
       case 'text':
         final textElement = element as TextElement;
 
-        // Create the text style, using Google Fonts if specified
+        // Create the text style based on font source
         TextStyle textStyle;
-        if (textElement.isGoogleFont) {
+        if (googleFontsList.contains(textElement.fontFamily)) {
           try {
             // Use Google Fonts with the specified fontFamily
             textStyle = GoogleFonts.getFont(
@@ -86,36 +102,39 @@ class ElementWidget extends StatelessWidget {
                   textElement.isItalic ? FontStyle.italic : FontStyle.normal,
             );
           } catch (e) {
-            // Fallback to system font if Google Font fails to load
             print(
               'Error loading Google Font: ${textElement.fontFamily}. Using system font instead.',
             );
             textStyle = TextStyle(
+              fontFamily: textElement.fontFamily,
               color: _hexToColor(textElement.color),
               fontSize: max(8.0, textElement.fontSize).toDouble(),
               fontWeight:
                   textElement.isBold ? FontWeight.bold : FontWeight.normal,
               fontStyle:
                   textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-              fontFamily: 'Arial',
               decoration: TextDecoration.none,
             );
           }
         } else {
-          // Use system font
+          // Use system font directly
           textStyle = TextStyle(
+            fontFamily:
+                textElement.fontFamily.isEmpty
+                    ? 'Arial'
+                    : textElement.fontFamily,
             color: _hexToColor(textElement.color),
             fontSize: max(8.0, textElement.fontSize).toDouble(),
             fontWeight:
                 textElement.isBold ? FontWeight.bold : FontWeight.normal,
             fontStyle:
                 textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-            fontFamily:
-                textElement.fontFamily.isEmpty
-                    ? 'Arial'
-                    : textElement.fontFamily,
             decoration: TextDecoration.none,
+            package: null, // Ensure no package is specified for system fonts
           );
+
+          // Try to load font if not already loaded
+          _loadFontFamily(textElement.fontFamily);
         }
 
         return Container(
