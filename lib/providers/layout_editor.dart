@@ -2036,7 +2036,25 @@ class LayoutEditorProvider with ChangeNotifier {
     }
   }
 
-  // Helper to render a text element
+  // Helper to convert text alignment string to TextAlign - improved for consistency
+  TextAlign _getTextAlign(String alignment) {
+    // Make case-insensitive
+    final lowerAlignment = alignment.toLowerCase();
+
+    if (lowerAlignment.contains('left')) {
+      return TextAlign.left;
+    } else if (lowerAlignment.contains('right')) {
+      return TextAlign.right;
+    } else if (lowerAlignment.contains('center')) {
+      return TextAlign.center;
+    } else {
+      // Default alignment
+      return TextAlign.left;
+    }
+  }
+
+  // Remove the duplicate _renderTextElement method and keep only this one
+  // Helper to render a text element with corrected alignment implementation
   void _renderTextElement(
     Canvas canvas,
     TextElement element,
@@ -2056,33 +2074,199 @@ class LayoutEditorProvider with ChangeNotifier {
         canvas.drawRect(rect, bgPaint);
       }
 
-      // Create text style
-      final textStyle = TextStyle(
-        color: _hexToColor(element.color),
-        fontSize: element.fontSize * resolutionMultiplier,
-        fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
-        fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
-        fontFamily: element.fontFamily,
-      );
+      // Create text style with correct properties
+      TextStyle textStyle;
 
-      // Create paragraph style based on alignment
-      final paragraphStyle = ui.ParagraphStyle(
+      // Special handling for Google Fonts
+      if (element.isGoogleFont) {
+        try {
+          textStyle = GoogleFonts.getFont(
+            element.fontFamily,
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize * resolutionMultiplier,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+        } catch (e) {
+          print(
+            'Error loading Google Font: ${element.fontFamily}. Using fallback font.',
+          );
+          // Fallback to system font if Google Font fails
+          textStyle = TextStyle(
+            fontFamily: 'Arial',
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize * resolutionMultiplier,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+        }
+      } else {
+        // System font
+        textStyle = TextStyle(
+          fontFamily: element.fontFamily,
+          color: _hexToColor(element.color),
+          fontSize: element.fontSize * resolutionMultiplier,
+          fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+        );
+      }
+
+      // Create a TextPainter to handle precise text rendering
+      final textPainter = TextPainter(
+        text: TextSpan(text: element.text, style: textStyle),
         textAlign: _getTextAlign(element.alignment),
         textDirection: TextDirection.ltr,
       );
 
-      // Build paragraph
-      final paragraphBuilder =
-          ui.ParagraphBuilder(paragraphStyle)
-            ..pushStyle(textStyle as ui.TextStyle)
-            ..addText(element.text);
+      // Layout the text within the constraints
+      textPainter.layout(maxWidth: width);
 
+      // Calculate correct position based on alignment
+      double dx = x;
+      double dy = y;
+
+      // Horizontal alignment - make consistent with _getTextAlignment logic
+      final lowerAlignment = element.alignment.toLowerCase();
+
+      if (!lowerAlignment.contains('left') &&
+          !lowerAlignment.contains('right')) {
+        if (lowerAlignment.contains('center')) {
+          // Center horizontally
+          dx = x + (width - textPainter.width) / 2;
+        }
+      } else if (lowerAlignment.contains('right')) {
+        // Align to right
+        dx = x + width - textPainter.width;
+      }
+      // Else align to left (default)
+
+      // Vertical alignment
+      if (!lowerAlignment.contains('top') &&
+          !lowerAlignment.contains('bottom')) {
+        if (lowerAlignment.contains('center')) {
+          // Center vertically
+          dy = y + (height - textPainter.height) / 2;
+        }
+      } else if (lowerAlignment.contains('bottom')) {
+        // Align to bottom
+        dy = y + height - textPainter.height;
+      }
+      // Else align to top (default)
+
+      // Draw the text at the calculated position
+      textPainter.paint(canvas, Offset(dx, dy));
+    } catch (e) {
+      print('Error rendering text element: $e');
+      _renderTextElementFallback(
+        canvas,
+        element,
+        x,
+        y,
+        width,
+        height,
+        resolutionMultiplier,
+      );
+    }
+  }
+
+  // Improved fallback method for text rendering using basic paragraph builder
+  void _renderTextElementFallback(
+    Canvas canvas,
+    TextElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+    double resolutionMultiplier,
+  ) {
+    try {
+      // Create a rect for the background if needed
+      final rect = Rect.fromLTWH(x, y, width, height);
+
+      // Draw background if not transparent
+      if (element.backgroundColor != 'transparent') {
+        final bgPaint = Paint()..color = _hexToColor(element.backgroundColor);
+        canvas.drawRect(rect, bgPaint);
+      }
+
+      // Create basic paragraph style based on alignment
+      final TextAlign alignment = _getTextAlign(element.alignment);
+      final paragraphStyle = ui.ParagraphStyle(
+        textAlign: alignment,
+        textDirection: TextDirection.ltr,
+        maxLines: null,
+        ellipsis: '...',
+      );
+
+      // Create text style
+      final color = _hexToColor(element.color);
+      final fontSize = element.fontSize * resolutionMultiplier;
+      final fontWeight =
+          element.isBold ? ui.FontWeight.bold : ui.FontWeight.normal;
+      final fontStyle =
+          element.isItalic ? ui.FontStyle.italic : ui.FontStyle.normal;
+
+      // Build paragraph with correct styling
+      final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle);
+
+      // Set text style based on whether it's a Google Font
+      if (element.isGoogleFont) {
+        try {
+          // For Google Fonts, we need to use the Flutter API first
+          final style = GoogleFonts.getFont(
+            element.fontFamily,
+            color: color,
+            fontSize: fontSize,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+
+          // Convert to ui.TextStyle
+          final uiStyle = ui.TextStyle(
+            color: color,
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            fontStyle: fontStyle,
+            fontFamily: style.fontFamily,
+          );
+
+          paragraphBuilder.pushStyle(uiStyle);
+        } catch (e) {
+          // Fallback for Google Fonts
+          paragraphBuilder.pushStyle(
+            ui.TextStyle(
+              color: color,
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              fontStyle: fontStyle,
+              fontFamily: 'Arial',
+            ),
+          );
+        }
+      } else {
+        // System font
+        paragraphBuilder.pushStyle(
+          ui.TextStyle(
+            color: color,
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            fontStyle: fontStyle,
+            fontFamily: element.fontFamily,
+          ),
+        );
+      }
+
+      paragraphBuilder.addText(element.text);
       final paragraph = paragraphBuilder.build();
       paragraph.layout(ui.ParagraphConstraints(width: width));
 
-      // Position paragraph according to vertical alignment
+      // Calculate position based on vertical alignment
       double dy = y;
-      if (element.alignment.contains('center')) {
+
+      // Vertical alignment calculation
+      if (element.alignment.contains('center') &&
+          !element.alignment.contains('top') &&
+          !element.alignment.contains('bottom')) {
         dy = y + (height - paragraph.height) / 2;
       } else if (element.alignment.contains('bottom')) {
         dy = y + height - paragraph.height;
@@ -2091,7 +2275,26 @@ class LayoutEditorProvider with ChangeNotifier {
       // Draw text
       canvas.drawParagraph(paragraph, Offset(x, dy));
     } catch (e) {
-      print('Error rendering text element: $e');
+      print('Error in fallback text rendering: $e');
+
+      // Last resort - draw something to indicate there's text
+      final paint = Paint()..color = _hexToColor(element.color);
+      canvas.drawRect(
+        Rect.fromLTWH(x, y, width, height),
+        Paint()..color = _hexToColor(element.backgroundColor),
+      );
+
+      // Draw an indicator that text should be here
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x + width, y + height),
+        paint..strokeWidth = 1,
+      );
+      canvas.drawLine(
+        Offset(x + width, y),
+        Offset(x, y + height),
+        paint..strokeWidth = 1,
+      );
     }
   }
 
@@ -2209,17 +2412,6 @@ class LayoutEditorProvider with ChangeNotifier {
       canvas,
       Offset(x + 5, y + height - textPainter.height - 5),
     );
-  }
-
-  // Helper to convert text alignment string to TextAlign
-  TextAlign _getTextAlign(String alignment) {
-    if (alignment.contains('Left')) {
-      return TextAlign.left;
-    } else if (alignment.contains('Right')) {
-      return TextAlign.right;
-    } else {
-      return TextAlign.center;
-    }
   }
 
   // Helper to convert hex color to Color

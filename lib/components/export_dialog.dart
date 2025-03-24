@@ -145,31 +145,6 @@ class _ExportDialogState extends State<ExportDialog> {
                   style: const TextStyle(color: Colors.red, fontSize: 12),
                 ),
               ),
-
-            // Add a preview section
-            const SizedBox(height: 16),
-            _buildSectionHeader('Preview'),
-            Container(
-              height: 150,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: widget.layout.width / widget.layout.height,
-                  child: Screenshot(
-                    controller: _screenshotController,
-                    child: widget.layout.buildLayoutPreviewWidget(
-                      photoFilePaths:
-                          [], // Empty list for sample photos in preview
-                      includeBackground: _includeBackground,
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -209,12 +184,12 @@ class _ExportDialogState extends State<ExportDialog> {
         style: ElevatedButton.styleFrom(
           backgroundColor:
               isSelected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerLowest,
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.surfaceContainerLow,
           foregroundColor:
               isSelected
-                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurface,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         ),
         child: Text(label),
@@ -224,14 +199,8 @@ class _ExportDialogState extends State<ExportDialog> {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const Divider(),
-        ],
-      ),
+      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
     );
   }
 

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
-import 'package:widgets_to_image/widgets_to_image.dart';
+import 'package:screenshot/screenshot.dart';
 import '../models/layouts.dart';
 
 /// A utility widget to render a layout with specified photos
@@ -22,9 +22,8 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
   String? _errorMessage;
   double _resolutionMultiplier = 1.0;
   bool _includeBackground = true;
-  // Replace ScreenshotController with WidgetsToImageController
-  final WidgetsToImageController _widgetsToImageController =
-      WidgetsToImageController();
+  // Replace WidgetsToImageController with ScreenshotController
+  final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
   void initState() {
@@ -178,9 +177,9 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: widget.layout.width / widget.layout.height,
-                  // Use WidgetsToImage instead of Screenshot
-                  child: WidgetsToImage(
-                    controller: _widgetsToImageController,
+                  // Use Screenshot instead of WidgetsToImage
+                  child: Screenshot(
+                    controller: _screenshotController,
                     child: widget.layout.buildLayoutPreviewWidget(
                       photoFilePaths:
                           _photoFilePaths.where((p) => p.isNotEmpty).toList(),
@@ -300,7 +299,7 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     }
   }
 
-  // Updated export method using WidgetsToImage
+  // Updated export method using screenshot to capture the preview
   Future<void> _exportLayout() async {
     // Choose export location
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
@@ -321,39 +320,19 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     });
 
     try {
-      // Approach 1: Try to use the controller's capture method first
-      final bytes = await _widgetsToImageController.capture();
+      // First try using the Screenshot controller to capture the preview
+      final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
 
-      if (bytes != null) {
-        // If we got bytes from the controller, scale them if needed and save to file
-        if (_resolutionMultiplier != 1.0) {
-          // If scaling is needed, use the model's export method which handles scaling
-          final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
+      // Capture using the screenshot controller
+      final capturedImage = await _screenshotController.capture();
 
-          final file = await widget.layout.exportAsImage(
-            exportPath: exportPath,
-            photoFilePaths: photos,
-            resolutionMultiplier: _resolutionMultiplier,
-            includeBackground: _includeBackground,
-          );
-
-          if (file != null && await file.exists()) {
-            _showExportSuccess(context);
-          } else {
-            setState(() {
-              _errorMessage = 'Failed to create export file with scaling.';
-            });
-          }
-        } else {
-          // No scaling needed, just write bytes to file
-          final file = File(exportPath);
-          await file.writeAsBytes(bytes);
-          _showExportSuccess(context);
-        }
+      if (capturedImage != null) {
+        // If we successfully captured an image, save it directly
+        final file = File(exportPath);
+        await file.writeAsBytes(capturedImage);
+        _showExportSuccess(context);
       } else {
-        // Fallback to model export method if capture returns null
-        final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
-
+        // If screenshot capture failed, fall back to the layout export method
         final file = await widget.layout.exportAsImage(
           exportPath: exportPath,
           photoFilePaths: photos,
