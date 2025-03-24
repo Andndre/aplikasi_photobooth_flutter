@@ -3,6 +3,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
+import 'package:aplikasi_photobooth_flutter/models/layouts.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -1185,12 +1186,12 @@ class SesiFotoProvider with ChangeNotifier {
     }
   }
 
+  // Modified takePhoto function to use layouts for composite image generation
   Future<void> takePhoto(
     String saveFolder,
     String uploadFolder,
     String eventName,
-    List<List<int>> coordinates,
-    String basePhotoPath,
+    Layouts layout,
     BuildContext context,
   ) async {
     final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
@@ -1236,8 +1237,12 @@ class SesiFotoProvider with ChangeNotifier {
 
     print("Foto disimpan. Jumlah foto: ${_takenPhotos.length}");
 
-    // If all photos are taken, copy them to the upload folder and create composite image and GIF
-    if (_takenPhotos.length == coordinates.length) {
+    // Find camera elements in the layout to determine when we have all photos
+    final cameraElements =
+        layout.elements.where((e) => e.type == 'camera').toList();
+
+    // If all photos are taken based on the layout's camera elements, create composite and GIF
+    if (_takenPhotos.length == cameraElements.length) {
       final existingFiles =
           Directory(uploadFolder).listSync().whereType<File>().toList();
       int maxIndex = 0;
@@ -1264,7 +1269,7 @@ class SesiFotoProvider with ChangeNotifier {
         }
       }
 
-      // if taken photos are same as layout, create composite image and GIF
+      // Copy individual photos to the upload folder with standard naming
       for (var i = 0; i < _takenPhotos.length; i++) {
         final photo = _takenPhotos[i];
         final newFileName = 'Luminara_${eventName}_${maxIndex + i + 1}.jpg';
@@ -1273,6 +1278,7 @@ class SesiFotoProvider with ChangeNotifier {
         print('Foto ${photo.path} disalin ke $newFilePath');
       }
 
+      // Create output paths with the same naming conventions
       final compositeImagePath = path.join(
         uploadFolder,
         'Luminara_${eventName}_${maxCompositeIndex + 2}_composite.jpg',
@@ -1283,21 +1289,33 @@ class SesiFotoProvider with ChangeNotifier {
         'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
       );
 
-      // Use compute to run the composite image and GIF creation in separate isolates
+      // Use the layout's exportAsImage method for the composite image
       _setLoading(true, 'Creating composite image and GIF...');
-      await Future.wait([
-        compute(_createCompositeImage, {
-          'basePhotoPath': basePhotoPath,
-          'images': _takenPhotos.map((file) => file.path).toList(),
-          'coordinates': coordinates,
-          'outputPath': compositeImagePath,
-        }),
-        compute(_createGif, {
-          'images': _takenPhotos.map((file) => file.path).toList(),
-          'outputPath': gifPath,
-        }),
-      ]);
-      _setLoading(false);
+
+      try {
+        // Export the composite image using the layout's exportAsImage method
+        final exportedFile = await layout.exportAsImage(
+          exportPath: compositeImagePath,
+          photoFilePaths: _takenPhotos.map((file) => file.path).toList(),
+          resolutionMultiplier: 1.5, // Higher quality output
+        );
+
+        if (exportedFile != null) {
+          print('Composite image created: ${exportedFile.path}');
+        } else {
+          print('Failed to create composite image');
+        }
+
+        // Create GIF from captured photos
+        await _createSimpleGif(
+          images: _takenPhotos.map((file) => file.path).toList(),
+          outputPath: gifPath,
+        );
+      } catch (e) {
+        print('Error creating composite image or GIF: $e');
+      } finally {
+        _setLoading(false);
+      }
 
       _takenPhotos.clear();
       notifyListeners();
@@ -1309,69 +1327,38 @@ class SesiFotoProvider with ChangeNotifier {
     }
   }
 
-  static Future<void> _createCompositeImage(Map<String, dynamic> params) async {
-    final basePhotoPath = params['basePhotoPath'] as String;
-    final images = (params['images'] as List).cast<String>();
-    final coordinates =
-        (params['coordinates'] as List)
-            .map((coords) => (coords as List).cast<int>())
-            .toList();
-    final outputPath = params['outputPath'] as String;
+  // Add the missing _createSimpleGif method
+  Future<void> _createSimpleGif({
+    required List<String> images,
+    required String outputPath,
+  }) async {
+    if (images.isEmpty) return;
 
-    final basePhoto = img.decodeImage(File(basePhotoPath).readAsBytesSync())!;
-    final compositeImage = basePhoto.clone();
-
-    for (var i = 0; i < images.length; i++) {
-      print('Composite image $i');
-      final photo = img.decodeImage(File(images[i]).readAsBytesSync())!;
-      final coords = coordinates[i];
-      img.compositeImage(
-        compositeImage,
-        photo,
-        dstX: coords[0],
-        dstY: coords[1],
-        dstW: coords[2],
-        dstH: coords[3],
-      );
-    }
-
-    img.compositeImage(compositeImage, basePhoto, dstX: 0, dstY: 0);
-    File(outputPath).writeAsBytesSync(img.encodeJpg(compositeImage));
-
-    print('Composite image created: $outputPath');
-  }
-
-  static Future<void> _createGif(Map<String, dynamic> params) async {
-    final images = (params['images'] as List).cast<String>();
-    final outputPath = params['outputPath'] as String;
-
-    final frames =
-        images.map((imagePath) {
-          final decodedImage =
-              img.decodeImage(File(imagePath).readAsBytesSync())!;
+    try {
+      final frames = await compute((Map<String, dynamic> params) {
+        final paths = params['imagePaths'] as List<String>;
+        return paths.map((imagePath) {
+          final image = img.decodeImage(File(imagePath).readAsBytesSync())!;
           return img.copyResize(
-            decodedImage,
-            width: decodedImage.width ~/ 3,
-            height: decodedImage.height ~/ 3,
+            image,
+            width: image.width ~/ 3,
+            height: image.height ~/ 3,
           );
         }).toList();
+      }, {'imagePaths': images});
 
-    final gif = encodeGifAnimation(frames, repeat: 3);
-    File(outputPath).writeAsBytesSync(Uint8List.fromList(gif));
+      final encoder = img.GifEncoder();
+      encoder.repeat = 3;
+      for (var frame in frames) {
+        encoder.addFrame(frame, duration: 50);
+      }
+      final gif = encoder.finish()!;
 
-    print('GIF created: $outputPath');
-  }
-
-  static Uint8List encodeGifAnimation(
-    List<img.Image> frames, {
-    required int repeat,
-  }) {
-    final encoder = img.GifEncoder();
-    encoder.repeat = repeat;
-    for (var frame in frames) {
-      encoder.addFrame(frame, duration: 50);
+      await File(outputPath).writeAsBytes(Uint8List.fromList(gif));
+      print('GIF created: $outputPath');
+    } catch (e) {
+      print('Error creating GIF: $e');
     }
-    return encoder.finish()!;
   }
 
   // Helper function to get min value

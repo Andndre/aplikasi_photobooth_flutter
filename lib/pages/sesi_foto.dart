@@ -834,32 +834,7 @@ class SesiFoto extends StatefulWidget {
 class SesiFotoState extends State<SesiFoto> {
   final int _photoCount = 1; // Start from 1
 
-  // Method to capture the selected window and save it
-  Future<void> _captureSelectedWindow() async {
-    final provider = Provider.of<SesiFotoProvider>(context, listen: false);
-
-    if (provider.windowToCapture == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No window selected for capture')),
-      );
-      return;
-    }
-
-    try {
-      final capturedImageBytes = await provider.captureWindow();
-      if (capturedImageBytes != null) {
-        final tempDir = await getTemporaryDirectory();
-        final tempFile = File('${tempDir.path}/window_capture.png');
-        await tempFile.writeAsBytes(capturedImageBytes);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error capturing image: $e')));
-      }
-    }
-  }
+  // Modified method to capture the selected window and send to Imaging Edge
 
   @override
   Widget build(BuildContext context) {
@@ -881,11 +856,16 @@ class SesiFotoState extends State<SesiFoto> {
             appBar: AppBar(title: Text('Sesi Foto: ${widget.event.name}')),
             body: CallbackShortcuts(
               bindings: <ShortcutActivator, VoidCallback>{
-                const SingleActivator(LogicalKeyboardKey.enter):
-                    _captureSelectedWindow,
-                // Add refresh shortcut
-                const SingleActivator(LogicalKeyboardKey.keyR): () {
-                  // This shortcut is kept for convenience but no longer needs a visible button
+                // Fix: Connect Enter key directly to the provider's takePhoto method,
+                // not to the _captureSelectedWindow method
+                const SingleActivator(LogicalKeyboardKey.enter): () {
+                  sesiFotoProvider.takePhoto(
+                    widget.event.saveFolder,
+                    widget.event.uploadFolder,
+                    widget.event.name,
+                    layout,
+                    context,
+                  );
                 },
               },
               child: Focus(
