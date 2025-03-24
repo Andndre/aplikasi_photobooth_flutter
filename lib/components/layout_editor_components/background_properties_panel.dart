@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
+import '../export_dialog.dart';
 
 class BackgroundPropertiesPanel extends StatelessWidget {
   const BackgroundPropertiesPanel({super.key});
@@ -16,6 +17,8 @@ class BackgroundPropertiesPanel extends StatelessWidget {
     if (layout == null) {
       return const Center(child: Text('No layout loaded'));
     }
+
+    Color backgroundColor = _hexToColor(layout.backgroundColor);
 
     return Container(
       decoration: BoxDecoration(
@@ -322,6 +325,39 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                           style: TextStyle(fontSize: 12),
                         ),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Export Layout Section
+                  const _SectionHeader(title: 'Export Layout'),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text(
+                      'Create an image preview of this layout with sample photos in camera slots.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Pass the provider explicitly to the dialog
+                      showDialog(
+                        context: context,
+                        builder:
+                            (context) => ExportDialog(
+                              layout: layout,
+                              editorProvider: editorProvider,
+                            ),
+                      );
+                    },
+                    icon: const Icon(Icons.image),
+                    label: const Text('Export as Image'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      minimumSize: const Size(double.infinity, 0),
                     ),
                   ),
                 ],

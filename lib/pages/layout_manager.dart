@@ -1,3 +1,4 @@
+import 'package:aplikasi_photobooth_flutter/components/render_layout_with_photos.dart';
 import 'package:aplikasi_photobooth_flutter/pages/layout_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -236,6 +237,20 @@ class LayoutCard extends StatelessWidget {
                       tooltip: 'Delete',
                       constraints: const BoxConstraints(),
                       padding: const EdgeInsets.all(4),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.image),
+                      label: const Text('Render with Photos'),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) =>
+                                    RenderLayoutWithPhotos(layout: layout),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

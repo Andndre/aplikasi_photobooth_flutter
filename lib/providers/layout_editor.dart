@@ -4,11 +4,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vector_math/vector_math_64.dart';
+import 'package:vector_math/vector_math_64.dart' as vector_math;
 import '../models/layouts.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:ui' as ui;
 
 enum EditMode { select, move, text, image, camera }
 
@@ -66,6 +67,19 @@ class LayoutEditorProvider with ChangeNotifier {
   // Add getter to check if multiple elements are selected
   bool get hasMultipleElementsSelected => _selectedElementIds.length > 1;
 
+  // Add font loading state tracking
+  bool _isLoadingFonts = false;
+  bool get isLoadingFonts => _isLoadingFonts;
+  double _fontLoadingProgress = 0.0;
+  double get fontLoadingProgress => _fontLoadingProgress;
+  String _currentlyLoadingFont = '';
+  String get currentlyLoadingFont => _currentlyLoadingFont;
+
+  // Set to store loaded fonts to avoid duplicate loading
+  final Set<String> _loadedFonts = {};
+  bool _initialFontLoadComplete = false;
+  bool get initialFontLoadComplete => _initialFontLoadComplete;
+
   void setLayout(Layouts layout) {
     _layout = layout;
     _selectedElement = null;
@@ -74,13 +88,97 @@ class LayoutEditorProvider with ChangeNotifier {
 
     // Reset history when loading a new layout
     _resetHistory();
-    _saveToHistory(); // Save initial state
+    saveToHistory(); // Save initial state
+
+    // Preload fonts when layout is set
+    _preloadFonts();
 
     notifyListeners();
   }
 
-  // Method to save current state to history
-  void _saveToHistory() {
+  // New method to preload all fonts used in text elements
+  Future<void> _preloadFonts() async {
+    if (_layout == null) return;
+
+    // Get all text elements
+    final textElements =
+        _layout!.elements
+            .where((e) => e.type == 'text' && e.isVisible)
+            .map((e) => e as TextElement)
+            .toList();
+
+    if (textElements.isEmpty) {
+      _initialFontLoadComplete = true;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingFonts = true;
+    _fontLoadingProgress = 0.0;
+    notifyListeners();
+
+    int loadedCount = 0;
+    final totalFonts = textElements.length;
+
+    for (final textElement in textElements) {
+      // Skip if already loaded
+      if (_loadedFonts.contains(textElement.fontFamily)) {
+        loadedCount++;
+        _fontLoadingProgress = loadedCount / totalFonts;
+        notifyListeners();
+        continue;
+      }
+
+      _currentlyLoadingFont = textElement.fontFamily;
+      notifyListeners();
+
+      try {
+        if (textElement.isGoogleFont) {
+          // Load Google Font
+          GoogleFonts.getFont(textElement.fontFamily);
+        } else {
+          // System fonts don't need preloading
+        }
+        _loadedFonts.add(textElement.fontFamily);
+      } catch (e) {
+        print('Error loading font ${textElement.fontFamily}: $e');
+      }
+
+      loadedCount++;
+      _fontLoadingProgress = loadedCount / totalFonts;
+      notifyListeners();
+    }
+
+    _isLoadingFonts = false;
+    _initialFontLoadComplete = true;
+    notifyListeners();
+  }
+
+  // Method to preload a single font (when adding a new text element)
+  Future<void> preloadFont(String fontFamily, bool isGoogleFont) async {
+    if (_loadedFonts.contains(fontFamily)) return;
+
+    _isLoadingFonts = true;
+    _currentlyLoadingFont = fontFamily;
+    _fontLoadingProgress = 0.5;
+    notifyListeners();
+
+    try {
+      if (isGoogleFont) {
+        GoogleFonts.getFont(fontFamily);
+      }
+      _loadedFonts.add(fontFamily);
+    } catch (e) {
+      print('Error loading font $fontFamily: $e');
+    }
+
+    _isLoadingFonts = false;
+    _fontLoadingProgress = 1.0;
+    notifyListeners();
+  }
+
+  // Method to save current state to history - change from private to public
+  void saveToHistory() {
     // Don't save if we're in the middle of an undo/redo operation
     if (_isUndoRedoOperation) return;
     if (_layout == null) return;
@@ -186,27 +284,10 @@ class LayoutEditorProvider with ChangeNotifier {
   // Modify select element to support multi-selection
   void selectElement(LayoutElement? element, {bool addToSelection = false}) {
     if (element == null) {
-      // Clear selection
       _selectedElement = null;
       _selectedElementIds.clear();
       notifyListeners();
       return;
-    }
-
-    // Check if the element is a child in a group before proceeding
-    bool isGroupChild = false;
-    String? parentGroupId;
-    if (_layout != null) {
-      for (final layoutElement in _layout!.elements) {
-        if (layoutElement.type == 'group') {
-          final groupElement = layoutElement as GroupElement;
-          if (groupElement.childIds.contains(element.id)) {
-            isGroupChild = true;
-            parentGroupId = groupElement.id;
-            break;
-          }
-        }
-      }
     }
 
     if (addToSelection) {
@@ -214,34 +295,6 @@ class LayoutEditorProvider with ChangeNotifier {
       final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
       if (isShiftPressed && _selectedElement != null && _layout != null) {
-        // Range selection - select all elements between the last selected element and the current one
-        final lastSelectedIndex = _layout!.elements.indexWhere(
-          (e) => e.id == _selectedElement!.id,
-        );
-        final currentIndex = _layout!.elements.indexWhere(
-          (e) => e.id == element.id,
-        );
-
-        if (lastSelectedIndex != -1 && currentIndex != -1) {
-          // Select all elements in the range
-          final startIndex = math.min(lastSelectedIndex, currentIndex);
-          final endIndex = math.max(lastSelectedIndex, currentIndex);
-
-          // Clear existing selection if not also pressing Ctrl
-          if (!HardwareKeyboard.instance.isControlPressed) {
-            _selectedElementIds.clear();
-          }
-
-          // Add all elements in the range to selection
-          for (int i = startIndex; i <= endIndex; i++) {
-            _selectedElementIds.add(_layout!.elements[i].id);
-          }
-
-          // Make the current element the primary selection
-          _selectedElement = element;
-        }
-      } else {
-        // Toggle selection for this element (Ctrl behavior)
         if (_selectedElementIds.contains(element.id)) {
           _selectedElementIds.remove(element.id);
           // If this was the primary selected element, update it
@@ -252,13 +305,15 @@ class LayoutEditorProvider with ChangeNotifier {
                     : null;
           }
         } else {
+          _selectedElement = element;
           _selectedElementIds.add(element.id);
-          // Update primary selected element if this is the first selection
-          _selectedElement ??= element;
         }
+      } else {
+        _selectedElement = element;
+        _selectedElementIds.clear();
+        _selectedElementIds.add(element.id);
       }
     } else {
-      // Standard single selection - clear all current selections first
       _selectedElement = element;
       _selectedElementIds.clear();
       _selectedElementIds.add(element.id);
@@ -323,7 +378,7 @@ class LayoutEditorProvider with ChangeNotifier {
     double width = maxX - minX;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Apply alignment
     for (final element in selectedElements) {
@@ -350,7 +405,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   void alignElementsVertically(String alignment) {
@@ -370,7 +425,7 @@ class LayoutEditorProvider with ChangeNotifier {
     double height = maxY - minY;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Apply alignment
     for (final element in selectedElements) {
@@ -397,7 +452,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   // Add methods for distribution of multiple elements
@@ -405,7 +460,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || selectedElements.length < 3) return;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Sort elements by x position
     final elements = [...selectedElements];
@@ -440,14 +495,14 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   void distributeElementsVertically() {
     if (_layout == null || selectedElements.length < 3) return;
 
     // Save starting state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Sort elements by y position
     final elements = [...selectedElements];
@@ -482,7 +537,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save ending state for undo
-    _saveToHistory();
+    saveToHistory();
   }
 
   // Add method to delete multiple elements
@@ -490,7 +545,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || _selectedElementIds.isEmpty) return;
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Make a copy to avoid modifying during iteration
     final selectedIds = {..._selectedElementIds};
@@ -540,7 +595,7 @@ class LayoutEditorProvider with ChangeNotifier {
   }
 
   void setScale(double newScale) {
-    _scale = newScale.clamp(0.1, 5.0);
+    _scale = newScale.clamp(0.1, 1.0); // Changed from 5.0 to 1.0
     notifyListeners();
   }
 
@@ -604,12 +659,13 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = newElement;
 
       // Save state for undo/redo
-      _saveToHistory();
+      saveToHistory();
 
       notifyListeners();
     });
   }
 
+  // Override addTextElement to also preload font
   void addTextElement({String? text, Offset? position, Size? size}) {
     if (_layout == null) return;
 
@@ -652,8 +708,11 @@ class LayoutEditorProvider with ChangeNotifier {
       _layout!.elements.add(newElement);
       _selectedElement = newElement;
 
+      // Preload font if needed (most system fonts should already be loaded)
+      preloadFont(newElement.fontFamily, newElement.isGoogleFont);
+
       // Save state for undo/redo
-      _saveToHistory();
+      saveToHistory();
 
       notifyListeners();
     } catch (e) {
@@ -689,7 +748,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _selectedElement = newElement;
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -769,9 +828,6 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_selectedElement?.id == id) {
       _selectedElement = element;
     }
-
-    // Save state for undo/redo
-    _saveToHistory();
 
     // Explicitly notify listeners to ensure UI updates
     notifyListeners();
@@ -907,8 +963,8 @@ class LayoutEditorProvider with ChangeNotifier {
       _selectedElement = element;
     }
 
-    // Save state for undo/redo
-    _saveToHistory();
+    // Remove the save to history call from here
+    // We'll save history only when resizing is completed, not during resize
 
     notifyListeners();
   }
@@ -952,11 +1008,12 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
 
+  // Override updateTextElement to also preload fonts when font is changed
   void updateTextElement(
     String id, {
     String? text,
@@ -977,6 +1034,12 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     final element = _layout!.elements[elementIndex] as TextElement;
+
+    // Preload new font if fontFamily is changing
+    if (fontFamily != null && fontFamily != element.fontFamily) {
+      final isGoogle = isGoogleFont ?? element.isGoogleFont;
+      preloadFont(fontFamily, isGoogle);
+    }
 
     if (text != null) element.text = text;
     if (fontFamily != null) {
@@ -1024,7 +1087,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1081,7 +1144,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1103,7 +1166,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1122,7 +1185,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1141,7 +1204,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1159,7 +1222,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1236,7 +1299,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1255,7 +1318,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.backgroundColor = color;
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     // Force notification to all listeners
     notifyListeners();
@@ -1271,7 +1334,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.add(element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1286,7 +1349,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(0, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1303,7 +1366,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(elementIndex + 1, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1318,7 +1381,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(elementIndex - 1, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1329,7 +1392,10 @@ class LayoutEditorProvider with ChangeNotifier {
     final currentScale = transformationController.value.getMaxScaleOnAxis();
 
     // Calculate target scale
-    final targetScale = (currentScale * factor).clamp(0.1, 5.0);
+    final targetScale = (currentScale * factor).clamp(
+      0.1,
+      1.0,
+    ); // Changed from 5.0 to 1.0
 
     // Instead of using transformationController.view (which doesn't exist),
     // we'll use a different approach to get a focal point for zooming
@@ -1385,8 +1451,8 @@ class LayoutEditorProvider with ChangeNotifier {
     final centerY = canvasHeight / 2;
 
     // Calculate center of the viewport in screen coordinates
-    final viewportCenterX = availableWidth / 2;
-    final viewportCenterY = availableHeight / 2;
+    final viewportCenterX = availableWidth / _scale;
+    final viewportCenterY = availableHeight / _scale;
 
     // Create a transformation that:
     // 1. Scales with the calculated scale
@@ -1395,7 +1461,7 @@ class LayoutEditorProvider with ChangeNotifier {
         Matrix4.identity()
           ..scale(_scale)
           ..setTranslation(
-            Vector3(
+            vector_math.Vector3(
               viewportCenterX / _scale - centerX,
               viewportCenterY / _scale - centerY,
               0.0,
@@ -1421,8 +1487,11 @@ class LayoutEditorProvider with ChangeNotifier {
     // Calculate the point in scene coordinates before zooming
     final focalPointScene = transformationController.toScene(focalPoint);
 
-    // Calculate the scale change
-    final scaleChange = targetScale / currentScale;
+    // Calculate the scale change (ensure we don't exceed 1.0)
+    final scaleChange = (targetScale / currentScale).clamp(
+      0.1,
+      1.0 / currentScale,
+    );
 
     // Create a transformation matrix for this zoom operation
     final zoomMatrix =
@@ -1505,7 +1574,7 @@ class LayoutEditorProvider with ChangeNotifier {
     _layout!.elements.insert(newIndex, element);
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1546,7 +1615,7 @@ class LayoutEditorProvider with ChangeNotifier {
     if (_layout == null || selectedElementIds.length <= 1) return;
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     // Get all selected elements
     final selectedElements =
@@ -1590,7 +1659,7 @@ class LayoutEditorProvider with ChangeNotifier {
     selectElement(groupElement);
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1604,7 +1673,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     final group = _selectedElement as GroupElement;
     final childIds = List<String>.from(group.childIds);
@@ -1623,7 +1692,7 @@ class LayoutEditorProvider with ChangeNotifier {
     selectElements(childElements);
 
     // Save state for undo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1649,7 +1718,7 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     // Save state for undo/redo
-    _saveToHistory();
+    saveToHistory();
 
     notifyListeners();
   }
@@ -1704,8 +1773,39 @@ class LayoutEditorProvider with ChangeNotifier {
         ungroupSelectedElements();
         return true;
       }
+
+      // Undo/Redo shortcuts
+      if (HardwareKeyboard.instance.isControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyZ) {
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          redo();
+        } else {
+          undo();
+        }
+        return true;
+      }
+
+      // CTRL + S to save layout
+      if (HardwareKeyboard.instance.isControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyS) {
+        saveLayout();
+        return true;
+      }
     }
     return false;
+  }
+
+  // Method to save the current layout state - to be called from the editor screen
+  void saveLayout() {
+    // Don't attempt to save if no layout is loaded
+    if (_layout == null) return;
+
+    // Set the save operation flag - this method doesn't actually perform the save
+    // It merely marks the current state as the "saved" state for the editor to handle
+    saveToHistory();
+
+    // Notify listeners about the save request
+    notifyListeners();
   }
 
   // Method to check if element is a child in any group
@@ -1738,5 +1838,650 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     return null;
+  }
+
+  void centerElementInCanvas(String elementId, bool horizontal, bool vertical) {
+    final element = getElementById(elementId);
+    if (element == null) return;
+
+    final canvasWidth = layout!.width.toDouble();
+    final canvasHeight = layout!.height.toDouble();
+
+    double newX = element.x;
+    double newY = element.y;
+
+    if (horizontal) {
+      newX = (canvasWidth - element.width) / 2;
+    }
+
+    if (vertical) {
+      newY = (canvasHeight - element.height) / 2;
+    }
+
+    updateElementPosition(elementId, Offset(newX, newY));
+  }
+
+  // Add getElementById method
+  LayoutElement? getElementById(String id) {
+    if (_layout == null) return null;
+    try {
+      return _layout!.elements.firstWhere((element) => element.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // New method to render and export the layout as an image
+  Future<File?> exportLayoutAsImage({
+    required String exportPath,
+    required double resolutionMultiplier,
+    bool includeBackground = true,
+    bool includeSamplePhotos = true,
+  }) async {
+    if (_layout == null) return null;
+
+    try {
+      // Create a recorder
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      // Calculate dimensions
+      final width = (_layout!.width * resolutionMultiplier).toDouble();
+      final height = (_layout!.height * resolutionMultiplier).toDouble();
+
+      // Draw background if needed
+      if (includeBackground) {
+        final bgColor = _hexToColor(_layout!.backgroundColor);
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, width, height),
+          Paint()..color = bgColor,
+        );
+      }
+
+      // Sort elements by their order in the layout
+      final elements = [..._layout!.elements];
+
+      // Load the sample photo for camera slots if needed
+      ui.Image? samplePhoto;
+      if (includeSamplePhotos) {
+        samplePhoto = await _loadSamplePhoto();
+      }
+
+      // Draw each element
+      for (final element in elements) {
+        // Skip invisible elements
+        if (!element.isVisible) continue;
+
+        // Skip group elements as we'll render their children individually
+        if (element.type == 'group') continue;
+
+        // Scale the element's position and size
+        final x = element.x * resolutionMultiplier;
+        final y = element.y * resolutionMultiplier;
+        final elementWidth = element.width * resolutionMultiplier;
+        final elementHeight = element.height * resolutionMultiplier;
+
+        // Save the current canvas state before applying transformations
+        canvas.save();
+
+        // Apply rotation if needed
+        if (element.rotation != 0) {
+          // Calculate center of the element for rotation
+          final centerX = x + (elementWidth / 2);
+          final centerY = y + (elementHeight / 2);
+
+          // Translate to center, rotate, then translate back
+          canvas.translate(centerX, centerY);
+          canvas.rotate((element.rotation * pi) / 180);
+          canvas.translate(-centerX, -centerY);
+        }
+
+        // Render based on element type
+        switch (element.type) {
+          case 'image':
+            await _renderImageElement(
+              canvas,
+              element as ImageElement,
+              x,
+              y,
+              elementWidth,
+              elementHeight,
+            );
+            break;
+
+          case 'text':
+            _renderTextElement(
+              canvas,
+              element as TextElement,
+              x,
+              y,
+              elementWidth,
+              elementHeight,
+              resolutionMultiplier,
+            );
+            break;
+
+          case 'camera':
+            if (includeSamplePhotos && samplePhoto != null) {
+              _renderCameraElement(
+                canvas,
+                element as CameraElement,
+                samplePhoto,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+              );
+            } else {
+              _renderCameraPlaceholder(
+                canvas,
+                element as CameraElement,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+              );
+            }
+            break;
+        }
+
+        // Restore the canvas state after rendering this element
+        canvas.restore();
+      }
+
+      // End recording and convert to image
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(width.round(), height.round());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) {
+        return null;
+      }
+
+      // Create file and write image data
+      final file = File(exportPath);
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      return file;
+    } catch (e) {
+      print('Error exporting layout: $e');
+      return null;
+    }
+  }
+
+  // Helper to load a sample photo for camera slots
+  Future<ui.Image?> _loadSamplePhoto() async {
+    try {
+      // First try to look for an existing image element and use that
+      if (_layout != null) {
+        for (final element in _layout!.elements) {
+          if (element.type == 'image') {
+            final imageElement = element as ImageElement;
+            final file = File(imageElement.path);
+            if (await file.exists()) {
+              final bytes = await file.readAsBytes();
+              final codec = await ui.instantiateImageCodec(bytes);
+              final frame = await codec.getNextFrame();
+              return frame.image;
+            }
+          }
+        }
+      }
+
+      // If no image found, use a default placeholder from assets
+      // This would require adding a sample image to your assets
+      // For simplicity, we'll create a simple placeholder image
+      final pictureRecorder = ui.PictureRecorder();
+      final canvas = Canvas(pictureRecorder);
+      final paint = Paint()..color = Colors.blue.shade200;
+
+      // Draw a blue rectangle with placeholder text
+      canvas.drawRect(Rect.fromLTWH(0, 0, 300, 300), paint);
+
+      // Add some text
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'Sample Photo',
+          style: TextStyle(color: Colors.white, fontSize: 24),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(150 - textPainter.width / 2, 150 - textPainter.height / 2),
+      );
+
+      final picture = pictureRecorder.endRecording();
+      return await picture.toImage(300, 300);
+    } catch (e) {
+      print('Error loading sample photo: $e');
+      return null;
+    }
+  }
+
+  // Helper to render an image element
+  Future<void> _renderImageElement(
+    Canvas canvas,
+    ImageElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) async {
+    try {
+      final file = File(element.path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+
+        // Draw with opacity
+        final paint =
+            Paint()
+              ..filterQuality = FilterQuality.high
+              ..isAntiAlias = true
+              ..color = Colors.white.withOpacity(element.opacity);
+
+        canvas.drawImageRect(
+          image,
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+          Rect.fromLTWH(x, y, width, height),
+          paint,
+        );
+      }
+    } catch (e) {
+      print('Error rendering image element: $e');
+    }
+  }
+
+  // Helper to convert text alignment string to TextAlign - improved for consistency
+  TextAlign _getTextAlign(String alignment) {
+    // Make case-insensitive
+    final lowerAlignment = alignment.toLowerCase();
+
+    if (lowerAlignment.contains('left')) {
+      return TextAlign.left;
+    } else if (lowerAlignment.contains('right')) {
+      return TextAlign.right;
+    } else if (lowerAlignment.contains('center')) {
+      return TextAlign.center;
+    } else {
+      // Default alignment
+      return TextAlign.left;
+    }
+  }
+
+  // Remove the duplicate _renderTextElement method and keep only this one
+  // Helper to render a text element with corrected alignment implementation
+  void _renderTextElement(
+    Canvas canvas,
+    TextElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+    double resolutionMultiplier,
+  ) {
+    try {
+      // Create a rect for the background if needed
+      final rect = Rect.fromLTWH(x, y, width, height);
+
+      // Draw background if not transparent
+      if (element.backgroundColor != 'transparent') {
+        final bgPaint = Paint()..color = _hexToColor(element.backgroundColor);
+        canvas.drawRect(rect, bgPaint);
+      }
+
+      // Create text style with correct properties
+      TextStyle textStyle;
+
+      // Special handling for Google Fonts
+      if (element.isGoogleFont) {
+        try {
+          textStyle = GoogleFonts.getFont(
+            element.fontFamily,
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize * resolutionMultiplier,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+        } catch (e) {
+          print(
+            'Error loading Google Font: ${element.fontFamily}. Using fallback font.',
+          );
+          // Fallback to system font if Google Font fails
+          textStyle = TextStyle(
+            fontFamily: 'Arial',
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize * resolutionMultiplier,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+        }
+      } else {
+        // System font
+        textStyle = TextStyle(
+          fontFamily: element.fontFamily,
+          color: _hexToColor(element.color),
+          fontSize: element.fontSize * resolutionMultiplier,
+          fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+        );
+      }
+
+      // Create a TextPainter to handle precise text rendering
+      final textPainter = TextPainter(
+        text: TextSpan(text: element.text, style: textStyle),
+        textAlign: _getTextAlign(element.alignment),
+        textDirection: TextDirection.ltr,
+      );
+
+      // Layout the text within the constraints
+      textPainter.layout(maxWidth: width);
+
+      // Calculate correct position based on alignment
+      double dx = x;
+      double dy = y;
+
+      // Horizontal alignment - make consistent with _getTextAlignment logic
+      final lowerAlignment = element.alignment.toLowerCase();
+
+      if (!lowerAlignment.contains('left') &&
+          !lowerAlignment.contains('right')) {
+        if (lowerAlignment.contains('center')) {
+          // Center horizontally
+          dx = x + (width - textPainter.width) / 2;
+        }
+      } else if (lowerAlignment.contains('right')) {
+        // Align to right
+        dx = x + width - textPainter.width;
+      }
+      // Else align to left (default)
+
+      // Vertical alignment
+      if (!lowerAlignment.contains('top') &&
+          !lowerAlignment.contains('bottom')) {
+        if (lowerAlignment.contains('center')) {
+          // Center vertically
+          dy = y + (height - textPainter.height) / 2;
+        }
+      } else if (lowerAlignment.contains('bottom')) {
+        // Align to bottom
+        dy = y + height - textPainter.height;
+      }
+      // Else align to top (default)
+
+      // Draw the text at the calculated position
+      textPainter.paint(canvas, Offset(dx, dy));
+    } catch (e) {
+      print('Error rendering text element: $e');
+      _renderTextElementFallback(
+        canvas,
+        element,
+        x,
+        y,
+        width,
+        height,
+        resolutionMultiplier,
+      );
+    }
+  }
+
+  // Improved fallback method for text rendering using basic paragraph builder
+  void _renderTextElementFallback(
+    Canvas canvas,
+    TextElement element,
+    double x,
+    double y,
+    double width,
+    double height,
+    double resolutionMultiplier,
+  ) {
+    try {
+      // Create a rect for the background if needed
+      final rect = Rect.fromLTWH(x, y, width, height);
+
+      // Draw background if not transparent
+      if (element.backgroundColor != 'transparent') {
+        final bgPaint = Paint()..color = _hexToColor(element.backgroundColor);
+        canvas.drawRect(rect, bgPaint);
+      }
+
+      // Create basic paragraph style based on alignment
+      final TextAlign alignment = _getTextAlign(element.alignment);
+      final paragraphStyle = ui.ParagraphStyle(
+        textAlign: alignment,
+        textDirection: TextDirection.ltr,
+        maxLines: null,
+        ellipsis: '...',
+      );
+
+      // Create text style
+      final color = _hexToColor(element.color);
+      final fontSize = element.fontSize * resolutionMultiplier;
+      final fontWeight =
+          element.isBold ? ui.FontWeight.bold : ui.FontWeight.normal;
+      final fontStyle =
+          element.isItalic ? ui.FontStyle.italic : ui.FontStyle.normal;
+
+      // Build paragraph with correct styling
+      final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle);
+
+      // Set text style based on whether it's a Google Font
+      if (element.isGoogleFont) {
+        try {
+          // For Google Fonts, we need to use the Flutter API first
+          final style = GoogleFonts.getFont(
+            element.fontFamily,
+            color: color,
+            fontSize: fontSize,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+
+          // Convert to ui.TextStyle
+          final uiStyle = ui.TextStyle(
+            color: color,
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            fontStyle: fontStyle,
+            fontFamily: style.fontFamily,
+          );
+
+          paragraphBuilder.pushStyle(uiStyle);
+        } catch (e) {
+          // Fallback for Google Fonts
+          paragraphBuilder.pushStyle(
+            ui.TextStyle(
+              color: color,
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              fontStyle: fontStyle,
+              fontFamily: 'Arial',
+            ),
+          );
+        }
+      } else {
+        // System font
+        paragraphBuilder.pushStyle(
+          ui.TextStyle(
+            color: color,
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            fontStyle: fontStyle,
+            fontFamily: element.fontFamily,
+          ),
+        );
+      }
+
+      paragraphBuilder.addText(element.text);
+      final paragraph = paragraphBuilder.build();
+      paragraph.layout(ui.ParagraphConstraints(width: width));
+
+      // Calculate position based on vertical alignment
+      double dy = y;
+
+      // Vertical alignment calculation
+      if (element.alignment.contains('center') &&
+          !element.alignment.contains('top') &&
+          !element.alignment.contains('bottom')) {
+        dy = y + (height - paragraph.height) / 2;
+      } else if (element.alignment.contains('bottom')) {
+        dy = y + height - paragraph.height;
+      }
+
+      // Draw text
+      canvas.drawParagraph(paragraph, Offset(x, dy));
+    } catch (e) {
+      print('Error in fallback text rendering: $e');
+
+      // Last resort - draw something to indicate there's text
+      final paint = Paint()..color = _hexToColor(element.color);
+      canvas.drawRect(
+        Rect.fromLTWH(x, y, width, height),
+        Paint()..color = _hexToColor(element.backgroundColor),
+      );
+
+      // Draw an indicator that text should be here
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x + width, y + height),
+        paint..strokeWidth = 1,
+      );
+      canvas.drawLine(
+        Offset(x + width, y),
+        Offset(x, y + height),
+        paint..strokeWidth = 1,
+      );
+    }
+  }
+
+  // Helper to render a camera element with sample photo
+  void _renderCameraElement(
+    Canvas canvas,
+    CameraElement element, // Ensure we're using CameraElement type
+    ui.Image samplePhoto,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    try {
+      // Draw the sample photo inside the camera slot
+      final paint =
+          Paint()
+            ..filterQuality = FilterQuality.high
+            ..isAntiAlias = true;
+
+      canvas.drawImageRect(
+        samplePhoto,
+        Rect.fromLTWH(
+          0,
+          0,
+          samplePhoto.width.toDouble(),
+          samplePhoto.height.toDouble(),
+        ),
+        Rect.fromLTWH(x, y, width, height),
+        paint,
+      );
+
+      // Draw a border and label
+      final borderPaint =
+          Paint()
+            ..color = Colors.white.withOpacity(0.7)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0;
+
+      canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+      // Add label - using element.label which is defined in CameraElement
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: element.label, // This is correct since element is CameraElement
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12 * (width / 300), // Scale font with element size
+            shadows: [
+              Shadow(
+                offset: const Offset(1, 1),
+                blurRadius: 3,
+                color: Colors.black.withOpacity(0.7),
+              ),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x + 5, y + height - textPainter.height - 5),
+      );
+    } catch (e) {
+      print('Error rendering camera element: $e');
+      _renderCameraPlaceholder(canvas, element, x, y, width, height);
+    }
+  }
+
+  // Helper to render a placeholder for camera elements
+  void _renderCameraPlaceholder(
+    Canvas canvas,
+    CameraElement element, // Ensure we're using CameraElement type
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    // Blue rect with camera icon
+    final bgPaint = Paint()..color = Colors.blue.withOpacity(0.2);
+    final borderPaint =
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+    // Draw camera icon
+    final iconPainter = TextPainter(
+      text: const TextSpan(text: '📷', style: TextStyle(fontSize: 24)),
+      textDirection: TextDirection.ltr,
+    );
+    iconPainter.layout();
+    iconPainter.paint(
+      canvas,
+      Offset(
+        x + (width - iconPainter.width) / 2,
+        y + (height - iconPainter.height) / 2,
+      ),
+    );
+
+    // Add label
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: element.label, // This is correct since element is CameraElement
+        style: const TextStyle(color: Colors.blue, fontSize: 12),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(x + 5, y + height - textPainter.height - 5),
+    );
+  }
+
+  // Helper to convert hex color to Color
+  Color _hexToColor(String hexColor) {
+    if (hexColor == 'transparent') return Colors.transparent;
+
+    hexColor = hexColor.replaceAll('#', '');
+    if (hexColor.length == 6) {
+      hexColor = 'FF$hexColor';
+    }
+    return Color(int.parse(hexColor, radix: 16));
   }
 }
