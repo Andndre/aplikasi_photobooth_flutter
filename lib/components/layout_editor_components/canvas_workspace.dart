@@ -140,77 +140,134 @@ class CanvasWorkspaceState extends State<CanvasWorkspace> {
                 editorProvider.selectElement(null);
               }
             },
-            child: InteractiveViewer(
-              key: _interactiveViewerKey,
-              transformationController: editorProvider.transformationController,
-              constrained: false,
-              boundaryMargin: EdgeInsets.all(max(canvasWidth, canvasHeight)),
-              minScale:
-                  0.1, // Increased minimum scale to prevent excessive zoom out
-              maxScale: 1.0, // Changed from 5.0 to 1.0
-              // Fix: Only enable panning when we're not dragging an element or using middle mouse
-              panEnabled: !_isMiddleMousePanning && !editorProvider.isDragging,
-              onInteractionUpdate: (details) {
-                editorProvider.setScale(
-                  editorProvider.transformationController.value
-                      .getMaxScaleOnAxis(),
-                );
-              },
-              onInteractionEnd: (details) {
-                // Ensure canvas stays in view after interaction
-                editorProvider.ensureCanvasVisible();
-              },
-              child: SizedBox(
-                width: canvasWidth,
-                height: canvasHeight,
-                child: Stack(
-                  children: [
-                    // Background pattern to help with orientation (optional)
-                    Positioned.fill(
-                      child: Container(
-                        color: Colors.grey[200],
-                        child: CustomPaint(painter: BackgroundPatternPainter()),
-                      ),
-                    ),
-
-                    // Centered canvas
-                    Positioned(
-                      left: canvasCenterX - layout.width / 2,
-                      top: canvasCenterY - layout.height / 2,
-                      child: Container(
-                        width: layout.width.toDouble(),
-                        height: layout.height.toDouble(),
-                        decoration: BoxDecoration(
-                          color: _hexToColor(layout.backgroundColor),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 20,
-                              spreadRadius: 5,
+            child: Stack(
+              children: [
+                InteractiveViewer(
+                  key: _interactiveViewerKey,
+                  transformationController:
+                      editorProvider.transformationController,
+                  constrained: false,
+                  boundaryMargin: EdgeInsets.all(
+                    max(canvasWidth, canvasHeight),
+                  ),
+                  minScale:
+                      0.1, // Increased minimum scale to prevent excessive zoom out
+                  maxScale: 1.0, // Changed from 5.0 to 1.0
+                  // Fix: Only enable panning when we're not dragging an element or using middle mouse
+                  panEnabled:
+                      !_isMiddleMousePanning && !editorProvider.isDragging,
+                  onInteractionUpdate: (details) {
+                    editorProvider.setScale(
+                      editorProvider.transformationController.value
+                          .getMaxScaleOnAxis(),
+                    );
+                  },
+                  onInteractionEnd: (details) {
+                    // Ensure canvas stays in view after interaction
+                    editorProvider.ensureCanvasVisible();
+                  },
+                  child: SizedBox(
+                    width: canvasWidth,
+                    height: canvasHeight,
+                    child: Stack(
+                      children: [
+                        // Background pattern to help with orientation (optional)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.grey[200],
+                            child: CustomPaint(
+                              painter: BackgroundPatternPainter(),
                             ),
-                          ],
+                          ),
                         ),
-                        child: Stack(
-                          children: [
-                            // Grid (if enabled)
-                            if (editorProvider.showGrid)
-                              Positioned.fill(
-                                child: CustomPaint(painter: GridPainter()),
-                              ),
 
-                            // First render all non-group elements and groups
-                            ..._buildNonGroupElements(layout, editorProvider),
+                        // Centered canvas
+                        Positioned(
+                          left: canvasCenterX - layout.width / 2,
+                          top: canvasCenterY - layout.height / 2,
+                          child: Container(
+                            width: layout.width.toDouble(),
+                            height: layout.height.toDouble(),
+                            decoration: BoxDecoration(
+                              color: _hexToColor(layout.backgroundColor),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              children: [
+                                // Grid (if enabled)
+                                if (editorProvider.showGrid)
+                                  Positioned.fill(
+                                    child: CustomPaint(painter: GridPainter()),
+                                  ),
 
-                            // Then render selection overlays for all elements
-                            // Note: This ensures overlays appear on top of all elements
-                            ..._buildSelectionOverlays(editorProvider),
-                          ],
+                                // First render all non-group elements and groups
+                                ..._buildNonGroupElements(
+                                  layout,
+                                  editorProvider,
+                                ),
+
+                                // Then render selection overlays for all elements
+                                // Note: This ensures overlays appear on top of all elements
+                                ..._buildSelectionOverlays(editorProvider),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Add loading overlay when fonts are loading
+                if (editorProvider.isLoadingFonts)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: Card(
+                          elevation: 8,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Loading fonts...',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Loading: ${editorProvider.currentlyLoadingFont}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                LinearProgressIndicator(
+                                  value: editorProvider.fontLoadingProgress,
+                                  backgroundColor: Colors.grey[300],
+                                  minHeight: 6,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${(editorProvider.fontLoadingProgress * 100).toInt()}%',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ),
         ),

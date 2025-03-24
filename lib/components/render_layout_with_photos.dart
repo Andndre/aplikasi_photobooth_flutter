@@ -22,7 +22,7 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
   String? _errorMessage;
   double _resolutionMultiplier = 1.0;
   bool _includeBackground = true;
-  // Replace WidgetsToImageController with ScreenshotController
+  // Controller only needed for capturing if needed
   final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
@@ -51,219 +51,211 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     final cameraElements =
         widget.layout.elements
             .where((e) => e.type == 'camera' && e.isVisible)
-            .cast<CameraElement>()
             .toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text('Render: ${widget.layout.name}')),
+      appBar: AppBar(
+        title: Text('Export Layout: ${widget.layout.name}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.image),
+            tooltip: 'Export as Image',
+            onPressed: _hasAnyPhotos() ? _exportLayout : null,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Assign Photos to Camera Slots',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select photos to use for each camera slot in your layout.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-
-            // Build camera slot list with photo selection
-            Expanded(
-              child: ListView.builder(
-                itemCount: cameraElements.length,
-                itemBuilder: (context, index) {
-                  final cameraElement = cameraElements[index];
-                  final hasPhoto =
-                      index < _photoFilePaths.length &&
-                      _photoFilePaths[index].isNotEmpty;
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        children: [
-                          // Preview of photo or placeholder
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child:
-                                hasPhoto
-                                    ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: Image.file(
-                                        File(_photoFilePaths[index]),
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                    : const Icon(
-                                      Icons.camera_alt,
-                                      color: Colors.grey,
-                                      size: 32,
-                                    ),
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Camera slot info and select button
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  cameraElement.label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Size: ${cameraElement.width.round()} × ${cameraElement.height.round()} px',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                ElevatedButton(
-                                  onPressed: () => _selectPhoto(index),
-                                  child: Text(
-                                    hasPhoto ? 'Change Photo' : 'Select Photo',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Delete button if photo exists
-                          if (hasPhoto)
-                            IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                setState(() {
-                                  _photoFilePaths[index] = '';
-                                });
-                              },
-                            ),
-                        ],
+            // Export settings
+            Card(
+              margin: const EdgeInsets.only(bottom: 16.0),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Export Settings',
+                      style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
+                    const SizedBox(height: 16),
 
-            // Add preview section above export options
-            const Divider(height: 32),
-            Text('Preview', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Container(
-              height: 200,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: widget.layout.width / widget.layout.height,
-                  // Use Screenshot instead of WidgetsToImage
-                  child: Screenshot(
-                    controller: _screenshotController,
-                    child: widget.layout.buildLayoutPreviewWidget(
-                      photoFilePaths:
-                          _photoFilePaths.where((p) => p.isNotEmpty).toList(),
-                      includeBackground: _includeBackground,
+                    // Resolution selector
+                    Text(
+                      'Resolution Multiplier',
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
-                  ),
-                ),
-              ),
-            ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildResolutionButton(1.0, '1x'),
+                        _buildResolutionButton(1.5, '1.5x'),
+                        _buildResolutionButton(2.0, '2x'),
+                        _buildResolutionButton(3.0, '3x'),
+                        _buildResolutionButton(4.0, '4x'),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
-            // Export options section
-            const Divider(height: 32),
-            Row(
-              children: [
-                const Text('Resolution:'),
-                const SizedBox(width: 16),
-                DropdownButton<double>(
-                  value: _resolutionMultiplier,
-                  items: [
-                    DropdownMenuItem(
-                      value: 1.0,
-                      child: Text(
-                        '1x (${widget.layout.width} × ${widget.layout.height})',
-                      ),
+                    Text(
+                      'Output size: ${(widget.layout.width * _resolutionMultiplier).round()} × ${(widget.layout.height * _resolutionMultiplier).round()} px',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const DropdownMenuItem(value: 1.5, child: Text('1.5x')),
-                    const DropdownMenuItem(value: 2.0, child: Text('2x')),
-                    const DropdownMenuItem(value: 3.0, child: Text('3x')),
-                    const DropdownMenuItem(value: 4.0, child: Text('4x')),
+
+                    const SizedBox(height: 16),
+
+                    // Include background option
+                    CheckboxListTile(
+                      title: const Text('Include Background'),
+                      value: _includeBackground,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (value) {
+                        setState(() {
+                          _includeBackground = value ?? true;
+                        });
+                      },
+                    ),
                   ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _resolutionMultiplier = value;
-                      });
-                    }
-                  },
                 ),
-                const SizedBox(width: 24),
-                Checkbox(
-                  value: _includeBackground,
-                  onChanged: (value) {
-                    setState(() {
-                      _includeBackground = value ?? true;
-                    });
-                  },
-                ),
-                const Text('Include Background'),
-              ],
+              ),
             ),
 
-            // Error message if any
+            // Photo selection section
+            Text(
+              'Select Photos',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
+            Text(
+              'Select photos for each camera slot in your layout:',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Camera slot list
+            Expanded(
+              child:
+                  cameraElements.isEmpty
+                      ? const Center(
+                        child: Text('No camera slots found in this layout.'),
+                      )
+                      : ListView.builder(
+                        itemCount: cameraElements.length,
+                        itemBuilder: (context, index) {
+                          final cameraElement = cameraElements[index];
+                          final hasPhoto =
+                              index < _photoFilePaths.length &&
+                              _photoFilePaths[index].isNotEmpty;
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8.0),
+                            child: ListTile(
+                              leading:
+                                  hasPhoto
+                                      ? _buildThumbnail(_photoFilePaths[index])
+                                      : const Icon(Icons.camera_alt),
+                              title: Text(cameraElement.id),
+                              subtitle: Text(
+                                hasPhoto
+                                    ? path.basename(_photoFilePaths[index])
+                                    : 'No photo selected',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.add_photo_alternate),
+                                onPressed: () => _selectPhoto(index),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+            ),
+
+            // Export button
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: ElevatedButton.icon(
+                onPressed:
+                    _hasAnyPhotos() && !_isExporting ? _exportLayout : null,
+                icon:
+                    _isExporting
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.download),
+                label: Text(_isExporting ? 'Exporting...' : 'Export Layout'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+            ),
+
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-
-            // Export button
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed:
-                      _isExporting || !_hasAnyPhotos() ? null : _exportLayout,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child:
-                      _isExporting
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Text('Export Layout'),
-                ),
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Build a thumbnail preview of the selected photo
+  Widget _buildThumbnail(String photoPath) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        image: DecorationImage(
+          image: FileImage(File(photoPath)),
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+
+  // Create a resolution selection button
+  Widget _buildResolutionButton(double value, String label) {
+    final isSelected = _resolutionMultiplier == value;
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+        child: ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _resolutionMultiplier = value;
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor:
+                isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerLow,
+            foregroundColor:
+                isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurface,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          ),
+          child: Text(label),
         ),
       ),
     );
@@ -282,28 +274,31 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
         allowMultiple: false,
       );
 
-      if (result != null && result.files.single.path != null) {
+      if (result != null &&
+          result.files.isNotEmpty &&
+          result.files.first.path != null) {
         setState(() {
-          if (index >= _photoFilePaths.length) {
-            _photoFilePaths.add(result.files.single.path!);
-          } else {
-            _photoFilePaths[index] = result.files.single.path!;
+          // Ensure list is large enough
+          while (_photoFilePaths.length <= index) {
+            _photoFilePaths.add('');
           }
-          _errorMessage = null;
+          _photoFilePaths[index] = result.files.first.path!;
+          _errorMessage = null; // Clear any previous error
         });
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error selecting photo: $e';
       });
+      print('Error selecting photo: $e');
     }
   }
 
-  // Updated export method using screenshot to capture the preview
+  // Updated export method using the Layouts class directly
   Future<void> _exportLayout() async {
     // Choose export location
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Choose Export Location',
+      dialogTitle: 'Select Export Location',
     );
 
     if (selectedDirectory == null) return;
@@ -314,44 +309,33 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     final exportPath = path.join(selectedDirectory, defaultFilename);
 
     setState(() {
+      _exportPath = exportPath;
       _isExporting = true;
       _errorMessage = null;
-      _exportPath = exportPath;
     });
 
     try {
-      // First try using the Screenshot controller to capture the preview
-      final photos = _photoFilePaths.where((p) => p.isNotEmpty).toList();
+      // Use the Layouts.exportAsImage method directly
+      final file = await widget.layout.exportAsImage(
+        exportPath: exportPath,
+        photoFilePaths: _photoFilePaths,
+        resolutionMultiplier: _resolutionMultiplier,
+        includeBackground: _includeBackground,
+      );
 
-      // Capture using the screenshot controller
-      final capturedImage = await _screenshotController.capture();
-
-      if (capturedImage != null) {
-        // If we successfully captured an image, save it directly
-        final file = File(exportPath);
-        await file.writeAsBytes(capturedImage);
+      // Check if export was successful
+      if (file != null && await file.exists()) {
         _showExportSuccess(context);
       } else {
-        // If screenshot capture failed, fall back to the layout export method
-        final file = await widget.layout.exportAsImage(
-          exportPath: exportPath,
-          photoFilePaths: photos,
-          resolutionMultiplier: _resolutionMultiplier,
-          includeBackground: _includeBackground,
-        );
-
-        if (file != null && await file.exists()) {
-          _showExportSuccess(context);
-        } else {
-          setState(() {
-            _errorMessage = 'Failed to create export file.';
-          });
-        }
+        setState(() {
+          _errorMessage = 'Export failed. Please try again.';
+        });
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error during export: $e';
       });
+      print('Export error: $e');
     } finally {
       setState(() {
         _isExporting = false;
@@ -364,11 +348,11 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Layout exported successfully to $_exportPath'),
+          content: Text('Layout exported successfully to:\n$_exportPath'),
           action: SnackBarAction(
             label: 'OPEN',
             onPressed: () {
-              // Open the file or folder - platform specific
+              // Open file or folder with platform-specific method
               if (Platform.isWindows) {
                 Process.run('explorer.exe', ['/select,', _exportPath!]);
               } else if (Platform.isMacOS) {
@@ -378,8 +362,12 @@ class _RenderLayoutWithPhotosState extends State<RenderLayoutWithPhotos> {
               }
             },
           ),
+          duration: const Duration(seconds: 6),
         ),
       );
+
+      // Navigate back after successful export
+      Navigator.of(context).pop();
     }
   }
 }

@@ -1090,10 +1090,10 @@ class Layouts {
       ),
     );
 
-    // Add label
+    // Add label - Ensure we use the camera element's label property
     final textPainter = TextPainter(
       text: TextSpan(
-        text: element.label,
+        text: element.label, // This is correct since element is CameraElement
         style: const TextStyle(color: Colors.blue, fontSize: 12),
       ),
       textDirection: TextDirection.ltr,

@@ -1,206 +1,225 @@
-import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:math';
-import 'package:flutter/services.dart';
-import '../../models/layouts.dart';
+
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
+import '../../models/layouts.dart';
 import '../../providers/layout_editor.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ElementWidget extends StatelessWidget {
   final LayoutElement element;
   final bool isGroupChild;
-  // Add GoogleFonts list for checking
-  final List<String> googleFontsList = GoogleFonts.asMap().keys.toList();
 
-  ElementWidget({super.key, required this.element, this.isGroupChild = false});
+  const ElementWidget({
+    super.key,
+    required this.element,
+    this.isGroupChild = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Get the editor provider to check if this element is selected
     final editorProvider = Provider.of<LayoutEditorProvider>(context);
     final isSelected = editorProvider.isElementSelected(element.id);
 
-    // Ensure width and height are at least 10 pixels
-    final safeWidth = max(10.0, element.width);
-    final safeHeight = max(10.0, element.height);
+    // Check if we need to put a placeholder while fonts are loading
+    final isTextElement = element.type == 'text';
+    final isLoadingFonts = editorProvider.isLoadingFonts;
+    final initialFontLoadComplete = editorProvider.initialFontLoadComplete;
 
-    return Transform.rotate(
-      angle: element.rotation * (pi / 180),
-      child: SizedBox(
-        width: safeWidth,
-        height: safeHeight,
-        child: _buildElementContent(context, isSelected),
+    // Use a placeholder during initial font load for text elements
+    if (isTextElement && isLoadingFonts && !initialFontLoadComplete) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color:
+                isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey.withOpacity(0.2),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+          color: Colors.grey.withOpacity(0.1),
+        ),
+        child: const Center(
+          child: Text('Loading font...', style: TextStyle(fontSize: 10)),
+        ),
+      );
+    }
+
+    // Regular element rendering
+    switch (element.type) {
+      case 'image':
+        return _buildImageElement(element as ImageElement, isSelected, context);
+      case 'text':
+        return _buildTextElement(element as TextElement, isSelected, context);
+      case 'camera':
+        return _buildCameraElement(
+          element as CameraElement,
+          isSelected,
+          context,
+        );
+      default:
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.red),
+            color: Colors.red.withOpacity(0.2),
+          ),
+          child: const Center(child: Text('Unknown element type')),
+        );
+    }
+  }
+
+  Widget _buildImageElement(
+    ImageElement element,
+    bool isSelected,
+    BuildContext context,
+  ) {
+    final file = File(element.path);
+    return file.existsSync()
+        ? Opacity(
+          opacity: element.opacity,
+          child: Image.file(
+            file,
+            fit: element.aspectRatioLocked ? BoxFit.contain : BoxFit.fill,
+            width: element.width,
+            height: element.height,
+          ),
+        )
+        : Container(
+          color: Colors.grey[300],
+          child: const Center(child: Icon(Icons.image_not_supported, size: 24)),
+        );
+  }
+
+  Widget _buildCameraElement(
+    CameraElement element,
+    bool isSelected,
+    BuildContext context,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Colors.blue,
+          width: 2,
+          style: BorderStyle.solid,
+        ),
+        color: Colors.blue.withOpacity(0.1),
+      ),
+      child: Stack(
+        children: [
+          Center(
+            child: Icon(
+              Icons.camera_alt,
+              size: min(element.width, element.height) / 3,
+              color: Colors.blue.withOpacity(0.5),
+            ),
+          ),
+          Positioned(
+            bottom: 5,
+            left: 5,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              color: Colors.blue.withOpacity(0.7),
+              child: Text(
+                element.label,
+                style: const TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Future<String?> _loadFontFamily(String fontName) async {
+  Widget _buildTextElement(
+    TextElement element,
+    bool isSelected,
+    BuildContext context,
+  ) {
+    TextStyle textStyle;
+
     try {
-      // Check both system and user font directories
-      final directories = [
-        'C:\\Windows\\Fonts',
-        '${Platform.environment['USERPROFILE']}\\AppData\\Local\\Microsoft\\Windows\\Fonts',
-      ];
-
-      for (var dir in directories) {
-        final fontFile = File('$dir\\$fontName.ttf');
-        if (await fontFile.exists()) {
-          final fontLoader = FontLoader(fontName);
-          final bytes = await fontFile.readAsBytes();
-          fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
-          await fontLoader.load();
-          return fontName;
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Error loading font $fontName: $e');
-      return null;
-    }
-  }
-
-  Widget _buildElementContent(BuildContext context, bool isSelected) {
-    // For group elements, we'll handle rendering differently since
-    // the canvas will now handle the group rendering and interactions
-    if (element.type == 'group' && !isGroupChild) {
-      // Return a simple container since the actual group rendering is handled in the canvas
-      return Container(decoration: BoxDecoration(color: Colors.transparent));
-    }
-
-    switch (element.type) {
-      case 'image':
-        final imageElement = element as ImageElement;
-        final file = File(imageElement.path);
-        return file.existsSync()
-            ? Opacity(
-              opacity: imageElement.opacity,
-              child: Image.file(
-                file,
-                fit:
-                    imageElement.aspectRatioLocked
-                        ? BoxFit.contain
-                        : BoxFit.fill,
-                width: element.width,
-                height: element.height,
-              ),
-            )
-            : Container(
-              color: Colors.grey[300],
-              child: const Center(
-                child: Icon(Icons.image_not_supported, size: 24),
-              ),
-            );
-
-      case 'text':
-        final textElement = element as TextElement;
-
-        // Create the text style based on font source
-        TextStyle textStyle;
-        if (googleFontsList.contains(textElement.fontFamily)) {
-          try {
-            // Use Google Fonts with the specified fontFamily
-            textStyle = GoogleFonts.getFont(
-              textElement.fontFamily,
-              color: _hexToColor(textElement.color),
-              fontSize: max(8.0, textElement.fontSize).toDouble(),
-              fontWeight:
-                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
-              fontStyle:
-                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-            );
-          } catch (e) {
-            print(
-              'Error loading Google Font: ${textElement.fontFamily}. Using system font instead.',
-            );
-            textStyle = TextStyle(
-              fontFamily: textElement.fontFamily,
-              color: _hexToColor(textElement.color),
-              fontSize: max(8.0, textElement.fontSize).toDouble(),
-              fontWeight:
-                  textElement.isBold ? FontWeight.bold : FontWeight.normal,
-              fontStyle:
-                  textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-              decoration: TextDecoration.none,
-            );
-          }
-        } else {
-          // Use system font directly
+      // Properly handle Google Fonts
+      if (element.isGoogleFont) {
+        try {
+          textStyle = GoogleFonts.getFont(
+            element.fontFamily,
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
+          );
+        } catch (e) {
+          print(
+            'Error loading Google Font: ${element.fontFamily}. Using fallback font.',
+          );
+          // Fallback to system font if Google Font fails
           textStyle = TextStyle(
-            fontFamily:
-                textElement.fontFamily.isEmpty
-                    ? 'Arial'
-                    : textElement.fontFamily,
-            color: _hexToColor(textElement.color),
-            fontSize: max(8.0, textElement.fontSize).toDouble(),
-            fontWeight:
-                textElement.isBold ? FontWeight.bold : FontWeight.normal,
-            fontStyle:
-                textElement.isItalic ? FontStyle.italic : FontStyle.normal,
-            decoration: TextDecoration.none,
-            package: null, // Ensure no package is specified for system fonts
+            fontFamily: 'Arial',
+            color: _hexToColor(element.color),
+            fontSize: element.fontSize,
+            fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+            fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
           );
         }
-
-        return Container(
-          width: max(10.0, element.width),
-          height: max(10.0, element.height),
-          color: _hexToColor(textElement.backgroundColor),
-          alignment: _getElementAlignment(textElement.alignment),
-          padding: const EdgeInsets.all(4.0),
-          child: Text(
-            textElement.text.isEmpty ? ' ' : textElement.text,
-            style: textStyle,
-            textAlign: _getTextAlignment(textElement.alignment),
-            overflow: TextOverflow.visible,
-          ),
+      } else {
+        // System font
+        textStyle = TextStyle(
+          fontFamily: element.fontFamily,
+          color: _hexToColor(element.color),
+          fontSize: element.fontSize,
+          fontWeight: element.isBold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: element.isItalic ? FontStyle.italic : FontStyle.normal,
         );
+      }
 
-      case 'camera':
-        final cameraElement = element as CameraElement;
-        return Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: Colors.blue,
-              width: 2,
-              style: BorderStyle.solid,
+      // Container with proper alignment and background
+      return Container(
+        decoration: BoxDecoration(
+          color:
+              element.backgroundColor != 'transparent'
+                  ? _hexToColor(element.backgroundColor)
+                  : Colors.transparent,
+          border:
+              isSelected
+                  ? Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2.0,
+                  )
+                  : null,
+        ),
+        child: Transform.rotate(
+          angle: (element.rotation * 3.14159) / 180,
+          child: Align(
+            alignment: _getAlignment(element.alignment),
+            child: Text(
+              element.text,
+              style: textStyle,
+              textAlign: _getTextAlign(element.alignment),
+              overflow: TextOverflow.visible,
             ),
-            color: Colors.blue.withOpacity(0.1),
           ),
-          child: Stack(
-            children: [
-              Center(
-                child: Icon(
-                  Icons.camera_alt,
-                  size: min(element.width, element.height) / 3,
-                  color: Colors.blue.withOpacity(0.5),
-                ),
-              ),
-              Positioned(
-                bottom: 5,
-                left: 5,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  color: Colors.blue.withOpacity(0.7),
-                  child: Text(
-                    cameraElement.label,
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                  ),
-                ),
-              ),
-            ],
+        ),
+      );
+    } catch (e) {
+      // Fallback rendering for error cases
+      print('Error rendering text element: $e');
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red),
+          color: Colors.red.withOpacity(0.2),
+        ),
+        child: Center(
+          child: Text(
+            'Error rendering text: ${e.toString()}',
+            style: const TextStyle(fontSize: 10, color: Colors.red),
           ),
-        );
-
-      default:
-        return Container(
-          color: Colors.red,
-          child: Center(child: Text('Unknown element type: ${element.type}')),
-        );
+        ),
+      );
     }
   }
 
-  TextAlign _getTextAlignment(String alignment) {
+  TextAlign _getTextAlign(String alignment) {
     switch (alignment) {
       case 'topLeft':
       case 'centerLeft':
@@ -222,7 +241,7 @@ class ElementWidget extends StatelessWidget {
     }
   }
 
-  Alignment _getElementAlignment(String alignment) {
+  Alignment _getAlignment(String alignment) {
     switch (alignment) {
       case 'topLeft':
         return Alignment.topLeft;

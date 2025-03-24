@@ -67,6 +67,19 @@ class LayoutEditorProvider with ChangeNotifier {
   // Add getter to check if multiple elements are selected
   bool get hasMultipleElementsSelected => _selectedElementIds.length > 1;
 
+  // Add font loading state tracking
+  bool _isLoadingFonts = false;
+  bool get isLoadingFonts => _isLoadingFonts;
+  double _fontLoadingProgress = 0.0;
+  double get fontLoadingProgress => _fontLoadingProgress;
+  String _currentlyLoadingFont = '';
+  String get currentlyLoadingFont => _currentlyLoadingFont;
+
+  // Set to store loaded fonts to avoid duplicate loading
+  final Set<String> _loadedFonts = {};
+  bool _initialFontLoadComplete = false;
+  bool get initialFontLoadComplete => _initialFontLoadComplete;
+
   void setLayout(Layouts layout) {
     _layout = layout;
     _selectedElement = null;
@@ -77,6 +90,90 @@ class LayoutEditorProvider with ChangeNotifier {
     _resetHistory();
     saveToHistory(); // Save initial state
 
+    // Preload fonts when layout is set
+    _preloadFonts();
+
+    notifyListeners();
+  }
+
+  // New method to preload all fonts used in text elements
+  Future<void> _preloadFonts() async {
+    if (_layout == null) return;
+
+    // Get all text elements
+    final textElements =
+        _layout!.elements
+            .where((e) => e.type == 'text' && e.isVisible)
+            .map((e) => e as TextElement)
+            .toList();
+
+    if (textElements.isEmpty) {
+      _initialFontLoadComplete = true;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingFonts = true;
+    _fontLoadingProgress = 0.0;
+    notifyListeners();
+
+    int loadedCount = 0;
+    final totalFonts = textElements.length;
+
+    for (final textElement in textElements) {
+      // Skip if already loaded
+      if (_loadedFonts.contains(textElement.fontFamily)) {
+        loadedCount++;
+        _fontLoadingProgress = loadedCount / totalFonts;
+        notifyListeners();
+        continue;
+      }
+
+      _currentlyLoadingFont = textElement.fontFamily;
+      notifyListeners();
+
+      try {
+        if (textElement.isGoogleFont) {
+          // Load Google Font
+          await GoogleFonts.getFont(textElement.fontFamily);
+        } else {
+          // System fonts don't need preloading
+        }
+        _loadedFonts.add(textElement.fontFamily);
+      } catch (e) {
+        print('Error loading font ${textElement.fontFamily}: $e');
+      }
+
+      loadedCount++;
+      _fontLoadingProgress = loadedCount / totalFonts;
+      notifyListeners();
+    }
+
+    _isLoadingFonts = false;
+    _initialFontLoadComplete = true;
+    notifyListeners();
+  }
+
+  // Method to preload a single font (when adding a new text element)
+  Future<void> preloadFont(String fontFamily, bool isGoogleFont) async {
+    if (_loadedFonts.contains(fontFamily)) return;
+
+    _isLoadingFonts = true;
+    _currentlyLoadingFont = fontFamily;
+    _fontLoadingProgress = 0.5;
+    notifyListeners();
+
+    try {
+      if (isGoogleFont) {
+        await GoogleFonts.getFont(fontFamily);
+      }
+      _loadedFonts.add(fontFamily);
+    } catch (e) {
+      print('Error loading font $fontFamily: $e');
+    }
+
+    _isLoadingFonts = false;
+    _fontLoadingProgress = 1.0;
     notifyListeners();
   }
 
@@ -616,6 +713,7 @@ class LayoutEditorProvider with ChangeNotifier {
     });
   }
 
+  // Override addTextElement to also preload font
   void addTextElement({String? text, Offset? position, Size? size}) {
     if (_layout == null) return;
 
@@ -657,6 +755,9 @@ class LayoutEditorProvider with ChangeNotifier {
     try {
       _layout!.elements.add(newElement);
       _selectedElement = newElement;
+
+      // Preload font if needed (most system fonts should already be loaded)
+      preloadFont(newElement.fontFamily, newElement.isGoogleFont);
 
       // Save state for undo/redo
       saveToHistory();
@@ -960,6 +1061,7 @@ class LayoutEditorProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Override updateTextElement to also preload fonts when font is changed
   void updateTextElement(
     String id, {
     String? text,
@@ -980,6 +1082,12 @@ class LayoutEditorProvider with ChangeNotifier {
     }
 
     final element = _layout!.elements[elementIndex] as TextElement;
+
+    // Preload new font if fontFamily is changing
+    if (fontFamily != null && fontFamily != element.fontFamily) {
+      final isGoogle = isGoogleFont ?? element.isGoogleFont;
+      preloadFont(fontFamily, isGoogle);
+    }
 
     if (text != null) element.text = text;
     if (fontFamily != null) {
@@ -2301,7 +2409,7 @@ class LayoutEditorProvider with ChangeNotifier {
   // Helper to render a camera element with sample photo
   void _renderCameraElement(
     Canvas canvas,
-    CameraElement element,
+    CameraElement element, // Ensure we're using CameraElement type
     ui.Image samplePhoto,
     double x,
     double y,
@@ -2336,10 +2444,10 @@ class LayoutEditorProvider with ChangeNotifier {
 
       canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
 
-      // Add label
+      // Add label - using element.label which is defined in CameraElement
       final textPainter = TextPainter(
         text: TextSpan(
-          text: element.label,
+          text: element.label, // This is correct since element is CameraElement
           style: TextStyle(
             color: Colors.white,
             fontSize: 12 * (width / 300), // Scale font with element size
@@ -2368,7 +2476,7 @@ class LayoutEditorProvider with ChangeNotifier {
   // Helper to render a placeholder for camera elements
   void _renderCameraPlaceholder(
     Canvas canvas,
-    CameraElement element,
+    CameraElement element, // Ensure we're using CameraElement type
     double x,
     double y,
     double width,
@@ -2402,7 +2510,7 @@ class LayoutEditorProvider with ChangeNotifier {
     // Add label
     final textPainter = TextPainter(
       text: TextSpan(
-        text: element.label,
+        text: element.label, // This is correct since element is CameraElement
         style: const TextStyle(color: Colors.blue, fontSize: 12),
       ),
       textDirection: TextDirection.ltr,
