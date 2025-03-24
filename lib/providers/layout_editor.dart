@@ -135,7 +135,7 @@ class LayoutEditorProvider with ChangeNotifier {
       try {
         if (textElement.isGoogleFont) {
           // Load Google Font
-          await GoogleFonts.getFont(textElement.fontFamily);
+          GoogleFonts.getFont(textElement.fontFamily);
         } else {
           // System fonts don't need preloading
         }
@@ -165,7 +165,7 @@ class LayoutEditorProvider with ChangeNotifier {
 
     try {
       if (isGoogleFont) {
-        await GoogleFonts.getFont(fontFamily);
+        GoogleFonts.getFont(fontFamily);
       }
       _loadedFonts.add(fontFamily);
     } catch (e) {
@@ -200,11 +200,6 @@ class LayoutEditorProvider with ChangeNotifier {
       _history.removeAt(0);
       _historyIndex--;
     }
-  }
-
-  // Remove this method or make it redirect to the public version
-  void _saveToHistory() {
-    saveToHistory();
   }
 
   // Reset history
@@ -289,62 +284,17 @@ class LayoutEditorProvider with ChangeNotifier {
   // Modify select element to support multi-selection
   void selectElement(LayoutElement? element, {bool addToSelection = false}) {
     if (element == null) {
-      // Clear selection
       _selectedElement = null;
       _selectedElementIds.clear();
       notifyListeners();
       return;
     }
 
-    // // Check if the element is a child in a group before proceeding
-    // bool isGroupChild = false;
-    // String? parentGroupId;
-    // if (_layout != null) {
-    //   for (final layoutElement in _layout!.elements) {
-    //     if (layoutElement.type == 'group') {
-    //       final groupElement = layoutElement as GroupElement;
-    //       if (groupElement.childIds.contains(element.id)) {
-    //         isGroupChild = true;
-    //         parentGroupId = groupElement.id;
-    //         break;
-    //       }
-    //     }
-    //   }
-    // }
-
     if (addToSelection) {
       // Check if Shift key is being pressed for range selection
       final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
       if (isShiftPressed && _selectedElement != null && _layout != null) {
-        // Range selection - select all elements between the last selected element and the current one
-        final lastSelectedIndex = _layout!.elements.indexWhere(
-          (e) => e.id == _selectedElement!.id,
-        );
-        final currentIndex = _layout!.elements.indexWhere(
-          (e) => e.id == element.id,
-        );
-
-        if (lastSelectedIndex != -1 && currentIndex != -1) {
-          // Select all elements in the range
-          final startIndex = math.min(lastSelectedIndex, currentIndex);
-          final endIndex = math.max(lastSelectedIndex, currentIndex);
-
-          // Clear existing selection if not also pressing Ctrl
-          if (!HardwareKeyboard.instance.isControlPressed) {
-            _selectedElementIds.clear();
-          }
-
-          // Add all elements in the range to selection
-          for (int i = startIndex; i <= endIndex; i++) {
-            _selectedElementIds.add(_layout!.elements[i].id);
-          }
-
-          // Make the current element the primary selection
-          _selectedElement = element;
-        }
-      } else {
-        // Toggle selection for this element (Ctrl behavior)
         if (_selectedElementIds.contains(element.id)) {
           _selectedElementIds.remove(element.id);
           // If this was the primary selected element, update it
@@ -355,13 +305,15 @@ class LayoutEditorProvider with ChangeNotifier {
                     : null;
           }
         } else {
+          _selectedElement = element;
           _selectedElementIds.add(element.id);
-          // Update primary selected element if this is the first selection
-          _selectedElement ??= element;
         }
+      } else {
+        _selectedElement = element;
+        _selectedElementIds.clear();
+        _selectedElementIds.add(element.id);
       }
     } else {
-      // Standard single selection - clear all current selections first
       _selectedElement = element;
       _selectedElementIds.clear();
       _selectedElementIds.add(element.id);

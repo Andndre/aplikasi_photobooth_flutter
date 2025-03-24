@@ -54,7 +54,7 @@ abstract class LayoutElement {
 class ImageElement extends LayoutElement {
   String path;
   double opacity;
-  bool aspectRatioLocked; // Add this new property
+  bool aspectRatioLocked;
 
   ImageElement({
     required super.id,
@@ -64,8 +64,7 @@ class ImageElement extends LayoutElement {
     required super.height,
     required this.path,
     this.opacity = 1.0,
-    this.aspectRatioLocked =
-        true, // Default to true for preserving aspect ratio
+    this.aspectRatioLocked = true,
     super.rotation,
     super.isLocked,
     super.isVisible,
@@ -116,7 +115,7 @@ class TextElement extends LayoutElement {
   bool isBold;
   bool isItalic;
   String alignment;
-  bool isGoogleFont; // New property to track if this is a Google Font
+  bool isGoogleFont;
 
   TextElement({
     required super.id,
