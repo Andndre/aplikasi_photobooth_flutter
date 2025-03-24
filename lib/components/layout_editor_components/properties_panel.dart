@@ -9,10 +9,10 @@ import 'dart:io';
 import '../../models/layouts.dart';
 
 // Common widgets
-class _SectionHeader extends StatelessWidget {
+class SectionHeader extends StatelessWidget {
   final String title;
 
-  const _SectionHeader({required this.title});
+  const SectionHeader({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -33,12 +33,13 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _NumberPropertyRow extends StatelessWidget {
+class NumberPropertyRow extends StatelessWidget {
   final String label;
   final double value;
   final Function(double) onChanged;
 
-  const _NumberPropertyRow({
+  const NumberPropertyRow({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -49,7 +50,6 @@ class _NumberPropertyRow extends StatelessWidget {
     // Create a text controller with the current value
     final controller = TextEditingController(text: value.toStringAsFixed(1));
 
-    // Use StatefulBuilder to properly manage the dragging state
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -62,7 +62,7 @@ class _NumberPropertyRow extends StatelessWidget {
             child: StatefulBuilder(
               builder: (context, setState) {
                 // Create state variables outside the builder function as private properties
-                return _DraggableValueField(
+                return DraggableValueField(
                   controller: controller,
                   value: value,
                   label: label,
@@ -78,13 +78,14 @@ class _NumberPropertyRow extends StatelessWidget {
 }
 
 // Create a new StatefulWidget to properly track dragging state
-class _DraggableValueField extends StatefulWidget {
+class DraggableValueField extends StatefulWidget {
   final TextEditingController controller;
   final double value;
   final String label;
   final Function(double) onChanged;
 
-  const _DraggableValueField({
+  const DraggableValueField({
+    super.key,
     required this.controller,
     required this.value,
     required this.label,
@@ -92,10 +93,10 @@ class _DraggableValueField extends StatefulWidget {
   });
 
   @override
-  State<_DraggableValueField> createState() => _DraggableValueFieldState();
+  State<DraggableValueField> createState() => DraggableValueFieldState();
 }
 
-class _DraggableValueFieldState extends State<_DraggableValueField> {
+class DraggableValueFieldState extends State<DraggableValueField> {
   double startX = 0;
   double startValue = 0;
   bool isDragging = false;
@@ -227,12 +228,13 @@ class _DraggableValueFieldState extends State<_DraggableValueField> {
   }
 }
 
-class _SwitchPropertyRow extends StatelessWidget {
+class SwitchPropertyRow extends StatelessWidget {
   final String label;
   final bool value;
   final Function(bool) onChanged;
 
-  const _SwitchPropertyRow({
+  const SwitchPropertyRow({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -300,10 +302,10 @@ class PropertiesPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Common properties section
-                  const _SectionHeader(title: 'General'),
+                  const SectionHeader(title: 'General'),
 
                   // Position
-                  _NumberPropertyRow(
+                  NumberPropertyRow(
                     label: 'X',
                     value: element.x,
                     onChanged: (value) {
@@ -313,7 +315,7 @@ class PropertiesPanel extends StatelessWidget {
                       );
                     },
                   ),
-                  _NumberPropertyRow(
+                  NumberPropertyRow(
                     label: 'Y',
                     value: element.y,
                     onChanged: (value) {
@@ -325,7 +327,7 @@ class PropertiesPanel extends StatelessWidget {
                   ),
 
                   // Size
-                  _NumberPropertyRow(
+                  NumberPropertyRow(
                     label: 'Width',
                     value: element.width,
                     onChanged: (value) {
@@ -335,7 +337,7 @@ class PropertiesPanel extends StatelessWidget {
                       );
                     },
                   ),
-                  _NumberPropertyRow(
+                  NumberPropertyRow(
                     label: 'Height',
                     value: element.height,
                     onChanged: (value) {
@@ -347,7 +349,7 @@ class PropertiesPanel extends StatelessWidget {
                   ),
 
                   // Rotation
-                  _NumberPropertyRow(
+                  NumberPropertyRow(
                     label: 'Rotation',
                     value: element.rotation,
                     onChanged: (value) {
@@ -424,14 +426,14 @@ class PropertiesPanel extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // Visibility and Lock
-                  _SwitchPropertyRow(
+                  SwitchPropertyRow(
                     label: 'Visible',
                     value: element.isVisible,
                     onChanged: (value) {
                       editorProvider.toggleElementVisibility(element.id);
                     },
                   ),
-                  _SwitchPropertyRow(
+                  SwitchPropertyRow(
                     label: 'Locked',
                     value: element.isLocked,
                     onChanged: (value) {
@@ -467,7 +469,7 @@ class PropertiesPanel extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Element actions
-                  const _SectionHeader(title: 'Actions'),
+                  const SectionHeader(title: 'Actions'),
 
                   // Replace the grid layout with a column of buttons
                   Column(
@@ -542,7 +544,7 @@ class PropertiesPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: 'Image Properties'),
+        const SectionHeader(title: 'Image Properties'),
 
         // Image path
         Container(
@@ -599,7 +601,7 @@ class PropertiesPanel extends StatelessWidget {
         ),
 
         // Aspect Ratio Lock - NEW
-        _SwitchPropertyRow(
+        SwitchPropertyRow(
           label: 'Lock Ratio',
           value: element.aspectRatioLocked,
           onChanged: (value) {
@@ -710,7 +712,6 @@ class PropertiesPanel extends StatelessWidget {
     );
 
     // Keep the slider values in sync with the element properties
-    double fontSize = element.fontSize;
     Color textColor = _hexToColor(element.color);
     Color backgroundColor = _hexToColor(element.backgroundColor);
 
@@ -719,7 +720,7 @@ class PropertiesPanel extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionHeader(title: 'Text Properties'),
+            const SectionHeader(title: 'Text Properties'),
 
             // Text content with fixed text direction
             Container(
@@ -768,7 +769,7 @@ class PropertiesPanel extends StatelessWidget {
             ),
 
             // Font size - Replace Slider with NumberPropertyRow
-            _NumberPropertyRow(
+            NumberPropertyRow(
               label: 'Font Size',
               value: element.fontSize,
               onChanged: (value) {
@@ -1206,7 +1207,7 @@ class PropertiesPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: 'Camera Properties'),
+        const SectionHeader(title: 'Camera Properties'),
 
         // Camera label
         Container(
@@ -1290,7 +1291,7 @@ class PropertiesPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: 'Group Properties'),
+        const SectionHeader(title: 'Group Properties'),
 
         // Group name field
         Container(
@@ -1522,8 +1523,6 @@ class PropertiesPanel extends StatelessWidget {
   }
 }
 
-// Fix the CustomFontSelector class that has syntax errors
-
 class CustomFontSelector extends StatefulWidget {
   final String currentFont;
   final Function(String) onFontSelected;
@@ -1535,10 +1534,10 @@ class CustomFontSelector extends StatefulWidget {
   });
 
   @override
-  _CustomFontSelectorState createState() => _CustomFontSelectorState();
+  CustomFontSelectorState createState() => CustomFontSelectorState();
 }
 
-class _CustomFontSelectorState extends State<CustomFontSelector> {
+class CustomFontSelectorState extends State<CustomFontSelector> {
   // Replace the hardcoded fonts list with an empty list that will be populated
   List<String> systemFonts = [];
 
@@ -1738,11 +1737,6 @@ class _CustomFontSelectorState extends State<CustomFontSelector> {
   // Helper to check if a font is a Google Font
   bool _isGoogleFont(String fontName) {
     return googleFontsList.contains(fontName);
-  }
-
-  // Helper to check if a font is a System Font
-  bool _isSystemFont(String fontName) {
-    return systemFonts.contains(fontName);
   }
 
   // Helper to get appropriate TextStyle for font preview
