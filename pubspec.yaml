@@ -50,7 +50,6 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   vector_math: ^2.1.4
   screenshot: ^3.0.0
-  widgets_to_image: ^1.0.0
 
 dev_dependencies:
   flutter_test:
