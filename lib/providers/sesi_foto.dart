@@ -1,25 +1,174 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/foundation.dart';
+import 'package:aplikasi_photobooth_flutter/pages/start_event.dart';
+import 'dart:ui' as ui;
 
 class SesiFotoProvider with ChangeNotifier {
   final List<File> _takenPhotos = [];
   bool _isLoading = false;
   String _loadingMessage = '';
+  WindowInfo? _windowToCapture;
 
   List<File> get takenPhotos => _takenPhotos;
   bool get isLoading => _isLoading;
   String get loadingMessage => _loadingMessage;
+  WindowInfo? get windowToCapture => _windowToCapture;
 
   void _setLoading(bool isLoading, [String message = '']) {
     _isLoading = isLoading;
     _loadingMessage = message;
     notifyListeners();
+  }
+
+  void setWindowToCapture(WindowInfo? window) {
+    _windowToCapture = window;
+    notifyListeners();
+  }
+
+  // Simplified capture window function with better error handling
+  Future<Map<String, dynamic>?> captureWindowWithSize() async {
+    if (_windowToCapture == null) return null;
+
+    int hwnd = _windowToCapture!.hwnd;
+
+    // Check if window is still valid
+    if (IsWindow(hwnd) == 0) return null;
+
+    // Get window dimensions
+    final rect = calloc<RECT>();
+    if (GetWindowRect(hwnd, rect) == 0) {
+      calloc.free(rect);
+      return null;
+    }
+
+    int width = rect.ref.right - rect.ref.left;
+    int height = rect.ref.bottom - rect.ref.top;
+
+    // Check for valid dimensions
+    if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+      calloc.free(rect);
+      return null;
+    }
+
+    // Create DC for window and compatible DC for bitmap
+    final hdcWindow = GetDC(hwnd);
+    if (hdcWindow == 0) {
+      calloc.free(rect);
+      return null;
+    }
+
+    final hdcMemDC = CreateCompatibleDC(hdcWindow);
+    if (hdcMemDC == 0) {
+      ReleaseDC(hwnd, hdcWindow);
+      calloc.free(rect);
+      return null;
+    }
+
+    // Create compatible bitmap
+    final hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
+    if (hbmScreen == 0) {
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      calloc.free(rect);
+      return null;
+    }
+
+    final hbmOld = SelectObject(hdcMemDC, hbmScreen);
+
+    // Use BitBlt which is more stable for frequent captures
+    BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
+
+    // Create BITMAPINFOHEADER structure
+    final bi = calloc<BITMAPINFOHEADER>();
+    ZeroMemory(bi, sizeOf<BITMAPINFOHEADER>());
+    bi.ref.biSize = sizeOf<BITMAPINFOHEADER>();
+    bi.ref.biWidth = width;
+    bi.ref.biHeight = -height; // Negative for top-down DIB
+    bi.ref.biPlanes = 1;
+    bi.ref.biBitCount = 32;
+    bi.ref.biCompression = BI_RGB;
+
+    // Calculate the size of the DIB
+    final dwBmpSize = ((width * 32 + 31) ~/ 32) * 4 * height;
+
+    // Allocate memory for the bitmap bits
+    final lpbitmap = calloc<Uint8>(dwBmpSize);
+
+    // Get the bitmap bits
+    final dibResult = GetDIBits(
+      hdcMemDC,
+      hbmScreen,
+      0,
+      height,
+      lpbitmap,
+      bi.cast(),
+      DIB_RGB_COLORS,
+    );
+
+    if (dibResult == 0) {
+      // Clean up on failure
+      SelectObject(hdcMemDC, hbmOld);
+      DeleteObject(hbmScreen);
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      calloc.free(rect);
+      calloc.free(bi);
+      calloc.free(lpbitmap);
+      return null;
+    }
+
+    try {
+      // Convert bitmap data to Dart Uint8List
+      final bitmapBytes = Uint8List.fromList(lpbitmap.asTypedList(dwBmpSize));
+
+      // Clean up resources before image processing to reduce memory usage
+      SelectObject(hdcMemDC, hbmOld);
+      DeleteObject(hbmScreen);
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      calloc.free(rect);
+      calloc.free(bi);
+      calloc.free(lpbitmap);
+
+      // Use the img package for more stable image processing
+      final image = img.Image(width: width, height: height);
+
+      // Convert BGRA to RGBA while copying to image
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final i = (y * width + x) * 4;
+          final b = bitmapBytes[i];
+          final g = bitmapBytes[i + 1];
+          final r = bitmapBytes[i + 2];
+          final a = bitmapBytes[i + 3];
+
+          // Set pixel directly in the image
+          image.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+        }
+      }
+
+      // Encode to PNG format which is more compatible with Image.memory
+      final pngBytes = Uint8List.fromList(img.encodePng(image));
+
+      return {'bytes': pngBytes, 'width': width, 'height': height};
+    } catch (e) {
+      print('Error processing image: $e');
+      return null;
+    }
+  }
+
+  // Simplified captureWindow function
+  Future<Uint8List?> captureWindow() async {
+    final result = await captureWindowWithSize();
+    return result?['bytes'] as Uint8List?;
   }
 
   Future<void> takePhoto(

@@ -159,6 +159,14 @@ class _StartEventState extends State<StartEvent> {
   }
 }
 
+// Window information class - keep this for reference by other files
+class WindowInfo {
+  final int hwnd;
+  final String title;
+
+  WindowInfo({required this.hwnd, required this.title});
+}
+
 class ImagePreview extends StatefulWidget {
   final List<File> images;
   final int initialIndex;
