@@ -12,6 +12,14 @@ import 'package:path/path.dart' as path;
 import 'package:aplikasi_photobooth_flutter/pages/start_event.dart';
 import 'dart:ui' as ui;
 
+// Enum defining different window capture methods
+enum CaptureMethod {
+  bitBlt, // Standard BitBlt method
+  windowsGraphicsCapture, // Windows 10 Graphics Capture API
+  printWindow, // PrintWindow API
+  dxgi, // DXGI Desktop Duplication
+}
+
 class SesiFotoProvider with ChangeNotifier {
   final List<File> _takenPhotos = [];
   bool _isLoading = false;
@@ -33,6 +41,18 @@ class SesiFotoProvider with ChangeNotifier {
   bool _useCaching = true; // Uses frame caching to reduce processing
   bool _skipIdenticalFrames = true; // Skips processing identical frames
   Uint8List? _lastFrameData; // For frame comparison
+
+  // Add a field for the capture method
+  CaptureMethod _captureMethod = CaptureMethod.bitBlt;
+
+  // Getter for the current capture method
+  CaptureMethod get captureMethod => _captureMethod;
+
+  // Method to change the capture method
+  void setCaptureMethod(CaptureMethod method) {
+    _captureMethod = method;
+    notifyListeners();
+  }
 
   // Getters for performance stats
   double get currentFps => _currentFps;
@@ -76,257 +96,298 @@ class SesiFotoProvider with ChangeNotifier {
     }
 
     try {
-      int hwnd = _windowToCapture!.hwnd;
-
-      // Check if window is still valid
-      if (IsWindow(hwnd) == 0) {
-        print('Window handle is no longer valid');
-        return null;
+      switch (_captureMethod) {
+        case CaptureMethod.bitBlt:
+          return await _captureWithBitBlt();
+        case CaptureMethod.windowsGraphicsCapture:
+          return await _captureWithWindowsGraphicsCapture();
+        case CaptureMethod.printWindow:
+          return await _captureWithPrintWindow();
+        case CaptureMethod.dxgi:
+          return await _captureWithDXGI();
       }
-
-      // Get window dimensions
-      final rect = calloc<RECT>();
-      if (GetWindowRect(hwnd, rect) == 0) {
-        print('Failed to get window rect');
-        calloc.free(rect);
-        return null;
-      }
-
-      int width = rect.ref.right - rect.ref.left;
-      int height = rect.ref.bottom - rect.ref.top;
-      calloc.free(rect);
-
-      // Check for valid dimensions
-      if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
-        print('Invalid window dimensions: $width x $height');
-        return null;
-      }
-
-      // Create HDC for window
-      final hdcWindow = GetDC(hwnd);
-      if (hdcWindow == 0) {
-        print('Failed to get device context');
-        return null;
-      }
-
-      // Create compatible memory DC
-      final hdcMemDC = CreateCompatibleDC(hdcWindow);
-      if (hdcMemDC == 0) {
-        print('Failed to create compatible DC');
-        ReleaseDC(hwnd, hdcWindow);
-        return null;
-      }
-
-      // Create compatible bitmap
-      final hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
-      if (hbmScreen == 0) {
-        print('Failed to create compatible bitmap');
-        DeleteDC(hdcMemDC);
-        ReleaseDC(hwnd, hdcWindow);
-        return null;
-      }
-
-      // Select bitmap into memory DC
-      final hbmOld = SelectObject(hdcMemDC, hbmScreen);
-
-      // Try different capture methods until one works
-      bool captureSuccess = false;
-
-      // Option 1: Try BitBlt first (fastest, works for many windows)
-      int blResult = BitBlt(
-        hdcMemDC,
-        0,
-        0,
-        width,
-        height,
-        hdcWindow,
-        0,
-        0,
-        SRCCOPY,
-      );
-
-      if (blResult != 0) {
-        captureSuccess = true;
-        print('BitBlt capture succeeded');
+    } catch (e) {
+      print('Error in captureWindowWithSize: $e');
+      // Fall back to BitBlt if the selected method fails
+      if (_captureMethod != CaptureMethod.bitBlt) {
+        print('Falling back to BitBlt method');
+        try {
+          return await _captureWithBitBlt();
+        } catch (fallbackError) {
+          print('BitBlt fallback also failed: $fallbackError');
+          rethrow;
+        }
       } else {
-        print('BitBlt capture failed, trying PrintWindow');
+        rethrow;
       }
+    }
+  }
 
-      // Option 2: If BitBlt fails, try PrintWindow
-      if (!captureSuccess) {
-        int pwResult = PrintWindow(hwnd, hdcMemDC, 0);
-        if (pwResult != 0) {
-          captureSuccess = true;
-          print('PrintWindow capture succeeded');
-        } else {
-          print('PrintWindow capture failed, trying with PW_RENDERFULLCONTENT');
-        }
+  Future<Map<String, dynamic>?> _captureWithBitBlt() async {
+    int hwnd = _windowToCapture!.hwnd;
+
+    // Check if window is still valid
+    if (IsWindow(hwnd) == 0) {
+      print('Window handle is no longer valid');
+      return null;
+    }
+
+    // Get window dimensions
+    final rect = calloc<RECT>();
+    if (GetWindowRect(hwnd, rect) == 0) {
+      print('Failed to get window rect');
+      calloc.free(rect);
+      return null;
+    }
+
+    int width = rect.ref.right - rect.ref.left;
+    int height = rect.ref.bottom - rect.ref.top;
+    calloc.free(rect);
+
+    // Check for valid dimensions
+    if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+      print('Invalid window dimensions: $width x $height');
+      return null;
+    }
+
+    // Create HDC for window
+    final hdcWindow = GetDC(hwnd);
+    if (hdcWindow == 0) {
+      print('Failed to get device context');
+      return null;
+    }
+
+    // Create compatible memory DC
+    final hdcMemDC = CreateCompatibleDC(hdcWindow);
+    if (hdcMemDC == 0) {
+      print('Failed to create compatible DC');
+      ReleaseDC(hwnd, hdcWindow);
+      return null;
+    }
+
+    // Create compatible bitmap
+    final hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
+    if (hbmScreen == 0) {
+      print('Failed to create compatible bitmap');
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      return null;
+    }
+
+    // Select bitmap into memory DC
+    final hbmOld = SelectObject(hdcMemDC, hbmScreen);
+
+    // Try different capture methods until one works
+    bool captureSuccess = false;
+
+    // Option 1: Try BitBlt first (fastest, works for many windows)
+    int blResult = BitBlt(
+      hdcMemDC,
+      0,
+      0,
+      width,
+      height,
+      hdcWindow,
+      0,
+      0,
+      SRCCOPY,
+    );
+
+    if (blResult != 0) {
+      captureSuccess = true;
+      print('BitBlt capture succeeded');
+    } else {
+      print('BitBlt capture failed, trying PrintWindow');
+    }
+
+    // Option 2: If BitBlt fails, try PrintWindow
+    if (!captureSuccess) {
+      int pwResult = PrintWindow(hwnd, hdcMemDC, 0);
+      if (pwResult != 0) {
+        captureSuccess = true;
+        print('PrintWindow capture succeeded');
+      } else {
+        print('PrintWindow capture failed, trying with PW_RENDERFULLCONTENT');
       }
+    }
 
-      // Option 3: Try with full content rendering (for hardware accelerated windows)
-      if (!captureSuccess) {
-        int pwResult = PrintWindow(
-          hwnd,
-          hdcMemDC,
-          2,
-        ); // PW_RENDERFULLCONTENT = 2
-        if (pwResult != 0) {
-          captureSuccess = true;
-          print('PrintWindow with PW_RENDERFULLCONTENT succeeded');
-        } else {
-          print('All capture methods failed');
-        }
+    // Option 3: Try with full content rendering (for hardware accelerated windows)
+    if (!captureSuccess) {
+      int pwResult = PrintWindow(hwnd, hdcMemDC, 2); // PW_RENDERFULLCONTENT = 2
+      if (pwResult != 0) {
+        captureSuccess = true;
+        print('PrintWindow with PW_RENDERFULLCONTENT succeeded');
+      } else {
+        print('All capture methods failed');
       }
+    }
 
-      if (!captureSuccess) {
-        // Clean up resources
-        SelectObject(hdcMemDC, hbmOld);
-        DeleteObject(hbmScreen);
-        DeleteDC(hdcMemDC);
-        ReleaseDC(hwnd, hdcWindow);
-        print('Capture failed completely');
-        return null;
-      }
-
-      // Create a bitmap info structure for direct pixel access
-      final bmi = calloc<BITMAPINFO>();
-      bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
-      bmi.ref.bmiHeader.biWidth = width;
-      bmi.ref.bmiHeader.biHeight = -height; // Negative for top-down DIB
-      bmi.ref.bmiHeader.biPlanes = 1;
-      bmi.ref.bmiHeader.biBitCount = 32; // 32-bit BGRA
-      bmi.ref.bmiHeader.biCompression = BI_RGB;
-
-      // Create a buffer for the pixel data
-      final pixelDataSize = width * height * 4;
-      final pixelData = calloc<Uint8>(pixelDataSize);
-
-      // Get bitmap bits
-      final dibResult = GetDIBits(
-        hdcMemDC,
-        hbmScreen,
-        0,
-        height,
-        pixelData,
-        bmi,
-        DIB_RGB_COLORS,
-      );
-
-      if (dibResult == 0) {
-        // Clean up on failure
-        SelectObject(hdcMemDC, hbmOld);
-        DeleteObject(hbmScreen);
-        DeleteDC(hdcMemDC);
-        ReleaseDC(hwnd, hdcWindow);
-        calloc.free(bmi);
-        calloc.free(pixelData);
-        print('GetDIBits failed');
-        return null;
-      }
-
-      // Copy pixels to Dart Uint8List
-      final pixels = Uint8List(pixelDataSize);
-      for (int i = 0; i < pixelDataSize; i++) {
-        pixels[i] = pixelData[i];
-      }
-
-      // Update the timing
-      _lastCaptureTime = DateTime.now();
-
-      // Check if we should skip identical frames
-      if (_skipIdenticalFrames && _lastFrameData != null) {
-        bool identical = true;
-        // Check only a sample of pixels to improve performance
-        int sampleStep = max(1, (pixelDataSize ~/ 5000));
-        for (int i = 0; i < pixelDataSize; i += sampleStep) {
-          if (i < pixels.length &&
-              i < _lastFrameData!.length &&
-              pixels[i] != _lastFrameData![i]) {
-            identical = false;
-            break;
-          }
-        }
-
-        if (identical) {
-          // Clean up resources and return the last result
-          SelectObject(hdcMemDC, hbmOld);
-          DeleteObject(hbmScreen);
-          DeleteDC(hdcMemDC);
-          ReleaseDC(hwnd, hdcWindow);
-          calloc.free(bmi);
-          calloc.free(pixelData);
-
-          return _lastCaptureResult;
-        }
-      }
-
-      // Save this frame data for comparison
-      _lastFrameData = pixels;
-
+    if (!captureSuccess) {
       // Clean up resources
+      SelectObject(hdcMemDC, hbmOld);
+      DeleteObject(hbmScreen);
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      print('Capture failed completely');
+      return null;
+    }
+
+    // Create a bitmap info structure for direct pixel access
+    final bmi = calloc<BITMAPINFO>();
+    bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+    bmi.ref.bmiHeader.biWidth = width;
+    bmi.ref.bmiHeader.biHeight = -height; // Negative for top-down DIB
+    bmi.ref.bmiHeader.biPlanes = 1;
+    bmi.ref.bmiHeader.biBitCount = 32; // 32-bit BGRA
+    bmi.ref.bmiHeader.biCompression = BI_RGB;
+
+    // Create a buffer for the pixel data
+    final pixelDataSize = width * height * 4;
+    final pixelData = calloc<Uint8>(pixelDataSize);
+
+    // Get bitmap bits
+    final dibResult = GetDIBits(
+      hdcMemDC,
+      hbmScreen,
+      0,
+      height,
+      pixelData,
+      bmi,
+      DIB_RGB_COLORS,
+    );
+
+    if (dibResult == 0) {
+      // Clean up on failure
       SelectObject(hdcMemDC, hbmOld);
       DeleteObject(hbmScreen);
       DeleteDC(hdcMemDC);
       ReleaseDC(hwnd, hdcWindow);
       calloc.free(bmi);
       calloc.free(pixelData);
+      print('GetDIBits failed');
+      return null;
+    }
 
-      // For better performance in preview mode, use direct bitmap data
-      Map<String, dynamic> result;
-      if (_useDirectBitmap) {
-        // Convert BGRA to RGBA in-place
-        for (int i = 0; i < width * height; i++) {
-          final pixelOffset = i * 4;
-          // Swap B and R
-          final temp = pixels[pixelOffset];
-          pixels[pixelOffset] = pixels[pixelOffset + 2];
-          pixels[pixelOffset + 2] = temp;
-        }
+    // Copy pixels to Dart Uint8List
+    final pixels = Uint8List(pixelDataSize);
+    for (int i = 0; i < pixelDataSize; i++) {
+      pixels[i] = pixelData[i];
+    }
 
-        result = {
-          'bytes': pixels,
-          'width': width,
-          'height': height,
-          'isDirect': true, // Flag to indicate raw format
-        };
-      } else {
-        // Convert to PNG for more compatibility but slower performance
-        try {
-          // Create an image from BGRA pixels
-          final image = img.Image(width: width, height: height);
-          for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-              final i = (y * width + x) * 4;
-              final b = pixels[i];
-              final g = pixels[i + 1];
-              final r = pixels[i + 2];
-              final a = pixels[i + 3];
-              image.setPixel(x, y, img.ColorRgba8(r, g, b, a));
-            }
-          }
+    // Update the timing
+    _lastCaptureTime = DateTime.now();
 
-          // Encode to PNG - this is the slow part we're avoiding in preview mode
-          final pngBytes = Uint8List.fromList(img.encodePng(image));
-
-          result = {
-            'bytes': pngBytes,
-            'width': width,
-            'height': height,
-            'isDirect': false, // Flag to indicate PNG format
-          };
-        } catch (e) {
-          print('Error converting to PNG: $e');
-          return null;
+    // Check if we should skip identical frames
+    if (_skipIdenticalFrames && _lastFrameData != null) {
+      bool identical = true;
+      // Check only a sample of pixels to improve performance
+      int sampleStep = max(1, (pixelDataSize ~/ 5000));
+      for (int i = 0; i < pixelDataSize; i += sampleStep) {
+        if (i < pixels.length &&
+            i < _lastFrameData!.length &&
+            pixels[i] != _lastFrameData![i]) {
+          identical = false;
+          break;
         }
       }
 
-      // Save result for caching
-      _lastCaptureResult = result;
-      return result;
-    } catch (e) {
-      print('Error in captureWindowWithSize: $e');
-      return null;
+      if (identical) {
+        // Clean up resources and return the last result
+        SelectObject(hdcMemDC, hbmOld);
+        DeleteObject(hbmScreen);
+        DeleteDC(hdcMemDC);
+        ReleaseDC(hwnd, hdcWindow);
+        calloc.free(bmi);
+        calloc.free(pixelData);
+
+        return _lastCaptureResult;
+      }
     }
+
+    // Save this frame data for comparison
+    _lastFrameData = pixels;
+
+    // Clean up resources
+    SelectObject(hdcMemDC, hbmOld);
+    DeleteObject(hbmScreen);
+    DeleteDC(hdcMemDC);
+    ReleaseDC(hwnd, hdcWindow);
+    calloc.free(bmi);
+    calloc.free(pixelData);
+
+    // For better performance in preview mode, use direct bitmap data
+    Map<String, dynamic> result;
+    if (_useDirectBitmap) {
+      // Convert BGRA to RGBA in-place
+      for (int i = 0; i < width * height; i++) {
+        final pixelOffset = i * 4;
+        // Swap B and R
+        final temp = pixels[pixelOffset];
+        pixels[pixelOffset] = pixels[pixelOffset + 2];
+        pixels[pixelOffset + 2] = temp;
+      }
+
+      result = {
+        'bytes': pixels,
+        'width': width,
+        'height': height,
+        'isDirect': true, // Flag to indicate raw format
+      };
+    } else {
+      // Convert to PNG for more compatibility but slower performance
+      try {
+        // Create an image from BGRA pixels
+        final image = img.Image(width: width, height: height);
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            final i = (y * width + x) * 4;
+            final b = pixels[i];
+            final g = pixels[i + 1];
+            final r = pixels[i + 2];
+            final a = pixels[i + 3];
+            image.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+          }
+        }
+
+        // Encode to PNG - this is the slow part we're avoiding in preview mode
+        final pngBytes = Uint8List.fromList(img.encodePng(image));
+
+        result = {
+          'bytes': pngBytes,
+          'width': width,
+          'height': height,
+          'isDirect': false, // Flag to indicate PNG format
+        };
+      } catch (e) {
+        print('Error converting to PNG: $e');
+        return null;
+      }
+    }
+
+    // Save result for caching
+    _lastCaptureResult = result;
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> _captureWithWindowsGraphicsCapture() async {
+    // Windows Graphics Capture implementation
+    // If not yet implemented, temporarily fall back to BitBlt
+    print('Windows Graphics Capture not yet implemented, using BitBlt');
+    return await _captureWithBitBlt();
+  }
+
+  Future<Map<String, dynamic>?> _captureWithPrintWindow() async {
+    // Your implementation for PrintWindow API
+    // If not yet implemented, temporarily fall back to BitBlt
+    print('PrintWindow not yet implemented, using BitBlt');
+    return await _captureWithBitBlt();
+  }
+
+  Future<Map<String, dynamic>?> _captureWithDXGI() async {
+    // DXGI Desktop Duplication implementation
+    // If not yet implemented, temporarily fall back to BitBlt
+    print('DXGI not yet implemented, using BitBlt');
+    return await _captureWithBitBlt();
   }
 
   // Modified captureWindow function for saving high-quality images

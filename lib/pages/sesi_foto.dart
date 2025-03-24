@@ -88,30 +88,42 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
         final height = captureResult['height'] as int;
         final isDirect = captureResult['isDirect'] as bool;
 
-        setState(() {
-          _currentWindowCapture = capturedImageBytes;
-          _captureWidth = width;
-          _captureHeight = height;
-          _isDirect = isDirect;
-          _displayCaptureError = false;
-          _errorCount = 0;
-        });
+        // Debug print to check raw image data
+        print(
+          'Captured image bytes length: ${capturedImageBytes.length}, expected: ${width * height * 4}',
+        );
+        print('Captured dimensions: $width x $height, isDirect: $isDirect');
 
-        // Calculate and update FPS
-        _framesReceived++;
-        final now = DateTime.now();
-        final elapsed = now.difference(_lastFrameTime).inMilliseconds;
-        if (elapsed > 1000) {
-          // Update FPS every second
+        if (capturedImageBytes.isNotEmpty) {
           setState(() {
-            _currentFps = (_framesReceived * 1000) / elapsed;
-            _framesReceived = 0;
-            _lastFrameTime = now;
+            _currentWindowCapture = capturedImageBytes;
+            _captureWidth = width;
+            _captureHeight = height;
+            _isDirect = isDirect;
+            _displayCaptureError = false;
+            _errorCount = 0;
           });
+
+          // Calculate and update FPS
+          _framesReceived++;
+          final now = DateTime.now();
+          final elapsed = now.difference(_lastFrameTime).inMilliseconds;
+          if (elapsed > 1000) {
+            // Update FPS every second
+            setState(() {
+              _currentFps = (_framesReceived * 1000) / elapsed;
+              _framesReceived = 0;
+              _lastFrameTime = now;
+            });
+          }
+        } else {
+          print('Warning: Empty image data received');
+          _errorCount++;
         }
       }
     } catch (e) {
       _errorCount++;
+      print('Error capturing window: $e');
 
       // Only show error state after several consecutive errors
       if (_errorCount >= _maxConsecutiveErrors && mounted) {
@@ -119,8 +131,6 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
           _displayCaptureError = true;
         });
       }
-
-      print('Error capturing window: $e');
     } finally {
       _isCapturing = false;
     }
@@ -302,6 +312,7 @@ class RawImageDisplay extends StatefulWidget {
 class RawImageDisplayState extends State<RawImageDisplay> {
   ui.Image? _image;
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -323,32 +334,72 @@ class RawImageDisplayState extends State<RawImageDisplay> {
   Future<void> _convertToImage() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
+      // Validate the image data first
+      if (widget.imageBytes.length < widget.width * widget.height * 4) {
+        throw Exception(
+          'Invalid image data: bytes length (${widget.imageBytes.length}) '
+          'is less than expected (${widget.width * widget.height * 4})',
+        );
+      }
+
       // More efficient way to create an image from raw RGBA data
       final completer = Completer<ui.Image>();
-      ui.decodeImageFromPixels(
-        widget.imageBytes,
-        widget.width,
-        widget.height,
-        ui.PixelFormat.rgba8888,
-        completer.complete,
+
+      // Debug information
+      print(
+        'Converting raw image: ${widget.width}x${widget.height}, bytes: ${widget.imageBytes.length}',
       );
 
-      final image = await completer.future;
+      // Use a try-catch block specifically for the decodeImageFromPixels call
+      try {
+        ui.decodeImageFromPixels(
+          widget.imageBytes,
+          widget.width,
+          widget.height,
+          ui.PixelFormat.rgba8888,
+          completer.complete,
+          rowBytes:
+              widget.width *
+              4, // Explicitly set rowBytes to ensure correct stride
+        );
 
-      if (mounted) {
-        setState(() {
-          _image = image;
-          _isLoading = false;
-        });
+        final image = await completer.future;
+
+        if (mounted) {
+          setState(() {
+            _image = image;
+            _isLoading = false;
+          });
+        }
+      } catch (decodeError) {
+        print('Error in decodeImageFromPixels: $decodeError');
+
+        // Try alternative approach with createImageFromBytes
+        try {
+          final codec = await ui.instantiateImageCodec(widget.imageBytes);
+          final frame = await codec.getNextFrame();
+
+          if (mounted) {
+            setState(() {
+              _image = frame.image;
+              _isLoading = false;
+            });
+          }
+        } catch (codecError) {
+          print('Error with codec approach: $codecError');
+          rethrow;
+        }
       }
     } catch (e) {
       print('Error converting raw image: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _errorMessage = e.toString();
         });
       }
     }
@@ -356,8 +407,33 @@ class RawImageDisplayState extends State<RawImageDisplay> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _image == null) {
+    if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 32, color: Colors.red.shade400),
+            const SizedBox(height: 8),
+            Text('Image error', style: TextStyle(color: Colors.red.shade400)),
+            const SizedBox(height: 4),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(fontSize: 12),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_image == null) {
+      return const Center(child: Text('Failed to create image from raw data'));
     }
 
     return CustomPaint(
@@ -531,6 +607,7 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
   Widget build(BuildContext context) {
     // Get current selected window
     final currentWindow = widget.provider.windowToCapture;
+    final captureMethod = widget.provider.captureMethod;
 
     return Container(
       decoration: BoxDecoration(
@@ -538,57 +615,117 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const Text(
-            'Capture Window:',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 8),
-          _isLoading
-              ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Capture Window:',
+                style: TextStyle(
                   color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
-              )
-              : DropdownButton<int>(
-                // Change the type parameter to int
-                value: currentWindow?.hwnd, // Use hwnd as the value
-                onChanged: (int? newValue) {
-                  if (newValue != null) {
-                    if (newValue == 0) {
-                      // User selected "None"
-                      widget.provider.setWindowToCapture(null);
-                    } else {
-                      // Find the window with matching hwnd
-                      final selectedWindow = _availableWindows.firstWhere(
-                        (window) => window.hwnd == newValue,
-                        orElse: () => _availableWindows.first,
-                      );
-                      widget.provider.setWindowToCapture(selectedWindow);
-                    }
+              ),
+              const SizedBox(width: 8),
+              _isLoading
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                  : DropdownButton<int>(
+                    value: currentWindow?.hwnd,
+                    onChanged: (int? newValue) {
+                      if (newValue != null) {
+                        if (newValue == 0) {
+                          // User selected "None"
+                          widget.provider.setWindowToCapture(null);
+                        } else {
+                          // Find the window with matching hwnd
+                          final selectedWindow = _availableWindows.firstWhere(
+                            (window) => window.hwnd == newValue,
+                            orElse: () => _availableWindows.first,
+                          );
+                          widget.provider.setWindowToCapture(selectedWindow);
+                        }
+                      }
+                    },
+                    items:
+                        _availableWindows.map<DropdownMenuItem<int>>((
+                          WindowInfo window,
+                        ) {
+                          return DropdownMenuItem<int>(
+                            value: window.hwnd,
+                            child: SizedBox(
+                              width: 150,
+                              child: Text(
+                                window.title,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                    icon: const Icon(
+                      Icons.arrow_drop_down,
+                      color: Colors.white,
+                    ),
+                    underline: Container(height: 0),
+                    dropdownColor: Colors.grey[800],
+                    style: const TextStyle(color: Colors.white),
+                    hint: const Text(
+                      "Select a window",
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.white, size: 16),
+                onPressed: _loadAvailableWindows,
+                tooltip: 'Refresh window list',
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                padding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+
+          // Add capture method dropdown
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Capture Method:',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<CaptureMethod>(
+                value: captureMethod,
+                onChanged: (CaptureMethod? newMethod) {
+                  if (newMethod != null) {
+                    widget.provider.setCaptureMethod(newMethod);
                   }
                 },
                 items:
-                    _availableWindows.map<DropdownMenuItem<int>>((
-                      WindowInfo window,
+                    CaptureMethod.values.map<DropdownMenuItem<CaptureMethod>>((
+                      CaptureMethod method,
                     ) {
-                      // Each DropdownMenuItem uses hwnd (int) as its value
-                      return DropdownMenuItem<int>(
-                        value: window.hwnd,
+                      return DropdownMenuItem<CaptureMethod>(
+                        value: method,
                         child: SizedBox(
-                          width:
-                              150, // Constrain width to avoid excessive dropdown size
+                          width: 150,
                           child: Text(
-                            window.title,
+                            _getCaptureMethodName(method),
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 12),
                           ),
@@ -599,21 +736,95 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                 underline: Container(height: 0),
                 dropdownColor: Colors.grey[800],
                 style: const TextStyle(color: Colors.white),
-                // Handle empty state
-                hint: const Text(
-                  "Select a window",
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
               ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 16),
-            onPressed: _loadAvailableWindows,
-            tooltip: 'Refresh window list',
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            padding: EdgeInsets.zero,
+              IconButton(
+                icon: const Icon(
+                  Icons.help_outline,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                onPressed: () => _showCaptureMethodHelp(context),
+                tooltip: 'Capture method info',
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                padding: EdgeInsets.zero,
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  // Helper method to get the name of the capture method
+  String _getCaptureMethodName(CaptureMethod method) {
+    switch (method) {
+      case CaptureMethod.bitBlt:
+        return 'BitBlt (Default)';
+      case CaptureMethod.windowsGraphicsCapture:
+        return 'Windows Graphics Capture';
+      case CaptureMethod.printWindow:
+        return 'PrintWindow';
+      case CaptureMethod.dxgi:
+        return 'DXGI Desktop Duplication';
+    }
+  }
+
+  // Show a help dialog explaining the different capture methods
+  void _showCaptureMethodHelp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Capture Methods'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCaptureMethodInfo(
+                'BitBlt (Default)',
+                'Standard window capture. Works with most applications.',
+              ),
+              const SizedBox(height: 8),
+              _buildCaptureMethodInfo(
+                'Windows Graphics Capture',
+                'Better for UWP apps and games. Requires Windows 10.',
+              ),
+              const SizedBox(height: 8),
+              _buildCaptureMethodInfo(
+                'PrintWindow',
+                'Alternative method that can capture some windows that BitBlt cannot.',
+              ),
+              const SizedBox(height: 8),
+              _buildCaptureMethodInfo(
+                'DXGI Desktop Duplication',
+                'Best for games and hardware-accelerated content. Higher performance.',
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'If a window is only partially captured, try a different method.',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Helper method to build each capture method info item
+  Widget _buildCaptureMethodInfo(String title, String description) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(description, style: const TextStyle(fontSize: 12)),
+      ],
     );
   }
 }
