@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:ffi';
+import 'dart:ffi' hide Size; // Add 'hide Size' to prevent ambiguity
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:aplikasi_photobooth_flutter/pages/start_event.dart';
 import 'package:ffi/ffi.dart';
@@ -29,13 +31,18 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
   Timer? _captureTimer;
   int _captureWidth = 0;
   int _captureHeight = 0;
+  int _framesReceived = 0;
+  DateTime _lastFrameTime = DateTime.now();
+  double _currentFps = 0;
+  int _errorCount = 0;
+  final _maxConsecutiveErrors = 5;
+  bool _displayCaptureError = false;
+  bool _isDirect = false; // Track if we're using direct bitmap data
 
   @override
   void initState() {
     super.initState();
-    // Capture once immediately to get initial size
     _captureWindowForPreview().then((_) {
-      // Start periodic capture after we have the initial size
       _startPeriodicCapture();
     });
   }
@@ -48,9 +55,10 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
 
   // Start capturing the window periodically for preview
   void _startPeriodicCapture() {
-    // Use a longer interval to reduce flickering (250ms = 4fps)
     _captureTimer?.cancel();
-    _captureTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+
+    // Set timer to ~33ms for approximately 30fps
+    _captureTimer = Timer.periodic(const Duration(milliseconds: 15), (_) {
       if (!_isCapturing) {
         _captureWindowForPreview();
       }
@@ -62,7 +70,13 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
     if (_isCapturing) return; // Prevent multiple simultaneous captures
 
     final provider = widget.provider;
-    if (provider.windowToCapture == null) return;
+    if (provider.windowToCapture == null) {
+      setState(() {
+        _displayCaptureError = false;
+        _errorCount = 0;
+      });
+      return;
+    }
 
     _isCapturing = true;
 
@@ -72,15 +86,40 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
         final capturedImageBytes = captureResult['bytes'] as Uint8List;
         final width = captureResult['width'] as int;
         final height = captureResult['height'] as int;
+        final isDirect = captureResult['isDirect'] as bool;
 
-        if (!mounted) return;
         setState(() {
           _currentWindowCapture = capturedImageBytes;
           _captureWidth = width;
           _captureHeight = height;
+          _isDirect = isDirect;
+          _displayCaptureError = false;
+          _errorCount = 0;
         });
+
+        // Calculate and update FPS
+        _framesReceived++;
+        final now = DateTime.now();
+        final elapsed = now.difference(_lastFrameTime).inMilliseconds;
+        if (elapsed > 1000) {
+          // Update FPS every second
+          setState(() {
+            _currentFps = (_framesReceived * 1000) / elapsed;
+            _framesReceived = 0;
+            _lastFrameTime = now;
+          });
+        }
       }
     } catch (e) {
+      _errorCount++;
+
+      // Only show error state after several consecutive errors
+      if (_errorCount >= _maxConsecutiveErrors && mounted) {
+        setState(() {
+          _displayCaptureError = true;
+        });
+      }
+
       print('Error capturing window: $e');
     } finally {
       _isCapturing = false;
@@ -89,6 +128,9 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
 
   @override
   Widget build(BuildContext context) {
+    // Get provider FPS for display
+    final providerFps = widget.provider.currentFps;
+
     return RepaintBoundary(
       child: Container(
         margin: const EdgeInsets.all(16.0),
@@ -98,31 +140,88 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
         ),
         child: Stack(
           children: [
-            // Capture display
-            _currentWindowCapture != null
-                ? Center(
-                  child: Image.memory(
-                    _currentWindowCapture!,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                  ),
-                )
-                : const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'No window capture available',
-                        style: TextStyle(fontSize: 18),
+            // If we have a capture, display it
+            if (_currentWindowCapture != null && !_displayCaptureError)
+              Center(
+                child:
+                    _isDirect
+                        ? RawImageDisplay(
+                          imageBytes: _currentWindowCapture!,
+                          width: _captureWidth,
+                          height: _captureHeight,
+                        )
+                        : Image.memory(
+                          _currentWindowCapture!,
+                          fit: BoxFit.contain,
+                          gaplessPlayback: true,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error displaying image: $error');
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 48,
+                                    color: Colors.red.shade400,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'Error displaying capture',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Try Again'),
+                                    onPressed: () {
+                                      setState(() {
+                                        _displayCaptureError = false;
+                                        _errorCount = 0;
+                                        _currentWindowCapture = null;
+                                      });
+                                      _captureWindowForPreview();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+              ),
+
+            // Show "no capture" or error message
+            if (_currentWindowCapture == null || _displayCaptureError)
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _displayCaptureError
+                          ? Icons.error_outline
+                          : Icons.photo_camera,
+                      size: 48,
+                      color:
+                          _displayCaptureError
+                              ? Colors.red.shade400
+                              : Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _displayCaptureError
+                          ? 'Error capturing window'
+                          : widget.provider.windowToCapture == null
+                          ? 'No window selected'
+                          : 'Preparing window capture...',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color:
+                            _displayCaptureError ? Colors.red.shade400 : null,
                       ),
-                      SizedBox(height: 10),
-                      Text(
-                        'Press Enter to Take Photo',
-                        style: TextStyle(fontSize: 24),
-                      ),
-                    ],
-                  ),
+                    ),
+                    // ...existing code...
+                  ],
                 ),
+              ),
 
             // Window selection dropdown positioned at the top right
             Positioned(
@@ -130,10 +229,181 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
               right: 8,
               child: WindowSelectionDropdown(provider: widget.provider),
             ),
+
+            // "Press Enter" text at the bottom
+            if (_currentWindowCapture != null && !_displayCaptureError)
+              const Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Text(
+                    'Press Enter to Take Photo',
+                    style: TextStyle(
+                      fontSize: 24,
+                      color: Colors.white,
+                      backgroundColor: Colors.black54,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+
+            // FPS counter - small and unobtrusive in top left
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'UI: ${_currentFps.toStringAsFixed(1)} / Capture: ${providerFps.toStringAsFixed(1)} FPS',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+}
+
+// New widget to efficiently display raw image data without PNG conversion
+class RawImageDisplay extends StatefulWidget {
+  final Uint8List imageBytes;
+  final int width;
+  final int height;
+
+  const RawImageDisplay({
+    Key? key,
+    required this.imageBytes,
+    required this.width,
+    required this.height,
+  }) : super(key: key);
+
+  @override
+  RawImageDisplayState createState() => RawImageDisplayState();
+}
+
+class RawImageDisplayState extends State<RawImageDisplay> {
+  ui.Image? _image;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _convertToImage();
+  }
+
+  @override
+  void didUpdateWidget(RawImageDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only recreate the image if size changed or image data changed
+    if (oldWidget.width != widget.width ||
+        oldWidget.height != widget.height ||
+        oldWidget.imageBytes != widget.imageBytes) {
+      _convertToImage();
+    }
+  }
+
+  Future<void> _convertToImage() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // More efficient way to create an image from raw RGBA data
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        widget.imageBytes,
+        widget.width,
+        widget.height,
+        ui.PixelFormat.rgba8888,
+        completer.complete,
+      );
+
+      final image = await completer.future;
+
+      if (mounted) {
+        setState(() {
+          _image = image;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error converting raw image: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading || _image == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return CustomPaint(
+      painter: RawImagePainter(image: _image!),
+      size: Size(widget.width.toDouble(), widget.height.toDouble()),
+    );
+  }
+}
+
+// Custom painter to efficiently render the ui.Image
+class RawImagePainter extends CustomPainter {
+  final ui.Image image;
+
+  RawImagePainter({required this.image});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Calculate scale to fit the image within the available space
+    final double scaleX = size.width / image.width;
+    final double scaleY = size.height / image.height;
+    final double scale = scaleX < scaleY ? scaleX : scaleY;
+
+    // Calculate centered position
+    final double left = (size.width - (image.width * scale)) / 2;
+    final double top = (size.height - (image.height * scale)) / 2;
+
+    // Create a rect for the image
+    final Rect rect = Rect.fromLTWH(
+      left,
+      top,
+      image.width * scale,
+      image.height * scale,
+    );
+
+    // Draw the image
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      rect,
+      Paint(),
+    );
+  }
+
+  @override
+  bool shouldRepaint(RawImagePainter oldDelegate) {
+    return oldDelegate.image != image;
   }
 }
 
@@ -159,21 +429,37 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
 
   // Function to load all available windows
   void _loadAvailableWindows() async {
+    if (_isLoading) return; // Prevent multiple simultaneous calls
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       final windows = _getWindowsList();
-      setState(() {
-        _availableWindows = windows;
-        _isLoading = false;
-      });
+
+      // Add a slight delay to ensure UI updates properly
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (mounted) {
+        setState(() {
+          _availableWindows = windows;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       print('Error loading windows: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          // Ensure we have at least one window available
+          if (_availableWindows.isEmpty) {
+            _availableWindows = [
+              WindowInfo(hwnd: 0, title: 'No windows found'),
+            ];
+          }
+        });
+      }
     }
   }
 
@@ -181,19 +467,30 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
   List<WindowInfo> _getWindowsList() {
     final windows = <WindowInfo>[];
 
-    // Define the callback function
-    final enumWindowsProc = Pointer.fromFunction<EnumWindowsProc>(
-      _enumWindowsCallback,
-      0, // Returning 0 means stop enumeration, 1 means continue
-    );
+    try {
+      // Define the callback function
+      final enumWindowsProc = Pointer.fromFunction<EnumWindowsProc>(
+        _enumWindowsCallback,
+        0, // Returning 0 means stop enumeration, 1 means continue
+      );
 
-    // Store the windows list in a global variable to access from the callback
-    _tempWindowsList = windows;
+      // Store the windows list in a global variable to access from the callback
+      _tempWindowsList = windows;
 
-    // Call the Win32 EnumWindows function
-    EnumWindows(enumWindowsProc, 0);
+      // Call the Win32 EnumWindows function
+      final result = EnumWindows(enumWindowsProc, 0);
+      if (result == 0) {
+        print('EnumWindows failed');
+      }
 
-    return windows;
+      // Add a special entry for "None" so user can deselect
+      windows.insert(0, WindowInfo(hwnd: 0, title: 'Select a window...'));
+
+      return windows;
+    } catch (e) {
+      print('Error in _getWindowsList: $e');
+      return [WindowInfo(hwnd: 0, title: 'Error loading windows')];
+    }
   }
 
   // Temporary storage for the windows list during enumeration
@@ -201,16 +498,32 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
 
   // Callback function for EnumWindows
   static int _enumWindowsCallback(int hwnd, int lParam) {
-    if (IsWindowVisible(hwnd) != 0) {
-      final buffer = calloc<Uint16>(1024).cast<Utf16>();
-      GetWindowText(hwnd, buffer, 1024);
-      final title = buffer.toDartString();
-      calloc.free(buffer);
+    try {
+      if (IsWindowVisible(hwnd) != 0) {
+        final buffer = calloc<Uint16>(1024).cast<Utf16>();
+        final titleLength = GetWindowText(hwnd, buffer, 1024);
 
-      if (title.isNotEmpty) {
-        _tempWindowsList?.add(WindowInfo(hwnd: hwnd, title: title));
+        if (titleLength > 0) {
+          final title = buffer.toDartString();
+
+          // Filter out empty titles and system windows
+          if (title.isNotEmpty &&
+              !title.contains('Default IME') &&
+              !title.contains('MSCTFIME UI') &&
+              !title.contains('Windows Input Experience')) {
+            // Filter out this application's own window to prevent capturing itself
+            if (!title.toLowerCase().contains('aplikasi_photobooth_flutter')) {
+              _tempWindowsList?.add(WindowInfo(hwnd: hwnd, title: title));
+            }
+          }
+        }
+
+        calloc.free(buffer);
       }
+    } catch (e) {
+      print('Error in _enumWindowsCallback: $e');
     }
+
     return TRUE; // Continue enumeration
   }
 
@@ -251,12 +564,17 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                 value: currentWindow?.hwnd, // Use hwnd as the value
                 onChanged: (int? newValue) {
                   if (newValue != null) {
-                    // Find the window with matching hwnd
-                    final selectedWindow = _availableWindows.firstWhere(
-                      (window) => window.hwnd == newValue,
-                      orElse: () => _availableWindows.first,
-                    );
-                    widget.provider.setWindowToCapture(selectedWindow);
+                    if (newValue == 0) {
+                      // User selected "None"
+                      widget.provider.setWindowToCapture(null);
+                    } else {
+                      // Find the window with matching hwnd
+                      final selectedWindow = _availableWindows.firstWhere(
+                        (window) => window.hwnd == newValue,
+                        orElse: () => _availableWindows.first,
+                      );
+                      widget.provider.setWindowToCapture(selectedWindow);
+                    }
                   }
                 },
                 items:
@@ -428,22 +746,44 @@ class SesiFotoState extends State<SesiFoto> {
                                         itemCount:
                                             sesiFotoProvider.takenPhotos.length,
                                         itemBuilder: (context, index) {
-                                          return Container(
-                                            decoration: BoxDecoration(
-                                              border: Border.all(
-                                                color: Colors.grey.shade300,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(7),
-                                              child: Image.file(
-                                                sesiFotoProvider
-                                                    .takenPhotos[index],
-                                                fit: BoxFit.cover,
-                                              ),
+                                          final photo =
+                                              sesiFotoProvider
+                                                  .takenPhotos[index];
+                                          return Card(
+                                            clipBehavior: Clip.antiAlias,
+                                            elevation: 3.0,
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                Image.file(
+                                                  photo,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                                Positioned(
+                                                  top: 4,
+                                                  right: 4,
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.6),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      '${index + 1}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           );
                                         },
