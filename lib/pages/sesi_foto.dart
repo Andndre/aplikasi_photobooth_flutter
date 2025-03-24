@@ -150,56 +150,32 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
         ),
         child: Stack(
           children: [
-            // If we have a capture, display it
-            if (_currentWindowCapture != null && !_displayCaptureError)
-              Center(
+            // If we have a capture, display it - always show the image container to avoid flicker
+            Container(
+              color: Colors.black, // Stable background color
+              child: Center(
                 child:
-                    _isDirect
-                        ? RawImageDisplay(
-                          imageBytes: _currentWindowCapture!,
-                          width: _captureWidth,
-                          height: _captureHeight,
-                        )
-                        : Image.memory(
-                          _currentWindowCapture!,
-                          fit: BoxFit.contain,
-                          gaplessPlayback: true,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('Error displaying image: $error');
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 48,
-                                    color: Colors.red.shade400,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Error displaying capture',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
-                                  TextButton.icon(
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Try Again'),
-                                    onPressed: () {
-                                      setState(() {
-                                        _displayCaptureError = false;
-                                        _errorCount = 0;
-                                        _currentWindowCapture = null;
-                                      });
-                                      _captureWindowForPreview();
-                                    },
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                    _currentWindowCapture != null && !_displayCaptureError
+                        ? _isDirect
+                            ? RawImageDisplay(
+                              imageBytes: _currentWindowCapture!,
+                              width: _captureWidth,
+                              height: _captureHeight,
+                            )
+                            : Image.memory(
+                              _currentWindowCapture!,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                              errorBuilder: (context, error, stackTrace) {
+                                print('Error displaying image: $error');
+                                return const SizedBox(); // Empty widget on error
+                              },
+                            )
+                        : const SizedBox(), // Empty widget instead of loading spinner
               ),
+            ),
 
-            // Show "no capture" or error message
+            // Show "no capture" or error message only when needed
             if (_currentWindowCapture == null || _displayCaptureError)
               Center(
                 child: Column(
@@ -299,11 +275,11 @@ class RawImageDisplay extends StatefulWidget {
   final int height;
 
   const RawImageDisplay({
-    Key? key,
+    super.key,
     required this.imageBytes,
     required this.width,
     required this.height,
-  }) : super(key: key);
+  });
 
   @override
   RawImageDisplayState createState() => RawImageDisplayState();
@@ -311,7 +287,8 @@ class RawImageDisplay extends StatefulWidget {
 
 class RawImageDisplayState extends State<RawImageDisplay> {
   ui.Image? _image;
-  bool _isLoading = true;
+  ui.Image? _previousImage; // Keep the previous image to prevent flickering
+  bool _isConverting = false;
   String? _errorMessage;
 
   @override
@@ -332,10 +309,11 @@ class RawImageDisplayState extends State<RawImageDisplay> {
   }
 
   Future<void> _convertToImage() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // Skip if we're already converting to prevent race conditions
+    if (_isConverting) return;
+
+    _isConverting = true;
+    String? conversionError;
 
     try {
       // Validate the image data first
@@ -346,100 +324,101 @@ class RawImageDisplayState extends State<RawImageDisplay> {
         );
       }
 
-      // More efficient way to create an image from raw RGBA data
-      final completer = Completer<ui.Image>();
-
       // Debug information
-      print(
-        'Converting raw image: ${widget.width}x${widget.height}, bytes: ${widget.imageBytes.length}',
-      );
+      // print('Converting raw image: ${widget.width}x${widget.height}, bytes: ${widget.imageBytes.length}');
 
       // Use a try-catch block specifically for the decodeImageFromPixels call
       try {
+        // Create the image without using setState during conversion
+        final completer = Completer<ui.Image>();
         ui.decodeImageFromPixels(
           widget.imageBytes,
           widget.width,
           widget.height,
           ui.PixelFormat.rgba8888,
           completer.complete,
-          rowBytes:
-              widget.width *
-              4, // Explicitly set rowBytes to ensure correct stride
+          rowBytes: widget.width * 4,
         );
 
         final image = await completer.future;
 
+        // Only update UI if the widget is still mounted
         if (mounted) {
           setState(() {
+            // Save the previous image before replacing it
+            _previousImage = _image;
             _image = image;
-            _isLoading = false;
+            _errorMessage = null;
           });
         }
       } catch (decodeError) {
         print('Error in decodeImageFromPixels: $decodeError');
 
-        // Try alternative approach with createImageFromBytes
+        // Try alternative approach with ImageCodec
         try {
           final codec = await ui.instantiateImageCodec(widget.imageBytes);
           final frame = await codec.getNextFrame();
 
           if (mounted) {
             setState(() {
+              _previousImage = _image;
               _image = frame.image;
-              _isLoading = false;
+              _errorMessage = null;
             });
           }
         } catch (codecError) {
           print('Error with codec approach: $codecError');
-          rethrow;
+          conversionError = codecError.toString();
         }
       }
     } catch (e) {
       print('Error converting raw image: $e');
-      if (mounted) {
+      conversionError = e.toString();
+    } finally {
+      // Update error state if needed, but only if we're still mounted
+      if (mounted && conversionError != null) {
         setState(() {
-          _isLoading = false;
-          _errorMessage = e.toString();
+          _errorMessage = conversionError;
         });
       }
+
+      _isConverting = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+    // If we have a current image, display it
+    if (_image != null) {
+      return CustomPaint(
+        painter: RawImagePainter(image: _image!),
+        size: Size(widget.width.toDouble(), widget.height.toDouble()),
+      );
     }
 
+    // If we have a previous image, show it to prevent flickering while loading new one
+    if (_previousImage != null) {
+      return CustomPaint(
+        painter: RawImagePainter(image: _previousImage!),
+        size: Size(widget.width.toDouble(), widget.height.toDouble()),
+      );
+    }
+
+    // Only show an empty container or error if we have no images at all
     if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 32, color: Colors.red.shade400),
-            const SizedBox(height: 8),
-            Text('Image error', style: TextStyle(color: Colors.red.shade400)),
-            const SizedBox(height: 4),
-            Text(
-              _errorMessage!,
-              style: const TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: Text(
+            'Image Error',
+            style: TextStyle(color: Colors.red.shade400),
+          ),
         ),
       );
     }
 
-    if (_image == null) {
-      return const Center(child: Text('Failed to create image from raw data'));
-    }
-
-    return CustomPaint(
-      painter: RawImagePainter(image: _image!),
-      size: Size(widget.width.toDouble(), widget.height.toDouble()),
-    );
+    // Blank space instead of a spinner
+    return Container(color: Colors.black);
   }
 }
 
@@ -766,6 +745,10 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
         return 'PrintWindow';
       case CaptureMethod.dxgi:
         return 'DXGI Desktop Duplication';
+      case CaptureMethod.browserSpecific:
+        return 'Browser Specific';
+      case CaptureMethod.fullscreenApp:
+        return 'Fullscreen App';
     }
   }
 
@@ -799,9 +782,19 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                 'DXGI Desktop Duplication',
                 'Best for games and hardware-accelerated content. Higher performance.',
               ),
+              const SizedBox(height: 8),
+              _buildCaptureMethodInfo(
+                'Browser Specific',
+                'Optimized for Chrome, Edge, Firefox and other browsers with hardware acceleration.',
+              ),
+              const SizedBox(height: 8),
+              _buildCaptureMethodInfo(
+                'Fullscreen App',
+                'For OBS Projector, games, and other fullscreen applications.',
+              ),
               const SizedBox(height: 16),
               const Text(
-                'If a window is only partially captured, try a different method.',
+                'For Chrome/Edge browsers, use Browser Specific.\nFor OBS Projector, use Fullscreen App.',
                 style: TextStyle(fontStyle: FontStyle.italic),
               ),
             ],
