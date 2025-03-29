@@ -78,23 +78,51 @@ class CameraElement extends LayoutElement {
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       ui.Image image = frame.image;
-      // Draw the sample photo inside the camera slot
+
+      // Draw the sample photo inside the camera slot using object-fit: cover approach
       final paint =
           Paint()
             ..filterQuality = FilterQuality.high
             ..isAntiAlias = true;
 
-      canvas.drawImageRect(
-        image,
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(
-          x,
-          y,
-          width * resolutionMultiplier,
-          height * resolutionMultiplier,
-        ),
-        paint,
+      // Calculate the source rectangle for "cover" behavior
+      final destRect = Rect.fromLTWH(
+        x,
+        y,
+        width * resolutionMultiplier,
+        height * resolutionMultiplier,
       );
+
+      // Calculate aspect ratios
+      final imageRatio = image.width / image.height;
+      final destRatio = destRect.width / destRect.height;
+
+      // Determine source rectangle to implement "cover" behavior
+      Rect sourceRect;
+      if (imageRatio > destRatio) {
+        // Image is wider than destination: crop width
+        final newWidth = image.height * destRatio;
+        final offsetX = (image.width - newWidth) / 2;
+        sourceRect = Rect.fromLTWH(
+          offsetX,
+          0,
+          newWidth,
+          image.height.toDouble(),
+        );
+      } else {
+        // Image is taller than destination: crop height
+        final newHeight = image.width / destRatio;
+        final offsetY = (image.height - newHeight) / 2;
+        sourceRect = Rect.fromLTWH(
+          0,
+          offsetY,
+          image.width.toDouble(),
+          newHeight,
+        );
+      }
+
+      // Draw the image with "cover" behavior
+      canvas.drawImageRect(image, sourceRect, destRect, paint);
     } catch (e) {
       print('Error rendering camera element: $e');
       _renderCameraPlaceholder(canvas, x, y, elementWidth, elementHeight);
