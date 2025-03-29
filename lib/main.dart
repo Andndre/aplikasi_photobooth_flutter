@@ -1,38 +1,21 @@
-import 'package:aplikasi_photobooth_flutter/pages/main_menu.dart';
-import 'package:aplikasi_photobooth_flutter/providers/settings.dart';
-import 'package:aplikasi_photobooth_flutter/providers/start_event.dart';
 import 'package:flutter/material.dart';
+import 'package:photobooth/providers/event_provider.dart';
+import 'package:photobooth/providers/layout_editor_provider.dart';
+import 'package:photobooth/providers/layout_provider.dart';
+import 'package:photobooth/providers/settings_provider.dart';
+import 'package:photobooth/screens/main_screen.dart';
 import 'package:provider/provider.dart';
-import 'providers/events.dart';
-import 'providers/layouts.dart';
-import 'providers/sesi_foto.dart';
-import 'providers/layout_editor_listenable.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
-        // Main global providers
-        ChangeNotifierProvider<LayoutsProvider>(
-          create: (_) => LayoutsProvider(),
-        ),
-
-        // Optional: Global state that's shared across the app
-        Provider<SelectedElementNotifier>(
-          create: (_) => SelectedElementNotifier(),
-          dispose: (_, notifier) => notifier.dispose(),
-        ),
-
-        Provider<ZoomLevelNotifier>(
-          create: (_) => ZoomLevelNotifier(),
-          dispose: (_, notifier) => notifier.dispose(),
-        ),
-        ChangeNotifierProvider(create: (_) => EventsProvider()),
-        ChangeNotifierProvider(create: (_) => StartEventProvider()),
-        ChangeNotifierProvider(create: (_) => SesiFotoProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => LayoutsProvider()),
+        ChangeNotifierProvider(create: (_) => EventsProvider()),
+        ChangeNotifierProvider(create: (_) => LayoutEditorProvider()),
       ],
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
@@ -58,7 +41,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
           themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-          home: const MainMenu(),
+          home: const MainScreen(),
           debugShowCheckedModeBanner: false,
         );
       },

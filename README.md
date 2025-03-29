@@ -1,4 +1,4 @@
-# aplikasi_photobooth_flutter
+# photobooth
 
 A new Flutter project.
 

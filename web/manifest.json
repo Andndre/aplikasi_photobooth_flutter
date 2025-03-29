@@ -1,6 +1,6 @@
 {
-    "name": "aplikasi_photobooth_flutter",
-    "short_name": "aplikasi_photobooth_flutter",
+    "name": "photobooth",
+    "short_name": "photobooth",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
