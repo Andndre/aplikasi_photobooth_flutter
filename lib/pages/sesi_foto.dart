@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 import '../providers/sesi_foto.dart';
 
-// Create a separate stateful widget for the window capture preview
 class WindowCapturePreview extends StatefulWidget {
   final SesiFotoProvider provider;
 
@@ -201,17 +200,9 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
                             _displayCaptureError ? Colors.red.shade400 : null,
                       ),
                     ),
-                    // ...existing code...
                   ],
                 ),
               ),
-
-            // Window selection dropdown positioned at the top right
-            Positioned(
-              top: 8,
-              right: 8,
-              child: WindowSelectionDropdown(provider: widget.provider),
-            ),
 
             // "Press Enter" text at the bottom
             if (_currentWindowCapture != null && !_displayCaptureError)
@@ -581,152 +572,139 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    // Get current selected window
     final currentWindow = widget.provider.windowToCapture;
     final captureMethod = widget.provider.captureMethod;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Capture Window:',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              _isLoading
-                  ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                  : DropdownButton<int>(
-                    value: currentWindow?.hwnd,
-                    onChanged: (int? newValue) {
-                      if (newValue != null) {
-                        if (newValue == 0) {
-                          // User selected "None"
-                          widget.provider.setWindowToCapture(null);
-                        } else {
-                          // Find the window with matching hwnd
-                          final selectedWindow = _availableWindows.firstWhere(
-                            (window) => window.hwnd == newValue,
-                            orElse: () => _availableWindows.first,
-                          );
-                          widget.provider.setWindowToCapture(selectedWindow);
-                        }
-                      }
-                    },
-                    items:
-                        _availableWindows.map<DropdownMenuItem<int>>((
-                          WindowInfo window,
-                        ) {
-                          return DropdownMenuItem<int>(
-                            value: window.hwnd,
-                            child: SizedBox(
-                              width: 150,
-                              child: Text(
-                                window.title,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
+    return Badge(
+      isLabelVisible: currentWindow == null,
+      backgroundColor: Theme.of(context).colorScheme.error,
+      smallSize: 8,
+      child: PopupMenuButton(
+        icon: const Icon(Icons.settings),
+        tooltip:
+            currentWindow == null
+                ? 'Select a window to capture'
+                : 'Capture Settings',
+        position: PopupMenuPosition.under,
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.8,
+          minWidth: 300,
+        ),
+        itemBuilder:
+            (context) => [
+              PopupMenuItem(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 300),
+                  child: IntrinsicWidth(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Window Selection',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Expanded(
+                              child: DropdownButton<int>(
+                                value: currentWindow?.hwnd,
+                                isExpanded: true,
+                                onChanged: (int? newValue) {
+                                  if (newValue != null) {
+                                    if (newValue == 0) {
+                                      widget.provider.setWindowToCapture(null);
+                                    } else {
+                                      final selectedWindow = _availableWindows
+                                          .firstWhere(
+                                            (window) => window.hwnd == newValue,
+                                            orElse:
+                                                () => _availableWindows.first,
+                                          );
+                                      widget.provider.setWindowToCapture(
+                                        selectedWindow,
+                                      );
+                                    }
+                                  }
+                                  Navigator.pop(context);
+                                },
+                                items:
+                                    _availableWindows
+                                        .map<DropdownMenuItem<int>>((window) {
+                                          return DropdownMenuItem<int>(
+                                            value: window.hwnd,
+                                            child: Text(
+                                              window.title,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          );
+                                        })
+                                        .toList(),
                               ),
                             ),
-                          );
-                        }).toList(),
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
-                      color: Colors.white,
-                    ),
-                    underline: Container(height: 0),
-                    dropdownColor: Colors.grey[800],
-                    style: const TextStyle(color: Colors.white),
-                    hint: const Text(
-                      "Select a window",
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, size: 20),
+                              onPressed: () {
+                                _loadAvailableWindows();
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ],
+                        ),
+                        const Divider(),
+                        const Text(
+                          'Capture Method',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Expanded(
+                              child: DropdownButton<CaptureMethod>(
+                                value: captureMethod,
+                                isExpanded: true,
+                                onChanged: (CaptureMethod? newMethod) {
+                                  if (newMethod != null) {
+                                    widget.provider.setCaptureMethod(newMethod);
+                                  }
+                                  Navigator.pop(context);
+                                },
+                                items:
+                                    CaptureMethod.values.map<
+                                      DropdownMenuItem<CaptureMethod>
+                                    >((method) {
+                                      return DropdownMenuItem<CaptureMethod>(
+                                        value: method,
+                                        child: Text(
+                                          _getCaptureMethodName(method),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      );
+                                    }).toList(),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.help_outline, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showCaptureMethodHelp(context);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 16),
-                onPressed: _loadAvailableWindows,
-                tooltip: 'Refresh window list',
-                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                padding: EdgeInsets.zero,
-              ),
-            ],
-          ),
-
-          // Add capture method dropdown
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Capture Method:',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(width: 8),
-              DropdownButton<CaptureMethod>(
-                value: captureMethod,
-                onChanged: (CaptureMethod? newMethod) {
-                  if (newMethod != null) {
-                    widget.provider.setCaptureMethod(newMethod);
-                  }
-                },
-                items:
-                    CaptureMethod.values.map<DropdownMenuItem<CaptureMethod>>((
-                      CaptureMethod method,
-                    ) {
-                      return DropdownMenuItem<CaptureMethod>(
-                        value: method,
-                        child: SizedBox(
-                          width: 150,
-                          child: Text(
-                            _getCaptureMethodName(method),
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-                underline: Container(height: 0),
-                dropdownColor: Colors.grey[800],
-                style: const TextStyle(color: Colors.white),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.help_outline,
-                  color: Colors.white,
-                  size: 16,
-                ),
-                onPressed: () => _showCaptureMethodHelp(context),
-                tooltip: 'Capture method info',
-                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                padding: EdgeInsets.zero,
-              ),
             ],
-          ),
-        ],
       ),
     );
   }
@@ -846,11 +824,12 @@ class SesiFotoState extends State<SesiFoto> {
           final layout = widget.event.getLayout(context);
 
           return Scaffold(
-            appBar: AppBar(title: Text('Sesi Foto: ${widget.event.name}')),
+            appBar: AppBar(
+              title: Text('Sesi Foto: ${widget.event.name}'),
+              actions: [WindowSelectionDropdown(provider: sesiFotoProvider)],
+            ),
             body: CallbackShortcuts(
               bindings: <ShortcutActivator, VoidCallback>{
-                // Fix: Connect Enter key directly to the provider's takePhoto method,
-                // not to the _captureSelectedWindow method
                 const SingleActivator(LogicalKeyboardKey.enter): () {
                   sesiFotoProvider.takePhoto(
                     widget.event.saveFolder,
