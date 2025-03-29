@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:photobooth/components/dialogs/add_event_dialog.dart';
+import 'package:photobooth/components/dialogs/delete_event_dialog.dart';
 import 'package:photobooth/components/dialogs/edit_event_dialog.dart';
 import 'package:photobooth/components/dialogs/event_detail_dialog.dart';
 import 'package:photobooth/providers/event_provider.dart';
@@ -121,7 +122,15 @@ class EventPage extends StatelessWidget {
                                     IconButton(
                                       icon: const Icon(Icons.delete),
                                       onPressed: () {
-                                        // ...existing code for delete dialog...
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) {
+                                            return DeleteEventDialog(
+                                              event: event,
+                                              index: index,
+                                            );
+                                          },
+                                        );
                                       },
                                     ),
                                     IconButton(
