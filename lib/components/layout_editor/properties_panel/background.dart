@@ -17,8 +17,6 @@ class BackgroundPropertiesPanel extends StatelessWidget {
       return const Center(child: Text('No layout loaded'));
     }
 
-    Color backgroundColor = _hexToColor(layout.backgroundColor);
-
     return Container(
       decoration: BoxDecoration(
         border: Border(left: BorderSide(color: Theme.of(context).dividerColor)),
@@ -73,11 +71,6 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                                 layout.backgroundColor,
                               );
 
-                              // Debug print
-                              print(
-                                'Current background color: ${layout.backgroundColor}',
-                              );
-
                               // Show color picker dialog with stateful color selection
                               Color? resultColor = await showDialog<Color>(
                                 context: context,
@@ -126,7 +119,6 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                                 final colorHex =
                                     // '#${resultColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
                                     '#${resultColor.toHexString()}';
-                                print('New background color: $colorHex');
                                 editorProvider.updateLayoutBackground(colorHex);
                               }
                             },
@@ -463,92 +455,6 @@ class _DisplayProperty extends StatelessWidget {
                 ),
               ),
               child: Text(value),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ColorPropertyRow extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Function(Color) onColorChanged;
-
-  const _ColorPropertyRow({
-    required this.label,
-    required this.color,
-    required this.onColorChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 14)),
-          ),
-          Expanded(
-            child: InkWell(
-              onTap: () async {
-                final Color? pickedColor = await showDialog<Color>(
-                  context: context,
-                  builder:
-                      (context) => AlertDialog(
-                        title: Text('Pick $label'),
-                        content: SingleChildScrollView(
-                          child: ColorPicker(
-                            pickerColor: color,
-                            onColorChanged: (color) {},
-                            pickerAreaHeightPercent: 0.8,
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(color),
-                            child: const Text('Select'),
-                          ),
-                        ],
-                      ),
-                );
-
-                if (pickedColor != null) {
-                  onColorChanged(pickedColor);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: color,
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-                      style: const TextStyle(fontFamily: 'monospace'),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         ],
