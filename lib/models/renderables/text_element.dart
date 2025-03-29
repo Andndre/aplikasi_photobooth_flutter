@@ -81,7 +81,7 @@ class TextElement extends LayoutElement {
   }
 
   @override
-  void renderExport(
+  Future<void> renderExport(
     Canvas canvas,
     LayoutElement e,
     double x,
@@ -90,7 +90,7 @@ class TextElement extends LayoutElement {
     double elementHeight,
     double resolutionMultiplier, {
     String? imagePath,
-  }) {
+  }) async {
     TextElement element = e as TextElement;
     try {
       // Create a rect for the background if needed

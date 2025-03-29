@@ -44,7 +44,7 @@ abstract class LayoutElement {
     }
   }
 
-  void renderExport(
+  Future<void> renderExport(
     Canvas canvas,
     LayoutElement element,
     double x,

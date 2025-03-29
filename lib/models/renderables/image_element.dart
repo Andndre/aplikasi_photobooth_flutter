@@ -58,7 +58,7 @@ class ImageElement extends LayoutElement {
   }
 
   @override
-  void renderExport(
+  Future<void> renderExport(
     Canvas canvas,
     LayoutElement element,
     double x,
@@ -71,40 +71,83 @@ class ImageElement extends LayoutElement {
     try {
       final file = File(path);
       if (await file.exists()) {
+        // Use a simpler approach with fewer resource management concerns
         final bytes = await file.readAsBytes();
-        final descriptor = await ui.ImageDescriptor.encoded(
-          await ui.ImmutableBuffer.fromUint8List(bytes),
-        );
-        final codec = await descriptor.instantiateCodec();
-        final frame = await codec.getNextFrame();
-        final image = frame.image;
+        final codec = await ui.instantiateImageCodec(bytes);
 
-        descriptor.dispose();
-        codec.dispose();
+        try {
+          final frame = await codec.getNextFrame();
+          final image = frame.image;
 
-        // Draw with opacity
-        final paint =
-            Paint()
-              ..filterQuality = FilterQuality.high
-              ..isAntiAlias = true
-              ..color = Colors.white.withValues(alpha: opacity);
+          // Draw with opacity
+          final paint =
+              Paint()
+                ..filterQuality = FilterQuality.high
+                ..isAntiAlias = true
+                ..color = Colors.white.withOpacity(opacity);
 
-        canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-          Rect.fromLTWH(
-            x,
-            y,
-            width * resolutionMultiplier,
-            height * resolutionMultiplier,
-          ),
-          paint,
-        );
+          canvas.drawImageRect(
+            image,
+            Rect.fromLTWH(
+              0,
+              0,
+              image.width.toDouble(),
+              image.height.toDouble(),
+            ),
+            Rect.fromLTWH(
+              x,
+              y,
+              width * resolutionMultiplier,
+              height * resolutionMultiplier,
+            ),
+            paint,
+          );
+        } finally {
+          // Dispose the codec when done
+          codec.dispose();
+        }
       } else {
-        throw Exception("Imgae not found: $path");
+        throw Exception("Image not found: $path");
       }
     } catch (e) {
       print('Error rendering image element: $e');
+      // Draw a placeholder for failed images
+      _renderImagePlaceholder(
+        canvas,
+        x,
+        y,
+        width * resolutionMultiplier,
+        height * resolutionMultiplier,
+      );
     }
+  }
+
+  // Add a method to render a placeholder when image loading fails
+  void _renderImagePlaceholder(
+    Canvas canvas,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    // Grey rectangle with error icon visual
+    final bgPaint = Paint()..color = Colors.grey.withOpacity(0.3);
+    final borderPaint =
+        Paint()
+          ..color = Colors.grey
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+    // Draw X pattern to indicate missing image
+    final linePaint =
+        Paint()
+          ..color = Colors.grey
+          ..strokeWidth = 2.0;
+
+    canvas.drawLine(Offset(x, y), Offset(x + width, y + height), linePaint);
+    canvas.drawLine(Offset(x + width, y), Offset(x, y + height), linePaint);
   }
 }

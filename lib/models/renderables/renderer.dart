@@ -16,7 +16,7 @@ class Renderer {
   }) async {
     if (layout.allCameraElements.length != filePaths.length) {
       throw Exception(
-        "TODO: handle this error when the camera count is not the same as file paths length",
+        "Camera spots count doesn't match the number of provided images.",
       );
     }
 
@@ -36,7 +36,6 @@ class Renderer {
       );
 
       final elements = layout.elements;
-
       int index = 0;
 
       for (final element in elements) {
@@ -60,32 +59,35 @@ class Renderer {
           canvas.translate(-centerX, -centerY);
         }
 
-        print("Rendering ${element.type}");
-        switch (element.type) {
-          case 'camera':
-            element.renderExport(
-              canvas,
-              element,
-              x,
-              y,
-              elementWidth,
-              elementHeight,
-              resolutionMultiplier,
-              imagePath: filePaths[index++],
-            );
-            break;
-          case 'image':
-          case 'text':
-            element.renderExport(
-              canvas,
-              element,
-              x,
-              y,
-              elementWidth,
-              elementHeight,
-              resolutionMultiplier,
-            );
-            break;
+        try {
+          switch (element.type) {
+            case 'camera':
+              await element.renderExport(
+                canvas,
+                element,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+                resolutionMultiplier,
+                imagePath: filePaths[index++],
+              );
+              break;
+            case 'image':
+            case 'text':
+              await element.renderExport(
+                canvas,
+                element,
+                x,
+                y,
+                elementWidth,
+                elementHeight,
+                resolutionMultiplier,
+              );
+              break;
+          }
+        } catch (e) {
+          print('Error rendering element ${element.id}: $e');
         }
 
         canvas.restore();
@@ -93,20 +95,26 @@ class Renderer {
 
       final picture = recorder.endRecording();
       final img = await picture.toImage(width.round(), height.round());
-      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
 
-      if (byteData == null) {
-        return null;
+      try {
+        final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+        if (byteData == null) {
+          return null;
+        }
+
+        final file = File(exportPath);
+        await file.writeAsBytes(byteData.buffer.asUint8List());
+
+        return file;
+      } finally {
+        // Ensure image is disposed
+        img.dispose();
       }
-
-      final file = File(exportPath);
-      await file.writeAsBytes(byteData.buffer.asUint8List());
-
-      return file;
     } catch (e) {
-      print('Error rendering text element: $e');
+      print('Error in exportLayoutWithImages: $e');
+      return null;
     }
-    return null;
   }
 }
 

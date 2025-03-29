@@ -50,7 +50,7 @@ class CameraElement extends LayoutElement {
   }
 
   @override
-  void renderExport(
+  Future<void> renderExport(
     Canvas canvas,
     LayoutElement e,
     double x,
@@ -62,12 +62,18 @@ class CameraElement extends LayoutElement {
   }) async {
     try {
       if (imagePath == null) {
-        throw Exception("TODO: handle this error when image path is null");
+        print("Error: No image path provided for camera element");
+        _renderCameraPlaceholder(canvas, x, y, elementWidth, elementHeight);
+        return;
       }
+
       final file = File(imagePath);
-      if (await file.exists()) {
-        throw Exception("TODO: handle this error when image is not found");
+      if (!(await file.exists())) {
+        print("Error: Image file not found at path: $imagePath");
+        _renderCameraPlaceholder(canvas, x, y, elementWidth, elementHeight);
+        return;
       }
+
       final bytes = await file.readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
@@ -91,6 +97,41 @@ class CameraElement extends LayoutElement {
       );
     } catch (e) {
       print('Error rendering camera element: $e');
+      _renderCameraPlaceholder(canvas, x, y, elementWidth, elementHeight);
     }
+  }
+
+  // Add helper method to render a placeholder when an image is not available
+  void _renderCameraPlaceholder(
+    Canvas canvas,
+    double x,
+    double y,
+    double width,
+    double height,
+  ) {
+    // Blue rect with camera icon placeholder
+    final bgPaint = Paint()..color = Colors.blue.withOpacity(0.2);
+    final borderPaint =
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(x, y, width, height), borderPaint);
+
+    // Draw label
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(color: Colors.blue, fontSize: 16),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout(maxWidth: width - 10);
+    textPainter.paint(
+      canvas,
+      Offset(x + 5, y + height - textPainter.height - 5),
+    );
   }
 }
