@@ -94,7 +94,12 @@ class TextElement extends LayoutElement {
     TextElement element = e as TextElement;
     try {
       // Create a rect for the background if needed
-      final rect = Rect.fromLTWH(x, y, width, height);
+      final rect = Rect.fromLTWH(
+        x,
+        y,
+        width * resolutionMultiplier,
+        height * resolutionMultiplier,
+      );
 
       // Draw background if not transparent
       if (element.backgroundColor != 'transparent') {
@@ -102,6 +107,13 @@ class TextElement extends LayoutElement {
             Paint()..color = ColorsHelper.hexToColor(element.backgroundColor);
         canvas.drawRect(rect, bgPaint);
       }
+
+      // final testPaint =
+      //     Paint()
+      //       ..color = Colors.green
+      //       ..style = PaintingStyle.stroke;
+      // // draw outline for debugging
+      // canvas.drawRect(rect, testPaint);
 
       // Create text style with correct properties
       TextStyle textStyle;
@@ -148,7 +160,7 @@ class TextElement extends LayoutElement {
       );
 
       // Layout the text within the constraints
-      textPainter.layout(maxWidth: width);
+      textPainter.layout(maxWidth: width * resolutionMultiplier);
 
       // Calculate correct position based on alignment
       double dx = x;
@@ -174,11 +186,11 @@ class TextElement extends LayoutElement {
           !lowerAlignment.contains('bottom')) {
         if (lowerAlignment.contains('center')) {
           // Center vertically
-          dy = y + (height - textPainter.height) / 2;
+          dy = y + (height * resolutionMultiplier - textPainter.height) / 2;
         }
       } else if (lowerAlignment.contains('bottom')) {
         // Align to bottom
-        dy = y + height - textPainter.height;
+        dy = y + height * resolutionMultiplier - textPainter.height;
       }
       // Else align to top (default)
 

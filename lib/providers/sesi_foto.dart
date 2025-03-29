@@ -1193,6 +1193,7 @@ class SesiFotoProvider with ChangeNotifier {
     BuildContext context,
   ) async {
     final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
+    // final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote.txt - Notepad'));
     if (hwnd == 0) {
       print("Error: Imaging Edge Remote tidak ditemukan!");
       return;
@@ -1229,9 +1230,7 @@ class SesiFotoProvider with ChangeNotifier {
       }
     }
 
-    SetForegroundWindow(
-      FindWindowEx(0, 0, nullptr, TEXT('aplikasi_photobooth_flutter')),
-    );
+    SetForegroundWindow(FindWindowEx(0, 0, nullptr, TEXT('photobooth')));
 
     print("Foto disimpan. Jumlah foto: ${_takenPhotos.length}");
 

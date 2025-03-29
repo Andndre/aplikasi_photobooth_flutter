@@ -84,12 +84,6 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
         final height = captureResult['height'] as int;
         final isDirect = captureResult['isDirect'] as bool;
 
-        // Debug print to check raw image data
-        print(
-          'Captured image bytes length: ${capturedImageBytes.length}, expected: ${width * height * 4}',
-        );
-        print('Captured dimensions: $width x $height, isDirect: $isDirect');
-
         if (capturedImageBytes.isNotEmpty) {
           setState(() {
             _currentWindowCapture = capturedImageBytes;
@@ -826,7 +820,21 @@ class SesiFotoState extends State<SesiFoto> {
           return Scaffold(
             appBar: AppBar(
               title: Text('Sesi Foto: ${widget.event.name}'),
-              actions: [WindowSelectionDropdown(provider: sesiFotoProvider)],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.camera),
+                  onPressed:
+                      () => sesiFotoProvider.takePhoto(
+                        widget.event.saveFolder,
+                        widget.event.uploadFolder,
+                        widget.event.name,
+                        layout,
+                        context,
+                      ),
+                  tooltip: 'Take Photo (Enter)',
+                ),
+                WindowSelectionDropdown(provider: sesiFotoProvider),
+              ],
             ),
             body: CallbackShortcuts(
               bindings: <ShortcutActivator, VoidCallback>{
