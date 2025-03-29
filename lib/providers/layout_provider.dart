@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:photobooth/models/layout_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,8 +13,8 @@ class LayoutsProvider with ChangeNotifier {
   List<LayoutModel> get layouts => _layouts;
   bool get isLoaded => _loaded;
 
-  LayoutModel getLayoutById(int id) {
-    return _layouts.firstWhere((layout) => layout.id == id);
+  LayoutModel? getLayoutById(int id) {
+    return _layouts.firstWhereOrNull((layout) => layout.id == id);
   }
 
   Future<void> loadLayouts() async {

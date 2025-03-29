@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:photobooth/components/dialogs/add_event_dialog.dart';
 import 'package:photobooth/components/dialogs/edit_event_dialog.dart';
+import 'package:photobooth/components/dialogs/event_detail_dialog.dart';
 import 'package:photobooth/providers/event_provider.dart';
 import 'package:photobooth/providers/layout_provider.dart';
 import 'package:provider/provider.dart';
@@ -54,7 +55,7 @@ class EventPage extends StatelessWidget {
                             // Determine the appropriate error color based on theme
                             final errorColor =
                                 Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.red.shade900.withValues(alpha: 0.4)
+                                    ? Colors.red.shade900.withAlpha(102)
                                     : Colors.red.shade100;
 
                             return Card(
@@ -93,13 +94,14 @@ class EventPage extends StatelessWidget {
                                     IconButton(
                                       icon: const Icon(Icons.visibility),
                                       onPressed: () {
-                                        // Navigator.of(context).push(
-                                        //   MaterialPageRoute(
-                                        //     builder:
-                                        //         (context) =>
-                                        //             EventDetail(event: event),
-                                        //   ),
-                                        // );
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) {
+                                            return EventDetailDialog(
+                                              event: event,
+                                            );
+                                          },
+                                        );
                                       },
                                     ),
                                     IconButton(
