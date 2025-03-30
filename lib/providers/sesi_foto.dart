@@ -5,9 +5,10 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
+import 'package:photobooth/components/dialogs/captured_photos_dialog.dart';
 import 'package:photobooth/models/layout_model.dart';
 import 'package:photobooth/models/renderables/renderer.dart';
-import 'package:photobooth/pages/start_event.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
 
@@ -21,13 +22,28 @@ enum CaptureMethod {
   fullscreenApp, // Special mode for fullscreen applications
 }
 
+class WindowInfo {
+  final int hwnd;
+  final String title;
+
+  WindowInfo({required this.hwnd, required this.title});
+}
+
+enum SortOrder { newest, oldest }
+
 class SesiFotoProvider with ChangeNotifier {
   final List<File> _takenPhotos = [];
+  List<File> _compositeImages = [];
   bool _isLoading = false;
   String _loadingMessage = '';
   WindowInfo? _windowToCapture;
   DateTime _lastCaptureTime = DateTime.now();
   Map<String, dynamic>? _lastCaptureResult;
+  SortOrder _sortOrder = SortOrder.newest;
+
+  // Add retake photo index tracker
+  int? _retakePhotoIndex;
+  int? get retakePhotoIndex => _retakePhotoIndex;
 
   // Track frame capture performance
   int _frameCount = 0;
@@ -53,10 +69,18 @@ class SesiFotoProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Set retake photo index
+  void setRetakePhotoIndex(int? index) {
+    _retakePhotoIndex = index;
+    notifyListeners();
+  }
+
   // Getters for performance stats
   double get currentFps => _currentFps;
 
   List<File> get takenPhotos => _takenPhotos;
+  List<File> get compositeImages => _compositeImages;
+  SortOrder get sortOrder => _sortOrder;
   bool get isLoading => _isLoading;
   String get loadingMessage => _loadingMessage;
   WindowInfo? get windowToCapture => _windowToCapture;
@@ -530,21 +554,7 @@ class SesiFotoProvider with ChangeNotifier {
     }
 
     // Continue with bitmap processing as in _captureWithBitBlt
-    // ...existing code...
-
-    // The rest of the implementation is the same as in _captureWithBitBlt
     final bmi = calloc<BITMAPINFO>();
-    // ...existing code to process bitmap data...
-
-    // This method can use the same code as _captureWithBitBlt for the rest
-    // of the bitmap processing, so we'll reuse that code here
-
-    // Since we're reusing most of the code, consider refactoring to have
-    // a common _processBitmapData method shared between all capture methods
-
-    // ...rest of the implementation is the same as _captureWithBitBlt...
-
-    // For brevity, I'm going to keep just key parts here
     bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
     bmi.ref.bmiHeader.biWidth = width;
     bmi.ref.bmiHeader.biHeight = -height; // Negative for top-down DIB
@@ -588,8 +598,6 @@ class SesiFotoProvider with ChangeNotifier {
     // Update the timing
     _lastCaptureTime = DateTime.now();
 
-    // ...rest of the code to process the image data...
-
     // Clean up resources
     SelectObject(hdcMemDC, hbmOld);
     DeleteObject(hbmScreen);
@@ -617,14 +625,31 @@ class SesiFotoProvider with ChangeNotifier {
         'isDirect': true,
       };
     } else {
-      // ...convert to PNG as in _captureWithBitBlt...
-      // For brevity, omitting the duplicate code
-      result = {
-        'bytes': pixels, // This would actually be PNG encoded data
-        'width': width,
-        'height': height,
-        'isDirect': true, // Changed temporarily for brevity
-      };
+      try {
+        final image = img.Image(width: width, height: height);
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            final i = (y * width + x) * 4;
+            final b = pixels[i];
+            final g = pixels[i + 1];
+            final r = pixels[i + 2];
+            final a = pixels[i + 3];
+            image.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+          }
+        }
+
+        final pngBytes = Uint8List.fromList(img.encodePng(image));
+
+        result = {
+          'bytes': pngBytes,
+          'width': width,
+          'height': height,
+          'isDirect': false,
+        };
+      } catch (e) {
+        print('Error converting to PNG: $e');
+        return null;
+      }
     }
 
     _lastCaptureResult = result;
@@ -742,9 +767,6 @@ class SesiFotoProvider with ChangeNotifier {
     }
 
     // The rest of the processing (GetDIBits, pixel conversion) is the same as _captureWithBitBlt
-    // ...existing code for processing bitmap data...
-
-    // Continue with the same code as in _captureWithBitBlt to process the bitmap
     final bmi = calloc<BITMAPINFO>();
     bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
     bmi.ref.bmiHeader.biWidth = width;
@@ -770,9 +792,6 @@ class SesiFotoProvider with ChangeNotifier {
 
     // Process result the same as in _captureWithBitBlt
     // Copy data, check for identical frames, cleanup resources, etc.
-
-    // The rest is the same as in _captureWithBitBlt
-    // ...existing code for creating result map...
 
     // Copy pixels to Dart Uint8List
     final pixels = Uint8List(pixelDataSize);
@@ -810,8 +829,6 @@ class SesiFotoProvider with ChangeNotifier {
         'isDirect': true, // Flag to indicate raw format
       };
     } else {
-      // Same code as in _captureWithBitBlt for PNG conversion
-      // ...existing code...
       try {
         // Create an image from BGRA pixels
         final image = img.Image(width: width, height: height);
@@ -1096,7 +1113,6 @@ class SesiFotoProvider with ChangeNotifier {
             'isDirect': true,
           };
         } else {
-          // For non-direct mode, convert to PNG - same approach as other methods
           try {
             final image = img.Image(width: width, height: height);
             for (int y = 0; y < height; y++) {
@@ -1185,6 +1201,7 @@ class SesiFotoProvider with ChangeNotifier {
   }
 
   // Modified takePhoto function to use layouts for composite image generation
+  // and handle retakes
   Future<void> takePhoto(
     String saveFolder,
     String uploadFolder,
@@ -1192,10 +1209,23 @@ class SesiFotoProvider with ChangeNotifier {
     LayoutModel layout,
     BuildContext context,
   ) async {
-    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
     // final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote.txt - Notepad'));
+    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
     if (hwnd == 0) {
-      print("Error: Imaging Edge Remote tidak ditemukan!");
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Error'),
+              content: const Text('Imaging Edge Remote tidak ditemukan!'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+      );
       return;
     }
 
@@ -1207,7 +1237,7 @@ class SesiFotoProvider with ChangeNotifier {
     input.ref.type = INPUT_KEYBOARD;
     input.ref.ki.wVk = VK_1;
     SendInput(1, input, sizeOf<INPUT>());
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(seconds: 1, milliseconds: 500));
     input.ref.ki.dwFlags = KEYEVENTF_KEYUP;
     SendInput(1, input, sizeOf<INPUT>());
     calloc.free(input);
@@ -1224,105 +1254,178 @@ class SesiFotoProvider with ChangeNotifier {
       files.sort(
         (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
       );
+
       if (files.isNotEmpty) {
-        _takenPhotos.add(files.first);
+        final newPhoto = files.first;
+
+        // Handle retake case
+        if (_retakePhotoIndex != null) {
+          // We're retaking a photo - replace the existing one
+          final index = _retakePhotoIndex!;
+          final oldPhoto = _takenPhotos[index];
+          final oldPath = oldPhoto.path;
+
+          // Copy the new photo to replace the old one
+          newPhoto.copySync(oldPath);
+          _takenPhotos[index] = File(oldPath);
+
+          // Reset retake index
+          _retakePhotoIndex = null;
+
+          // Show captured photos dialog again - ensure context is valid
+          if (context.mounted) {
+            await _showCapturedPhotosDialog(
+              saveFolder,
+              uploadFolder,
+              eventName,
+              layout,
+              context,
+            );
+          }
+        } else {
+          // Normal case - add the new photo
+          _takenPhotos.add(files.first);
+
+          // Find camera elements in the layout to determine when we have all photos
+          final cameraElements =
+              layout.elements.where((e) => e.type == 'camera').toList();
+
+          // If all photos are taken, show captured photos dialog - ensure context is valid
+          if (_takenPhotos.length == cameraElements.length && context.mounted) {
+            await _showCapturedPhotosDialog(
+              saveFolder,
+              uploadFolder,
+              eventName,
+              layout,
+              context,
+            );
+          }
+        }
+
         notifyListeners();
       }
     }
 
     SetForegroundWindow(FindWindowEx(0, 0, nullptr, TEXT('photobooth')));
-
     print("Foto disimpan. Jumlah foto: ${_takenPhotos.length}");
+  }
 
-    // Find camera elements in the layout to determine when we have all photos
-    final cameraElements =
-        layout.elements.where((e) => e.type == 'camera').toList();
+  // Helper method to show captured photos dialog
+  Future<void> _showCapturedPhotosDialog(
+    String saveFolder,
+    String uploadFolder,
+    String eventName,
+    LayoutModel layout,
+    BuildContext context,
+  ) async {
+    if (!context.mounted) return;
 
-    // If all photos are taken based on the layout's camera elements, create composite and GIF
-    if (_takenPhotos.length == cameraElements.length) {
-      final existingFiles =
-          Directory(uploadFolder).listSync().whereType<File>().toList();
-      int maxIndex = 0;
-      int maxCompositeIndex = 0;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => CapturedPhotosDialog(
+            photos: _takenPhotos,
+            onRetake: (index) {
+              // Set the retake index
+              setRetakePhotoIndex(index);
+              // Close the dialog using the dialog's context
+              Navigator.of(dialogContext).pop();
+            },
+            onConfirm: () async {
+              // Close the dialog using the dialog's context
+              Navigator.of(dialogContext).pop();
+              await generateComposite(uploadFolder, eventName, layout, context);
+            },
+          ),
+    );
+  }
 
-      for (var file in existingFiles) {
-        final fileName = path.basename(file.path);
-        try {
-          if (fileName.contains('composite') || fileName.contains('gif')) {
-            final index = int.parse(
-              fileName.split('_').reversed.skip(1).first.split('.').first,
-            );
-            if (index > maxCompositeIndex) {
-              maxCompositeIndex = index;
-            }
-          } else {
-            final index = int.parse(fileName.split('_').last.split('.').first);
-            if (index > maxIndex) {
-              maxIndex = index;
-            }
-          }
-        } catch (e) {
-          continue;
-        }
-      }
+  Future<void> generateComposite(
+    String uploadFolder,
+    String eventName,
+    LayoutModel layout,
+    BuildContext context,
+  ) async {
+    final existingFiles =
+        Directory(uploadFolder).listSync().whereType<File>().toList();
+    int maxCompositeIndex = 0;
 
-      // Copy individual photos to the upload folder with standard naming
-      for (var i = 0; i < _takenPhotos.length; i++) {
-        final photo = _takenPhotos[i];
-        final newFileName = 'Luminara_${eventName}_${maxIndex + i + 1}.jpg';
-        final newFilePath = path.join(uploadFolder, newFileName);
-        photo.copySync(newFilePath);
-        print('Foto ${photo.path} disalin ke $newFilePath');
-      }
-
-      // Create output paths with the same naming conventions
-      final compositeImagePath = path.join(
-        uploadFolder,
-        'Luminara_${eventName}_${maxCompositeIndex + 2}_composite.jpg',
-      );
-
-      final gifPath = path.join(
-        uploadFolder,
-        'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
-      );
-
-      // Use the layout's exportAsImage method for the composite image
-      _setLoading(true, 'Creating composite image and GIF...');
-
+    for (var file in existingFiles) {
+      final fileName = path.basename(file.path);
       try {
-        // Export the composite image using the layout's exportAsImage method
-        final exportedFile = await Renderer.exportLayoutWithImages(
-          layout: layout,
-          exportPath: compositeImagePath,
-          filePaths: _takenPhotos.map((file) => file.path).toList(),
-          resolutionMultiplier: 1.5, // Higher quality output
-        );
-
-        if (exportedFile != null) {
-          print('Composite image created: ${exportedFile.path}');
-        } else {
-          print('Failed to create composite image');
+        if (fileName.contains('composite') || fileName.contains('gif')) {
+          final index = int.parse(
+            fileName.split('_').reversed.skip(1).first.split('.').first,
+          );
+          if (index > maxCompositeIndex) {
+            maxCompositeIndex = index;
+          }
         }
-
-        // Create GIF from captured photos
-        await _createSimpleGif(
-          images: _takenPhotos.map((file) => file.path).toList(),
-          outputPath: gifPath,
-        );
       } catch (e) {
-        print('Error creating composite image or GIF: $e');
-      } finally {
-        _setLoading(false);
-      }
-
-      _takenPhotos.clear();
-      notifyListeners();
-
-      if (context.mounted) {
-        // pop the current page
-        Navigator.of(context).pop();
+        continue;
       }
     }
+
+    // Create output paths
+    final compositeImagePath = path.join(
+      uploadFolder,
+      'Luminara_${eventName}_${maxCompositeIndex + 2}_composite.jpg',
+    );
+
+    final gifPath = path.join(
+      uploadFolder,
+      'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
+    );
+
+    _setLoading(true, 'Creating composite image and GIF...');
+
+    try {
+      // Export the composite image using the layout's exportAsImage method
+      final exportedFile = await Renderer.exportLayoutWithImages(
+        layout: layout,
+        exportPath: compositeImagePath,
+        filePaths: _takenPhotos.map((file) => file.path).toList(),
+        resolutionMultiplier: 1.5,
+      );
+
+      if (exportedFile != null) {
+        print('Composite image created: ${exportedFile.path}');
+      } else {
+        print('Failed to create composite image');
+      }
+
+      // Create GIF from captured photos
+      await _createSimpleGif(
+        images: _takenPhotos.map((file) => file.path).toList(),
+        outputPath: gifPath,
+      );
+
+      // Show the composite images dialog - ensure context is valid
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder:
+              (dialogContext) => CompositeImagesDialog(
+                eventName: eventName,
+                uploadFolder: uploadFolder,
+              ),
+        );
+      }
+
+      // Clear the taken photos list after successfully generating composite images
+      _clearTakenPhotos();
+    } catch (e) {
+      print('Error creating composite image or GIF: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Add a method to clear the taken photos list
+  void _clearTakenPhotos() {
+    _takenPhotos.clear();
+    notifyListeners();
   }
 
   // Add the missing _createSimpleGif method
@@ -1356,6 +1459,60 @@ class SesiFotoProvider with ChangeNotifier {
       print('GIF created: $outputPath');
     } catch (e) {
       print('Error creating GIF: $e');
+    }
+  }
+
+  Future<void> loadCompositeImages(String uploadFolder) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final directory = Directory(uploadFolder);
+
+      if (await directory.exists()) {
+        List<File> images = [];
+
+        await for (var entity in directory.list()) {
+          if (entity is File) {
+            final fileName = path.basename(entity.path).toLowerCase();
+            if (fileName.contains('composite') &&
+                (fileName.endsWith('.jpg') ||
+                    fileName.endsWith('.jpeg') ||
+                    fileName.endsWith('.png'))) {
+              images.add(entity);
+            }
+          }
+        }
+
+        _compositeImages = images;
+        _sortCompositeImages();
+      } else {
+        _compositeImages = [];
+      }
+    } catch (e) {
+      print('Error loading composite images: $e');
+      _compositeImages = [];
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  void setSortOrder(SortOrder order) {
+    _sortOrder = order;
+    _sortCompositeImages();
+    notifyListeners();
+  }
+
+  void _sortCompositeImages() {
+    if (_sortOrder == SortOrder.newest) {
+      _compositeImages.sort(
+        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+      );
+    } else {
+      _compositeImages.sort(
+        (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
+      );
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:photobooth/providers/event_provider.dart';
 import 'package:photobooth/providers/layout_editor_provider.dart';
 import 'package:photobooth/providers/layout_provider.dart';
+import 'package:photobooth/providers/sesi_foto.dart';
 import 'package:photobooth/providers/settings_provider.dart';
 import 'package:photobooth/screens/main_screen.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => LayoutsProvider()),
         ChangeNotifierProvider(create: (_) => EventsProvider()),
         ChangeNotifierProvider(create: (_) => LayoutEditorProvider()),
+        ChangeNotifierProvider(create: (_) => SesiFotoProvider()),
       ],
       child: const MyApp(),
     ),

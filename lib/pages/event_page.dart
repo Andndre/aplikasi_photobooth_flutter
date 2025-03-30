@@ -3,10 +3,9 @@ import 'package:photobooth/components/dialogs/add_event_dialog.dart';
 import 'package:photobooth/components/dialogs/delete_event_dialog.dart';
 import 'package:photobooth/components/dialogs/edit_event_dialog.dart';
 import 'package:photobooth/components/dialogs/event_detail_dialog.dart';
-import 'package:photobooth/pages/start_event.dart';
+import 'package:photobooth/pages/sesi_foto.dart';
 import 'package:photobooth/providers/event_provider.dart';
 import 'package:photobooth/providers/layout_provider.dart';
-import 'package:photobooth/providers/start_event.dart';
 import 'package:provider/provider.dart';
 
 class EventPage extends StatelessWidget {
@@ -143,15 +142,8 @@ class EventPage extends StatelessWidget {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
                                                     builder:
-                                                        (
-                                                          context,
-                                                        ) => ChangeNotifierProvider(
-                                                          create:
-                                                              (_) =>
-                                                                  StartEventProvider(),
-                                                          child: StartEvent(
-                                                            event: event,
-                                                          ),
+                                                        (context) => SesiFoto(
+                                                          event: event,
                                                         ),
                                                   ),
                                                 );
