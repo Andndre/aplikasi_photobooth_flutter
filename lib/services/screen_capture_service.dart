@@ -80,6 +80,16 @@ class ScreenCaptureService {
       true; // Uses raw bitmap data without PNG encoding for preview
   bool _useCaching = true; // Uses frame caching to reduce processing
 
+  // Tambahkan flag untuk penggunaan GPU
+  bool _useGpuAcceleration = true;
+  bool get useGpuAcceleration => _useGpuAcceleration;
+
+  void toggleGpuAcceleration() {
+    _useGpuAcceleration = !_useGpuAcceleration;
+    _lastCaptureResult = null; // Reset cache saat mengubah mode
+    print('GPU Acceleration: ${_useGpuAcceleration ? 'Enabled' : 'Disabled'}');
+  }
+
   // Setting untuk performa
   CaptureMethod _captureMethod = CaptureMethod.standard;
   final int _targetFrameIntervalMicros = 16667; // 60 FPS target (1000000/60)
@@ -187,19 +197,54 @@ class ScreenCaptureService {
     }
 
     try {
-      // Reduced downsample factor for faster processing
-      final downsampleFactor = _extremeOptimizationMode ? 2 : 1;
+      // Downsample factor normal
+      int downsampleFactor = 1;
 
-      // Try capture with print window first
+      // Extreme mode uses more aggressive downsampling
+      if (_extremeOptimizationMode) {
+        downsampleFactor = 2;
+      }
+
+      // Capture with Direct3D jika GPU acceleration diaktifkan dan tersedia
       Map<String, dynamic>? result;
-      try {
-        result = await _captureWithPrintWindow(
-          downsampleFactor: downsampleFactor,
-        );
 
-        result ??= await _captureWithBitBlt(downsampleFactor: downsampleFactor);
-      } catch (e) {
-        result = await _captureWithBitBlt(downsampleFactor: downsampleFactor);
+      if (_useGpuAcceleration) {
+        // Coba Direct3D capture jika tersedia (diprioritaskan)
+        try {
+          result = await _captureWithDirect3D(
+            downsampleFactor: downsampleFactor,
+          );
+        } catch (e) {
+          // Fallback to CPU methods if Direct3D fails
+          print('GPU capture failed, falling back to CPU: $e');
+        }
+      }
+
+      // Fallback to standard methods if direct3d capture fails or not enabled
+      if (result == null) {
+        print("Fallback to standard capture method");
+        try {
+          switch (_captureMethod) {
+            case CaptureMethod.standard:
+              result = await _captureWithBitBlt(
+                downsampleFactor: downsampleFactor,
+              );
+              break;
+            case CaptureMethod.printWindow:
+              result = await _captureWithPrintWindow(
+                downsampleFactor: downsampleFactor,
+              );
+              break;
+            case CaptureMethod.fullscreen:
+              result = await _captureWithFullscreenApp(
+                downsampleFactor: downsampleFactor,
+              );
+              break;
+          }
+        } catch (e) {
+          // Try other method if primary method fails
+          result = await _captureWithBitBlt(downsampleFactor: downsampleFactor);
+        }
       }
 
       _lastCaptureTime = now;
@@ -224,6 +269,143 @@ class ScreenCaptureService {
     } catch (e) {
       print('Error in captureWindowWithSize: $e');
       return _lastCaptureResult; // Return last result on error
+    }
+  }
+
+  // Metode untuk Direct3D capture - mengoptimalkan untuk aplikasi yang menggunakan GPU
+  Future<Map<String, dynamic>?> _captureWithDirect3D({
+    int downsampleFactor = 1,
+  }) async {
+    int hwnd = _windowToCapture!.hwnd;
+
+    // Check if window is still valid
+    if (IsWindow(hwnd) == 0) {
+      return null;
+    }
+
+    final rect = calloc<RECT>();
+    try {
+      if (GetWindowRect(hwnd, rect) == 0) {
+        return null;
+      }
+
+      int width = rect.ref.right - rect.ref.left;
+      int height = rect.ref.bottom - rect.ref.top;
+
+      // Check for valid dimensions
+      if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+        return null;
+      }
+
+      // Create DC and bitmap
+      final hdcScreen = GetDC(0); // DC for entire screen
+      if (hdcScreen == 0) {
+        return null;
+      }
+
+      final hdcMemDC = CreateCompatibleDC(hdcScreen);
+      if (hdcMemDC == 0) {
+        ReleaseDC(0, hdcScreen);
+        return null;
+      }
+
+      final hbmScreen = CreateCompatibleBitmap(hdcScreen, width, height);
+      if (hbmScreen == 0) {
+        DeleteDC(hdcMemDC);
+        ReleaseDC(0, hdcScreen);
+        return null;
+      }
+
+      final hbmOld = SelectObject(hdcMemDC, hbmScreen);
+
+      // Optimization for Direct3D windows:
+      // 1. Try PrintWindow with PW_RENDERFULLCONTENT (2) for best quality with Direct3D content
+      // 2. Fallback to standard PrintWindow if that fails
+      int pwResult = 0;
+
+      // First try with PW_RENDERFULLCONTENT for better Direct3D capture
+      pwResult = PrintWindow(hwnd, hdcMemDC, 2);
+
+      // If failed, try with standard PrintWindow
+      if (pwResult == 0) {
+        pwResult = PrintWindow(hwnd, hdcMemDC, 0);
+
+        // If both methods fail, then return null for fallback to other methods
+        if (pwResult == 0) {
+          SelectObject(hdcMemDC, hbmOld);
+          DeleteObject(hbmScreen);
+          DeleteDC(hdcMemDC);
+          ReleaseDC(0, hdcScreen);
+          return null;
+        }
+      }
+
+      // Get the bitmap data
+      final bmi = calloc<BITMAPINFO>();
+      bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+      bmi.ref.bmiHeader.biWidth = width;
+      bmi.ref.bmiHeader.biHeight = -height; // Negative for top-down DIB
+      bmi.ref.bmiHeader.biPlanes = 1;
+      bmi.ref.bmiHeader.biBitCount = 32; // 32-bit BGRA
+      bmi.ref.bmiHeader.biCompression = BI_RGB;
+
+      final pixelDataSize = width * height * 4;
+      final pixelData = calloc<Uint8>(pixelDataSize);
+
+      // Get bitmap bits
+      final dibResult = GetDIBits(
+        hdcMemDC,
+        hbmScreen,
+        0,
+        height,
+        pixelData,
+        bmi,
+        DIB_RGB_COLORS,
+      );
+
+      if (dibResult == 0) {
+        SelectObject(hdcMemDC, hbmOld);
+        DeleteObject(hbmScreen);
+        DeleteDC(hdcMemDC);
+        ReleaseDC(0, hdcScreen);
+        calloc.free(bmi);
+        calloc.free(pixelData);
+        return null;
+      }
+
+      // Copy pixels to Dart Uint8List
+      final pixels = Uint8List(pixelDataSize);
+      for (int i = 0; i < pixelDataSize; i++) {
+        pixels[i] = pixelData[i];
+      }
+
+      // Clean up resources
+      SelectObject(hdcMemDC, hbmOld);
+      DeleteObject(hbmScreen);
+      DeleteDC(hdcMemDC);
+      ReleaseDC(0, hdcScreen);
+      calloc.free(bmi);
+      calloc.free(pixelData);
+
+      // Process image data
+      final result = _processImageData(pixels, width, height, downsampleFactor);
+
+      // Mark result as GPU accelerated
+      if (result != null) {
+        result['isGpuAccelerated'] = true;
+
+        // Add additional metadata that might be useful
+        result['captureMethod'] = 'direct3d';
+        result['originalWidth'] = width;
+        result['originalHeight'] = height;
+      }
+
+      return result;
+    } catch (e) {
+      print('Error in Direct3D capture: $e');
+      return null;
+    } finally {
+      calloc.free(rect);
     }
   }
 

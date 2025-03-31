@@ -43,6 +43,7 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
   int _skippedFrames = 0;
   int _renderedFrames = 0;
   bool _reducedPowerMode = false; // Disable reduced power mode by default
+  bool _isGpuAccelerated = false;
 
   int _captureAttempts = 0;
   final int _maxCaptureAttempts = 5;
@@ -148,6 +149,9 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
         final originalWidth = captureResult['originalWidth'] as int? ?? width;
         final originalHeight =
             captureResult['originalHeight'] as int? ?? height;
+        // Check if the capture is GPU accelerated
+        final isGpuAccelerated =
+            captureResult['isGpuAccelerated'] as bool? ?? false;
 
         // Reset error counters on successful capture
         _errorCount = 0;
@@ -161,6 +165,8 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
           _originalWidth = originalWidth;
           _originalHeight = originalHeight;
           _isDirect = isDirect;
+          _isGpuAccelerated =
+              isGpuAccelerated; // Update GPU acceleration status
           _displayCaptureError = false;
         });
 
@@ -387,10 +393,62 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
                         color: _reducedPowerMode ? Colors.green : Colors.orange,
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        widget.provider.toggleGpuAcceleration();
+                      },
+                      child: Icon(
+                        _isGpuAccelerated
+                            ? Icons.flash_on
+                            : Icons.diamond_outlined,
+                        size: 12,
+                        color: _isGpuAccelerated ? Colors.cyan : Colors.grey,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+
+            // GPU acceleration indicator
+            if (_currentWindowCapture != null && !_displayCaptureError)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        _isGpuAccelerated
+                            ? Colors.cyan.withOpacity(0.7)
+                            : Colors.grey.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isGpuAccelerated ? Icons.flash_on : Icons.flash_off,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        _isGpuAccelerated ? 'GPU' : 'CPU',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // Original resolution indicator
             if (_currentWindowCapture != null &&
@@ -766,6 +824,19 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                               value: widget.provider.extremeOptimizationMode,
                               onChanged: (value) {
                                 widget.provider.toggleExtremeOptimizationMode();
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Use GPU Acceleration:"),
+                            Switch(
+                              value: widget.provider.useGpuAcceleration,
+                              onChanged: (value) {
+                                widget.provider.toggleGpuAcceleration();
                                 Navigator.pop(context);
                               },
                             ),
