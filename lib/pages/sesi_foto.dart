@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:ffi' hide Size; // Add 'hide Size' to prevent ambiguity
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photobooth/models/event_model.dart';
 import 'package:photobooth/providers/layout_provider.dart';
+import 'package:photobooth/services/screen_capture_service.dart';
 import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 import '../providers/sesi_foto.dart';
@@ -20,12 +22,15 @@ class WindowCapturePreview extends StatefulWidget {
   WindowCapturePreviewState createState() => WindowCapturePreviewState();
 }
 
-class WindowCapturePreviewState extends State<WindowCapturePreview> {
+class WindowCapturePreviewState extends State<WindowCapturePreview>
+    with SingleTickerProviderStateMixin {
   Uint8List? _currentWindowCapture;
   bool _isCapturing = false;
   Timer? _captureTimer;
   int _captureWidth = 0;
   int _captureHeight = 0;
+  int _originalWidth = 0;
+  int _originalHeight = 0;
   int _framesReceived = 0;
   DateTime _lastFrameTime = DateTime.now();
   double _currentFps = 0;
@@ -33,86 +38,191 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
   final _maxConsecutiveErrors = 5;
   bool _displayCaptureError = false;
   bool _isDirect = false; // Track if we're using direct bitmap data
+  DateTime _lastCaptureTime = DateTime.now();
+  final int _targetFrameTimeMs = 16; // ~60 FPS (1000ms / 60 = 16.67ms)
+  int _skippedFrames = 0;
+  int _renderedFrames = 0;
+  bool _reducedPowerMode = false; // Disable reduced power mode by default
+
+  int _captureAttempts = 0;
+  final int _maxCaptureAttempts = 5;
+  bool _initialCaptureComplete = false;
+
+  late AnimationController _refreshController;
 
   @override
   void initState() {
     super.initState();
-    _captureWindowForPreview().then((_) {
-      _startPeriodicCapture();
-    });
+    _setupAnimationController();
+    // First attempt at preview capture
+    _captureWindowForPreview(isInitialCapture: true);
+  }
+
+  void _setupAnimationController() {
+    // Use a faster animation ticker to handle 60fps
+    _refreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 16), // 60fps ticker
+    )..repeat();
+
+    // React to animation events, but throttle capture requests
+    _refreshController.addListener(_onAnimationTick);
+  }
+
+  void _onAnimationTick() {
+    // Skip some frames to reduce CPU load - with a more modest throttling
+    _skippedFrames++;
+
+    // In reduced power mode, only process every 2nd frame, but default is every frame
+    final skipThreshold = _reducedPowerMode ? 2 : 1;
+
+    if (_skippedFrames >= skipThreshold) {
+      _skippedFrames = 0;
+
+      final now = DateTime.now();
+      final elapsed = now.difference(_lastCaptureTime).inMilliseconds;
+
+      // Make sure we're not capturing too frequently
+      if (!_isCapturing && elapsed >= _targetFrameTimeMs) {
+        _captureWindowForPreview();
+        _renderedFrames++;
+      }
+    }
   }
 
   @override
   void dispose() {
     _captureTimer?.cancel();
+    _refreshController.dispose();
     super.dispose();
   }
 
-  // Start capturing the window periodically for preview
+  // Start capturing the window periodically for preview - only as fallback
   void _startPeriodicCapture() {
     _captureTimer?.cancel();
 
-    // Set timer to ~33ms for approximately 30fps
-    _captureTimer = Timer.periodic(const Duration(milliseconds: 15), (_) {
-      if (!_isCapturing) {
-        _captureWindowForPreview();
+    // Set timer to match our 60 FPS target
+    _captureTimer = Timer.periodic(Duration(milliseconds: _targetFrameTimeMs), (
+      _,
+    ) {
+      // Only use timer-based capture if animation controller isn't working
+      if (!_refreshController.isAnimating) {
+        final now = DateTime.now();
+        final elapsed = now.difference(_lastCaptureTime).inMilliseconds;
+
+        if (!_isCapturing && elapsed >= _targetFrameTimeMs) {
+          _captureWindowForPreview();
+          _renderedFrames++;
+        }
       }
     });
   }
 
-  // Method to capture the window for preview display
-  Future<void> _captureWindowForPreview() async {
-    if (_isCapturing) return; // Prevent multiple simultaneous captures
+  // Method to capture the window for preview display - optimized for performance
+  Future<void> _captureWindowForPreview({bool isInitialCapture = false}) async {
+    if (_isCapturing) return;
 
     final provider = widget.provider;
     if (provider.windowToCapture == null) {
-      setState(() {
-        _displayCaptureError = false;
-        _errorCount = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _displayCaptureError = false;
+          _errorCount = 0;
+          _captureAttempts = 0;
+        });
+      }
       return;
     }
 
     _isCapturing = true;
+    _lastCaptureTime = DateTime.now();
 
     try {
       final captureResult = await provider.captureWindowWithSize();
+
       if (captureResult != null && mounted) {
         final capturedImageBytes = captureResult['bytes'] as Uint8List;
         final width = captureResult['width'] as int;
         final height = captureResult['height'] as int;
         final isDirect = captureResult['isDirect'] as bool;
+        final originalWidth = captureResult['originalWidth'] as int? ?? width;
+        final originalHeight =
+            captureResult['originalHeight'] as int? ?? height;
 
-        if (capturedImageBytes.isNotEmpty) {
-          setState(() {
-            _currentWindowCapture = capturedImageBytes;
-            _captureWidth = width;
-            _captureHeight = height;
-            _isDirect = isDirect;
-            _displayCaptureError = false;
-            _errorCount = 0;
-          });
+        // Reset error counters on successful capture
+        _errorCount = 0;
+        _captureAttempts = 0;
+        _initialCaptureComplete = true;
 
-          // Calculate and update FPS
-          _framesReceived++;
-          final now = DateTime.now();
-          final elapsed = now.difference(_lastFrameTime).inMilliseconds;
-          if (elapsed > 1000) {
-            // Update FPS every second
+        setState(() {
+          _currentWindowCapture = capturedImageBytes;
+          _captureWidth = width;
+          _captureHeight = height;
+          _originalWidth = originalWidth;
+          _originalHeight = originalHeight;
+          _isDirect = isDirect;
+          _displayCaptureError = false;
+        });
+
+        // Start periodic capture after first successful capture
+        if (isInitialCapture) {
+          _startPeriodicCapture();
+        }
+
+        // Calculate and update FPS
+        _framesReceived++;
+        final now = DateTime.now();
+        final elapsed = now.difference(_lastFrameTime).inMilliseconds;
+        if (elapsed > 1000) {
+          // Update FPS every second
+          if (mounted) {
             setState(() {
               _currentFps = (_framesReceived * 1000) / elapsed;
               _framesReceived = 0;
               _lastFrameTime = now;
             });
           }
-        } else {
-          print('Warning: Empty image data received');
-          _errorCount++;
+        }
+      } else {
+        // Increment attempt counter
+        _captureAttempts++;
+
+        if (_captureAttempts < _maxCaptureAttempts && isInitialCapture) {
+          // Try again after a delay if we're still in initial capture phase
+          Future.delayed(Duration(milliseconds: 500), () {
+            if (mounted) {
+              _isCapturing = false;
+              _captureWindowForPreview(isInitialCapture: true);
+            }
+          });
+          return;
+        } else if (!_initialCaptureComplete && isInitialCapture) {
+          // If all attempts failed during initial capture
+          _errorCount = _maxConsecutiveErrors;
+          setState(() {
+            _displayCaptureError = true;
+          });
         }
       }
     } catch (e) {
       _errorCount++;
-      print('Error capturing window: $e');
+      _captureAttempts++;
+
+      if (_captureAttempts < _maxCaptureAttempts && isInitialCapture) {
+        // Try again if initial capture
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            _isCapturing = false;
+            _captureWindowForPreview(isInitialCapture: true);
+          }
+        });
+        return;
+      }
+
+      // Only log serious errors to reduce log spam
+      if (_errorCount % _maxConsecutiveErrors == 0) {
+        print('Error capturing window: $e');
+      }
 
       // Only show error state after several consecutive errors
       if (_errorCount >= _maxConsecutiveErrors && mounted) {
@@ -122,6 +232,13 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
       }
     } finally {
       _isCapturing = false;
+
+      // Start timer for periodic capture if we're done with initial attempts
+      if (isInitialCapture &&
+          _captureAttempts >= _maxCaptureAttempts &&
+          !_initialCaptureComplete) {
+        _startPeriodicCapture();
+      }
     }
   }
 
@@ -186,6 +303,8 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
                           ? 'Error capturing window'
                           : widget.provider.windowToCapture == null
                           ? 'No window selected'
+                          : _captureAttempts > 0
+                          ? 'Trying to capture window... (Attempt ${_captureAttempts}/${_maxCaptureAttempts})'
                           : 'Preparing window capture...',
                       style: TextStyle(
                         fontSize: 18,
@@ -193,6 +312,23 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
                             _displayCaptureError ? Colors.red.shade400 : null,
                       ),
                     ),
+                    if (_displayCaptureError)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (mounted) {
+                              setState(() {
+                                _displayCaptureError = false;
+                                _errorCount = 0;
+                                _captureAttempts = 0;
+                              });
+                              _captureWindowForPreview(isInitialCapture: true);
+                            }
+                          },
+                          child: const Text('Retry Capture'),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -238,10 +374,47 @@ class WindowCapturePreviewState extends State<WindowCapturePreview> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _reducedPowerMode = !_reducedPowerMode;
+                        });
+                      },
+                      child: Icon(
+                        _reducedPowerMode ? Icons.battery_saver : Icons.speed,
+                        size: 12,
+                        color: _reducedPowerMode ? Colors.green : Colors.orange,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+
+            // Original resolution indicator
+            if (_currentWindowCapture != null &&
+                !_displayCaptureError &&
+                _originalWidth > 0 &&
+                _originalHeight > 0)
+              Positioned(
+                bottom: 60, // Position above the "Press Enter" text
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Original: ${_originalWidth}x${_originalHeight} → Preview: ${_captureWidth}x${_captureHeight}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -268,159 +441,125 @@ class RawImageDisplay extends StatefulWidget {
 
 class RawImageDisplayState extends State<RawImageDisplay> {
   ui.Image? _image;
-  ui.Image? _previousImage; // Keep the previous image to prevent flickering
+  ui.Image? _previousImage;
   bool _isConverting = false;
   String? _errorMessage;
+  Size? _targetSize;
+  late final Paint _imagePaint;
 
   @override
   void initState() {
     super.initState();
+    // Configure image paint for better performance - use lowest quality
+    _imagePaint =
+        Paint()
+          ..filterQuality = FilterQuality.none
+          ..isAntiAlias = false;
     _convertToImage();
   }
 
   @override
   void didUpdateWidget(RawImageDisplay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Only recreate the image if size changed or image data changed
-    if (oldWidget.width != widget.width ||
-        oldWidget.height != widget.height ||
-        oldWidget.imageBytes != widget.imageBytes) {
+
+    // Optimize by checking if pixels have actually changed
+    final bytesChanged = widget.imageBytes != oldWidget.imageBytes;
+    final sizeChanged =
+        widget.width != oldWidget.width || widget.height != oldWidget.height;
+
+    if (sizeChanged || bytesChanged) {
       _convertToImage();
     }
   }
 
   Future<void> _convertToImage() async {
-    // Skip if we're already converting to prevent race conditions
     if (_isConverting) return;
 
     _isConverting = true;
-    String? conversionError;
 
     try {
-      // Validate the image data first
-      if (widget.imageBytes.length < widget.width * widget.height * 4) {
-        throw Exception(
-          'Invalid image data: bytes length (${widget.imageBytes.length}) '
-          'is less than expected (${widget.width * widget.height * 4})',
-        );
-      }
+      // Use the highest performance method available for image conversion
+      final completer = Completer<ui.Image>();
 
-      // Debug information
-      // print('Converting raw image: ${widget.width}x${widget.height}, bytes: ${widget.imageBytes.length}');
+      ui.decodeImageFromPixels(
+        widget.imageBytes,
+        widget.width,
+        widget.height,
+        ui.PixelFormat.rgba8888,
+        (ui.Image result) {
+          completer.complete(result);
+        },
+        // Don't scale during decode, as we'll do that during painting
+        // for better performance
+        rowBytes: widget.width * 4,
+      );
 
-      // Use a try-catch block specifically for the decodeImageFromPixels call
-      try {
-        // Create the image without using setState during conversion
-        final completer = Completer<ui.Image>();
-        ui.decodeImageFromPixels(
-          widget.imageBytes,
-          widget.width,
-          widget.height,
-          ui.PixelFormat.rgba8888,
-          completer.complete,
-          rowBytes: widget.width * 4,
-        );
+      final image = await completer.future;
 
-        final image = await completer.future;
-
-        // Only update UI if the widget is still mounted
-        if (mounted) {
-          setState(() {
-            // Save the previous image before replacing it
-            _previousImage = _image;
-            _image = image;
-            _errorMessage = null;
-          });
-        }
-      } catch (decodeError) {
-        print('Error in decodeImageFromPixels: $decodeError');
-
-        // Try alternative approach with ImageCodec
-        try {
-          final codec = await ui.instantiateImageCodec(widget.imageBytes);
-          final frame = await codec.getNextFrame();
-
-          if (mounted) {
-            setState(() {
-              _previousImage = _image;
-              _image = frame.image;
-              _errorMessage = null;
-            });
-          }
-        } catch (codecError) {
-          print('Error with codec approach: $codecError');
-          conversionError = codecError.toString();
-        }
-      }
-    } catch (e) {
-      print('Error converting raw image: $e');
-      conversionError = e.toString();
-    } finally {
-      // Update error state if needed, but only if we're still mounted
-      if (mounted && conversionError != null) {
+      if (mounted) {
         setState(() {
-          _errorMessage = conversionError;
+          _previousImage = _image;
+          _image = image;
+          _errorMessage = null;
         });
       }
-
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Image conversion error';
+        });
+      }
+      // Add this error log as it's important for debugging
+      print('Error converting image: $e');
+    } finally {
       _isConverting = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // If we have a current image, display it
-    if (_image != null) {
-      return CustomPaint(
-        painter: RawImagePainter(image: _image!),
-        size: Size(widget.width.toDouble(), widget.height.toDouble()),
-      );
-    }
-
-    // If we have a previous image, show it to prevent flickering while loading new one
-    if (_previousImage != null) {
-      return CustomPaint(
-        painter: RawImagePainter(image: _previousImage!),
-        size: Size(widget.width.toDouble(), widget.height.toDouble()),
-      );
-    }
-
-    // Only show an empty container or error if we have no images at all
-    if (_errorMessage != null) {
-      return Container(
-        color: Colors.black,
-        child: Center(
-          child: Text(
-            'Image Error',
-            style: TextStyle(color: Colors.red.shade400),
-          ),
-        ),
-      );
-    }
-
-    // Blank space instead of a spinner
-    return Container(color: Colors.black);
+    // Use RepaintBoundary to optimize rendering performance
+    return RepaintBoundary(
+      child:
+          _image != null
+              ? CustomPaint(
+                painter: RawImagePainter(
+                  image: _image!,
+                  thisPaint: _imagePaint,
+                ),
+                size: Size(widget.width.toDouble(), widget.height.toDouble()),
+              )
+              : _previousImage != null
+              ? CustomPaint(
+                painter: RawImagePainter(
+                  image: _previousImage!,
+                  thisPaint: _imagePaint,
+                ),
+                size: Size(widget.width.toDouble(), widget.height.toDouble()),
+              )
+              : Container(color: Colors.black),
+    );
   }
 }
 
 // Custom painter to efficiently render the ui.Image
 class RawImagePainter extends CustomPainter {
   final ui.Image image;
+  final Paint thisPaint;
 
-  RawImagePainter({required this.image});
+  RawImagePainter({required this.image, required this.thisPaint});
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Calculate scale to fit the image within the available space
+    // Calculate optimal scaling
     final double scaleX = size.width / image.width;
     final double scaleY = size.height / image.height;
-    final double scale = scaleX < scaleY ? scaleX : scaleY;
+    final double scale = math.min(scaleX, scaleY);
 
     // Calculate centered position
     final double left = (size.width - (image.width * scale)) / 2;
     final double top = (size.height - (image.height * scale)) / 2;
 
-    // Create a rect for the image
     final Rect rect = Rect.fromLTWH(
       left,
       top,
@@ -428,17 +567,17 @@ class RawImagePainter extends CustomPainter {
       image.height * scale,
     );
 
-    // Draw the image
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       rect,
-      Paint(),
+      thisPaint,
     );
   }
 
   @override
   bool shouldRepaint(RawImagePainter oldDelegate) {
+    // Only repaint if the image reference has changed
     return oldDelegate.image != image;
   }
 }
@@ -463,16 +602,17 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
     _loadAvailableWindows();
   }
 
-  // Function to load all available windows
+  // Gunakan metode dari service untuk mendapat daftar window
   void _loadAvailableWindows() async {
-    if (_isLoading) return; // Prevent multiple simultaneous calls
+    if (_isLoading) return;
 
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final windows = _getWindowsList();
+      // Gunakan fungsi dari service
+      final windows = await ScreenCaptureService.getWindowsList();
 
       // Add a slight delay to ensure UI updates properly
       await Future.delayed(const Duration(milliseconds: 100));
@@ -499,70 +639,6 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
     }
   }
 
-  // Function to get the list of windows
-  List<WindowInfo> _getWindowsList() {
-    final windows = <WindowInfo>[];
-
-    try {
-      // Define the callback function
-      final enumWindowsProc = Pointer.fromFunction<EnumWindowsProc>(
-        _enumWindowsCallback,
-        0, // Returning 0 means stop enumeration, 1 means continue
-      );
-
-      // Store the windows list in a global variable to access from the callback
-      _tempWindowsList = windows;
-
-      // Call the Win32 EnumWindows function
-      final result = EnumWindows(enumWindowsProc, 0);
-      if (result == 0) {
-        print('EnumWindows failed');
-      }
-
-      // Add a special entry for "None" so user can deselect
-      windows.insert(0, WindowInfo(hwnd: 0, title: 'Select a window...'));
-
-      return windows;
-    } catch (e) {
-      print('Error in _getWindowsList: $e');
-      return [WindowInfo(hwnd: 0, title: 'Error loading windows')];
-    }
-  }
-
-  // Temporary storage for the windows list during enumeration
-  static List<WindowInfo>? _tempWindowsList;
-
-  // Callback function for EnumWindows
-  static int _enumWindowsCallback(int hwnd, int lParam) {
-    try {
-      if (IsWindowVisible(hwnd) != 0) {
-        final buffer = calloc<Uint16>(1024).cast<Utf16>();
-        final titleLength = GetWindowText(hwnd, buffer, 1024);
-
-        if (titleLength > 0) {
-          final title = buffer.toDartString();
-
-          // Filter out empty titles and system windows
-          if (title.isNotEmpty &&
-              !title.contains('Default IME') &&
-              !title.contains('MSCTFIME UI') &&
-              !title.contains('Windows Input Experience')) {
-            // Filter out this application's own window to prevent capturing itself
-            if (!title.toLowerCase().contains('aplikasi_photobooth_flutter')) {
-              _tempWindowsList?.add(WindowInfo(hwnd: hwnd, title: title));
-            }
-          }
-        }
-
-        calloc.free(buffer);
-      }
-    } catch (e) {
-      print('Error in _enumWindowsCallback: $e');
-    }
-
-    return TRUE; // Continue enumeration
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentWindow = widget.provider.windowToCapture;
@@ -579,6 +655,8 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                 ? 'Select a window to capture'
                 : 'Capture Settings',
         position: PopupMenuPosition.under,
+        // Refresh window list when menu is opened
+        onOpened: _loadAvailableWindows,
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.8,
           minWidth: 300,
@@ -602,102 +680,109 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Expanded(
-                              child: DropdownButton<int>(
-                                value: currentWindow?.hwnd,
-                                isExpanded: true,
-                                onChanged: (int? newValue) {
-                                  if (newValue != null) {
-                                    if (newValue == 0) {
-                                      widget.provider.setWindowToCapture(null);
-                                    } else {
-                                      final selectedWindow = _availableWindows
-                                          .firstWhere(
-                                            (window) => window.hwnd == newValue,
-                                            orElse:
-                                                () => _availableWindows.first,
-                                          );
+                              child:
+                                  _isLoading
+                                      ? const Center(
+                                        child: SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      )
+                                      : DropdownButton<int>(
+                                        value: currentWindow?.hwnd,
+                                        isExpanded: true,
+                                        onChanged: (int? newValue) {
+                                          if (newValue != null) {
+                                            if (newValue == 0) {
+                                              widget.provider
+                                                  .setWindowToCapture(null);
+                                            } else {
+                                              final selectedWindow =
+                                                  _availableWindows.firstWhere(
+                                                    (window) =>
+                                                        window.hwnd == newValue,
+                                                    orElse:
+                                                        () =>
+                                                            _availableWindows
+                                                                .first,
+                                                  );
 
-                                      if (selectedWindow.hwnd != 0) {
-                                        widget.provider.setWindowToCapture(
-                                          selectedWindow,
-                                        );
-                                      } else {
-                                        widget.provider.setWindowToCapture(
-                                          null,
-                                        );
-                                      }
-                                    }
-                                  }
-                                  Navigator.pop(context);
-                                },
-                                items:
-                                    _availableWindows
-                                        .map<DropdownMenuItem<int>>((window) {
-                                          return DropdownMenuItem<int>(
-                                            value: window.hwnd,
-                                            child: Text(
-                                              window.title,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          );
-                                        })
-                                        .toList(),
-                              ),
+                                              if (selectedWindow.hwnd != 0) {
+                                                widget.provider
+                                                    .setWindowToCapture(
+                                                      selectedWindow,
+                                                    );
+                                              } else {
+                                                widget.provider
+                                                    .setWindowToCapture(null);
+                                              }
+                                            }
+                                          }
+                                          Navigator.pop(context);
+                                        },
+                                        items:
+                                            _availableWindows
+                                                .map<DropdownMenuItem<int>>((
+                                                  window,
+                                                ) {
+                                                  return DropdownMenuItem<int>(
+                                                    value: window.hwnd,
+                                                    child: Text(
+                                                      window.title,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  );
+                                                })
+                                                .toList(),
+                                      ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.refresh, size: 20),
                               onPressed: () {
                                 _loadAvailableWindows();
-                                Navigator.pop(context);
                               },
                             ),
                           ],
                         ),
+
                         const Divider(),
                         const Text(
-                          'Capture Method',
+                          'Performance Settings',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: DropdownButton<CaptureMethod>(
-                                value: captureMethod,
-                                isExpanded: true,
-                                onChanged: (CaptureMethod? newMethod) {
-                                  if (newMethod != null) {
-                                    widget.provider.setCaptureMethod(newMethod);
-                                  }
-                                  Navigator.pop(context);
-                                },
-                                items:
-                                    CaptureMethod.values.map<
-                                      DropdownMenuItem<CaptureMethod>
-                                    >((method) {
-                                      return DropdownMenuItem<CaptureMethod>(
-                                        value: method,
-                                        child: Text(
-                                          _getCaptureMethodName(method),
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                      );
-                                    }).toList(),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.help_outline, size: 20),
-                              onPressed: () {
+                            const Text("Extreme Power Saving:"),
+                            Switch(
+                              value: widget.provider.extremeOptimizationMode,
+                              onChanged: (value) {
+                                widget.provider.toggleExtremeOptimizationMode();
                                 Navigator.pop(context);
-                                _showCaptureMethodHelp(context);
                               },
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Capture Method: (Auto-selected based on window type)',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _getCaptureMethodName(captureMethod),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -712,18 +797,12 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
   // Helper method to get the name of the capture method
   String _getCaptureMethodName(CaptureMethod method) {
     switch (method) {
-      case CaptureMethod.bitBlt:
-        return 'BitBlt (Default)';
-      case CaptureMethod.windowsGraphicsCapture:
-        return 'Windows Graphics Capture';
+      case CaptureMethod.standard:
+        return 'Standard (BitBlt/PrintWindow)';
       case CaptureMethod.printWindow:
-        return 'PrintWindow';
-      case CaptureMethod.dxgi:
-        return 'DXGI Desktop Duplication';
-      case CaptureMethod.browserSpecific:
-        return 'Browser Specific';
-      case CaptureMethod.fullscreenApp:
-        return 'Fullscreen App';
+        return 'PrintWindow (Better Compatibility)';
+      case CaptureMethod.fullscreen:
+        return 'Fullscreen/Browser Mode';
     }
   }
 
@@ -739,37 +818,22 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildCaptureMethodInfo(
-                'BitBlt (Default)',
-                'Standard window capture. Works with most applications.',
-              ),
-              const SizedBox(height: 8),
-              _buildCaptureMethodInfo(
-                'Windows Graphics Capture',
-                'Better for UWP apps and games. Requires Windows 10.',
+                'Standard',
+                'Standard window capture. Works for most basic applications.',
               ),
               const SizedBox(height: 8),
               _buildCaptureMethodInfo(
                 'PrintWindow',
-                'Alternative method that can capture some windows that BitBlt cannot.',
+                'Better compatibility with more applications but may use more CPU.',
               ),
               const SizedBox(height: 8),
               _buildCaptureMethodInfo(
-                'DXGI Desktop Duplication',
-                'Best for games and hardware-accelerated content. Higher performance.',
-              ),
-              const SizedBox(height: 8),
-              _buildCaptureMethodInfo(
-                'Browser Specific',
-                'Optimized for Chrome, Edge, Firefox and other browsers with hardware acceleration.',
-              ),
-              const SizedBox(height: 8),
-              _buildCaptureMethodInfo(
-                'Fullscreen App',
-                'For OBS Projector, games, and other fullscreen applications.',
+                'Fullscreen/Browser Mode',
+                'Best for browsers, OBS, and fullscreen applications.',
               ),
               const SizedBox(height: 16),
               const Text(
-                'For Chrome/Edge browsers, use Browser Specific.\nFor OBS Projector, use Fullscreen App.',
+                'The best capture method is automatically selected based on the window type.',
                 style: TextStyle(fontStyle: FontStyle.italic),
               ),
             ],

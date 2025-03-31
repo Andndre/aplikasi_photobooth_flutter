@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:photobooth/providers/event_provider.dart';
 import 'package:photobooth/providers/layout_editor_provider.dart';
 import 'package:photobooth/providers/layout_provider.dart';
@@ -8,6 +9,11 @@ import 'package:photobooth/screens/main_screen.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Set the app to use less CPU
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   runApp(
     MultiProvider(
       providers: [
@@ -25,7 +31,6 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
