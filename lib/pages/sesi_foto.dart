@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:photobooth/models/event_model.dart';
 import 'package:photobooth/providers/layout_provider.dart';
 import 'package:photobooth/services/screen_capture_service.dart';
+import 'package:photobooth/components/dialogs/composite_images_dialog.dart'; // Add this import
 import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 import '../providers/sesi_foto.dart';
@@ -309,7 +310,7 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
                           : widget.provider.windowToCapture == null
                           ? 'No window selected'
                           : _captureAttempts > 0
-                          ? 'Trying to capture window... (Attempt ${_captureAttempts}/${_maxCaptureAttempts})'
+                          ? 'Trying to capture window... (Attempt $_captureAttempts/$_maxCaptureAttempts)'
                           : 'Preparing window capture...',
                       style: TextStyle(
                         fontSize: 18,
@@ -340,7 +341,7 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
 
             // "Press Enter" text at the bottom
             if (_currentWindowCapture != null && !_displayCaptureError)
-              const Positioned(
+              Positioned(
                 bottom: 20,
                 left: 0,
                 right: 0,
@@ -980,6 +981,21 @@ class SesiFotoState extends State<SesiFoto> {
             appBar: AppBar(
               title: Text('Sesi Foto: ${widget.event.name}'),
               actions: [
+                // Add new gallery button
+                IconButton(
+                  icon: const Icon(Icons.photo_library),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder:
+                          (context) => CompositeImagesDialog(
+                            eventName: widget.event.name,
+                            uploadFolder: widget.event.uploadFolder,
+                          ),
+                    );
+                  },
+                  tooltip: 'View Gallery',
+                ),
                 IconButton(
                   icon: const Icon(Icons.camera_alt),
                   onPressed:

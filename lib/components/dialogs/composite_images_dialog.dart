@@ -30,54 +30,89 @@ class _CompositeImagesDialogState extends State<CompositeImagesDialog> {
   }
 
   void _showImagePreview(BuildContext context, int index, List<File> images) {
-    if (images.isNotEmpty && index >= 0 && index < images.length) {
-      showDialog(
-        context: context,
-        builder:
-            (dialogContext) => Dialog(
-              backgroundColor: Colors.black,
-              child: Stack(
-                children: [
-                  Center(child: Image.file(images[index])),
+    if (images.isEmpty || index < 0 || index >= images.length) return;
+
+    showDialog(
+      context: context,
+      builder:
+          (dialogContext) => Dialog(
+            backgroundColor: Colors.black,
+            insetPadding: const EdgeInsets.all(16),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 3.0,
+                  child: Image.file(images[index], fit: BoxFit.contain),
+                ),
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
+                if (index > 0)
                   Positioned(
-                    top: 40,
-                    left: 20,
+                    left: 16,
+                    top: 0,
+                    bottom: 0,
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white70,
+                        size: 36,
+                      ),
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                        _showImagePreview(context, index - 1, images);
+                      },
                     ),
                   ),
-                  if (index > 0)
-                    Positioned(
-                      left: 20,
-                      top: MediaQuery.of(context).size.height / 2 - 30,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.arrow_left,
-                          color: Colors.white,
-                          size: 50,
-                        ),
-                        onPressed: () => setState(() => index--),
+                if (index < images.length - 1)
+                  Positioned(
+                    right: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white70,
+                        size: 36,
                       ),
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                        _showImagePreview(context, index + 1, images);
+                      },
                     ),
-                  if (index < images.length - 1)
-                    Positioned(
-                      right: 20,
-                      top: MediaQuery.of(context).size.height / 2 - 30,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.arrow_right,
-                          color: Colors.white,
-                          size: 50,
-                        ),
-                        onPressed: () => setState(() => index++),
-                      ),
+                  ),
+                Positioned(
+                  bottom: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                ],
-              ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      "${index + 1} / ${images.length}",
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
             ),
-      );
-    }
+          ),
+    );
   }
 
   @override
@@ -91,7 +126,7 @@ class _CompositeImagesDialogState extends State<CompositeImagesDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               AppBar(
-                title: Text('Composite Images: ${widget.eventName}'),
+                title: Text('Gallery ${widget.eventName}'),
                 leading: IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.of(context).pop(),
@@ -128,21 +163,75 @@ class _CompositeImagesDialogState extends State<CompositeImagesDialog> {
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 3,
-                                crossAxisSpacing: 8.0,
-                                mainAxisSpacing: 8.0,
+                                crossAxisSpacing: 12.0,
+                                mainAxisSpacing: 12.0,
                               ),
                           itemCount: compositeImages.length,
                           itemBuilder: (context, index) {
-                            return GestureDetector(
-                              onTap:
-                                  () => _showImagePreview(
-                                    context,
-                                    index,
-                                    compositeImages,
-                                  ),
-                              child: Image.file(
-                                compositeImages[index],
-                                fit: BoxFit.cover,
+                            return Card(
+                              clipBehavior: Clip.antiAlias,
+                              elevation: 3.0,
+                              child: InkWell(
+                                onTap:
+                                    () => _showImagePreview(
+                                      context,
+                                      index,
+                                      compositeImages,
+                                    ),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black12,
+                                        image: DecorationImage(
+                                          image: FileImage(
+                                            compositeImages[index],
+                                          ),
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.black.withOpacity(0.3),
+                                            ],
+                                            stops: const [0.7, 1.0],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
