@@ -30,6 +30,13 @@ class SesiFotoProvider with ChangeNotifier {
   int? _retakePhotoIndex;
   int? get retakePhotoIndex => _retakePhotoIndex;
 
+  // Add countdown state
+  int _countdownValue = 0;
+  bool _isCountingDown = false;
+
+  int get countdownValue => _countdownValue;
+  bool get isCountingDown => _isCountingDown;
+
   // Delegate ke screen capture service
   CaptureMethod get captureMethod => _screenCaptureService.captureMethod;
   double get currentFps => _screenCaptureService.currentFps;
@@ -94,6 +101,9 @@ class SesiFotoProvider with ChangeNotifier {
     LayoutModel layout,
     BuildContext context,
   ) async {
+    // If already counting down, don't start another countdown
+    if (_isCountingDown) return;
+
     final hwnd = FindWindowEx(0, 0, nullptr, TEXT('WhatsApp'));
     if (hwnd == 0) {
       showDialog(
@@ -112,6 +122,26 @@ class SesiFotoProvider with ChangeNotifier {
       );
       return;
     }
+
+    // Start countdown from 3
+    setState(() {
+      _isCountingDown = true;
+      _countdownValue = 3;
+    });
+
+    // Countdown sequence
+    for (int i = 3; i > 0; i--) {
+      setState(() {
+        _countdownValue = i;
+      });
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    // Reset countdown state after countdown
+    setState(() {
+      _isCountingDown = false;
+      _countdownValue = 0;
+    });
 
     // Store a reference to the photobooth window
     final photoboothHwnd = FindWindow(nullptr, TEXT('photobooth'));
@@ -419,5 +449,11 @@ class SesiFotoProvider with ChangeNotifier {
         (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
       );
     }
+  }
+
+  // Helper method to update state and notify listeners
+  void setState(VoidCallback fn) {
+    fn();
+    notifyListeners();
   }
 }

@@ -248,6 +248,9 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
   Widget build(BuildContext context) {
     // Get provider FPS for display
     final providerFps = widget.provider.currentFps;
+    // Get countdown state
+    final isCountingDown = widget.provider.isCountingDown;
+    final countdownValue = widget.provider.countdownValue;
 
     return RepaintBoundary(
       child: Container(
@@ -466,6 +469,29 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
                   child: Text(
                     'Original: ${_originalWidth}x$_originalHeight → Preview: ${_captureWidth}x$_captureHeight',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                ),
+              ),
+
+            // Countdown overlay - show on top of everything else
+            if (isCountingDown)
+              Center(
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(60),
+                  ),
+                  child: Center(
+                    child: Text(
+                      countdownValue.toString(),
+                      style: const TextStyle(
+                        fontSize: 64,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
