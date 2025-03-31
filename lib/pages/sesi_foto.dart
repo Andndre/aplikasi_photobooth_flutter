@@ -3,7 +3,6 @@ import 'dart:ffi' hide Size; // Add 'hide Size' to prevent ambiguity
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 
-import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photobooth/models/event_model.dart';
@@ -41,7 +40,6 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
   DateTime _lastCaptureTime = DateTime.now();
   final int _targetFrameTimeMs = 16; // ~60 FPS (1000ms / 60 = 16.67ms)
   int _skippedFrames = 0;
-  int _renderedFrames = 0;
   bool _reducedPowerMode = false; // Disable reduced power mode by default
   bool _isGpuAccelerated = false;
 
@@ -86,7 +84,6 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
       // Make sure we're not capturing too frequently
       if (!_isCapturing && elapsed >= _targetFrameTimeMs) {
         _captureWindowForPreview();
-        _renderedFrames++;
       }
     }
   }
@@ -113,7 +110,6 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
 
         if (!_isCapturing && elapsed >= _targetFrameTimeMs) {
           _captureWindowForPreview();
-          _renderedFrames++;
         }
       }
     });
@@ -501,8 +497,6 @@ class RawImageDisplayState extends State<RawImageDisplay> {
   ui.Image? _image;
   ui.Image? _previousImage;
   bool _isConverting = false;
-  String? _errorMessage;
-  Size? _targetSize;
   late final Paint _imagePaint;
 
   @override
@@ -558,15 +552,9 @@ class RawImageDisplayState extends State<RawImageDisplay> {
         setState(() {
           _previousImage = _image;
           _image = image;
-          _errorMessage = null;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Image conversion error';
-        });
-      }
       // Add this error log as it's important for debugging
       print('Error converting image: $e');
     } finally {
@@ -875,60 +863,6 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
       case CaptureMethod.fullscreen:
         return 'Fullscreen/Browser Mode';
     }
-  }
-
-  // Show a help dialog explaining the different capture methods
-  void _showCaptureMethodHelp(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Capture Methods'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildCaptureMethodInfo(
-                'Standard',
-                'Standard window capture. Works for most basic applications.',
-              ),
-              const SizedBox(height: 8),
-              _buildCaptureMethodInfo(
-                'PrintWindow',
-                'Better compatibility with more applications but may use more CPU.',
-              ),
-              const SizedBox(height: 8),
-              _buildCaptureMethodInfo(
-                'Fullscreen/Browser Mode',
-                'Best for browsers, OBS, and fullscreen applications.',
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'The best capture method is automatically selected based on the window type.',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Helper method to build each capture method info item
-  Widget _buildCaptureMethodInfo(String title, String description) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        Text(description, style: const TextStyle(fontSize: 12)),
-      ],
-    );
   }
 }
 
