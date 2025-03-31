@@ -113,6 +113,12 @@ class SesiFotoProvider with ChangeNotifier {
       return;
     }
 
+    // Store a reference to the photobooth window
+    final photoboothHwnd = FindWindow(nullptr, TEXT('photobooth'));
+    if (photoboothHwnd == 0) {
+      print('Warning: Could not find photobooth window');
+    }
+
     SetForegroundWindow(hwnd);
     await Future.delayed(const Duration(milliseconds: 300));
 
@@ -128,8 +134,27 @@ class SesiFotoProvider with ChangeNotifier {
 
     print("Foto diambil.");
 
-    // Back to the main window
-    await Future.delayed(const Duration(seconds: 3));
+    // Wait longer to ensure WhatsApp has completed its operation
+    await Future.delayed(const Duration(seconds: 4));
+
+    // Explicitly force focus back to photobooth with multiple attempts
+    if (photoboothHwnd != 0) {
+      print("Attempting to return focus to photobooth...");
+
+      // Try multiple techniques to ensure focus returns
+      SetForegroundWindow(photoboothHwnd);
+
+      // Try showing window normally first
+      ShowWindow(photoboothHwnd, SW_SHOW);
+
+      // Force foreground again after a small delay
+      await Future.delayed(const Duration(milliseconds: 100));
+      SetForegroundWindow(photoboothHwnd);
+
+      // If needed, try activating the window too
+      await Future.delayed(const Duration(milliseconds: 100));
+      SetActiveWindow(photoboothHwnd);
+    }
 
     // Get the latest photo from the save folder
     final directory = Directory(saveFolder);
@@ -190,7 +215,6 @@ class SesiFotoProvider with ChangeNotifier {
       }
     }
 
-    SetForegroundWindow(FindWindowEx(0, 0, nullptr, TEXT('photobooth')));
     print("Foto disimpan. Jumlah foto: ${_takenPhotos.length}");
   }
 
