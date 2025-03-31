@@ -4,6 +4,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:win32/win32.dart';
+import 'package:photobooth/services/gpu_capture_service.dart';
 
 // CaptureMethod enum yang sama dari file asli
 enum CaptureMethod {
@@ -205,24 +206,35 @@ class ScreenCaptureService {
         downsampleFactor = 2;
       }
 
-      // Capture with Direct3D jika GPU acceleration diaktifkan dan tersedia
+      // Capture with DXGI if GPU acceleration is enabled and available
       Map<String, dynamic>? result;
 
       if (_useGpuAcceleration) {
-        // Coba Direct3D capture jika tersedia (diprioritaskan)
+        // Try using the true GPU acceleration via DXGI first
         try {
-          result = await _captureWithDirect3D(
-            downsampleFactor: downsampleFactor,
-          );
+          if (await GpuCaptureService.isSupported()) {
+            print('Using true GPU acceleration via DXGI Desktop Duplication');
+            result = await GpuCaptureService.captureWindow(
+              _windowToCapture!.hwnd,
+            );
+
+            // Apply downsampling if needed
+            if (result != null && downsampleFactor > 1) {
+              result = _downsampleResult(result, downsampleFactor);
+            }
+          } else {
+            result = await _captureWithDirect3DFallback(
+              downsampleFactor: downsampleFactor,
+            );
+          }
         } catch (e) {
-          // Fallback to CPU methods if Direct3D fails
+          // Fallback to CPU methods if GPU methods fail
           print('GPU capture failed, falling back to CPU: $e');
         }
       }
 
       // Fallback to standard methods if direct3d capture fails or not enabled
       if (result == null) {
-        print("Fallback to standard capture method");
         try {
           switch (_captureMethod) {
             case CaptureMethod.standard:
@@ -272,8 +284,59 @@ class ScreenCaptureService {
     }
   }
 
+  // Helper method to downsample a capture result
+  Map<String, dynamic> _downsampleResult(
+    Map<String, dynamic> result,
+    int downsampleFactor,
+  ) {
+    final originalWidth = result['width'] as int;
+    final originalHeight = result['height'] as int;
+    final originalBytes = result['bytes'] as Uint8List;
+
+    final downsampledWidth = originalWidth ~/ downsampleFactor;
+    final downsampledHeight = originalHeight ~/ downsampleFactor;
+
+    // Create a new map with the downsampled values
+    final downsampledResult = Map<String, dynamic>.from(result);
+
+    if (result['isDirect'] == true) {
+      // Create downsampled image with direct bitmap
+      final downsampledSize = downsampledWidth * downsampledHeight * 4;
+      final downsampledPixels = Uint8List(downsampledSize);
+
+      // Simple but efficient downsampling
+      for (int y = 0; y < downsampledHeight; y++) {
+        final srcY = y * downsampleFactor;
+        if (srcY >= originalHeight) continue;
+
+        for (int x = 0; x < downsampledWidth; x++) {
+          final srcX = x * downsampleFactor;
+          if (srcX >= originalWidth) continue;
+
+          final srcOffset = (srcY * originalWidth + srcX) * 4;
+          final destOffset = (y * downsampledWidth + x) * 4;
+
+          if (srcOffset + 3 < originalBytes.length &&
+              destOffset + 3 < downsampledPixels.length) {
+            // Copy RGBA values directly (already in correct format from GPU capture)
+            downsampledPixels[destOffset] = originalBytes[srcOffset];
+            downsampledPixels[destOffset + 1] = originalBytes[srcOffset + 1];
+            downsampledPixels[destOffset + 2] = originalBytes[srcOffset + 2];
+            downsampledPixels[destOffset + 3] = originalBytes[srcOffset + 3];
+          }
+        }
+      }
+
+      downsampledResult['bytes'] = downsampledPixels;
+      downsampledResult['width'] = downsampledWidth;
+      downsampledResult['height'] = downsampledHeight;
+    }
+
+    return downsampledResult;
+  }
+
   // Metode untuk Direct3D capture - mengoptimalkan untuk aplikasi yang menggunakan GPU
-  Future<Map<String, dynamic>?> _captureWithDirect3D({
+  Future<Map<String, dynamic>?> _captureWithDirect3DFallback({
     int downsampleFactor = 1,
   }) async {
     int hwnd = _windowToCapture!.hwnd;
@@ -390,12 +453,10 @@ class ScreenCaptureService {
       // Process image data
       final result = _processImageData(pixels, width, height, downsampleFactor);
 
-      // Mark result as GPU accelerated
+      // Mark result as GPU accelerated mode (though it's a software fallback)
       if (result != null) {
-        result['isGpuAccelerated'] = true;
-
-        // Add additional metadata that might be useful
-        result['captureMethod'] = 'direct3d';
+        result['isGpuAccelerated'] = false; // Changed from true to false
+        result['captureMethod'] = 'direct3d_fallback';
         result['originalWidth'] = width;
         result['originalHeight'] = height;
       }

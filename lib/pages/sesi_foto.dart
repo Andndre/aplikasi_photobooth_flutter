@@ -438,7 +438,7 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
                       ),
                       const SizedBox(width: 2),
                       Text(
-                        _isGpuAccelerated ? 'GPU' : 'CPU',
+                        _isGpuAccelerated ? 'GPU Mode' : 'CPU Mode',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -468,7 +468,7 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'Original: ${_originalWidth}x${_originalHeight} → Preview: ${_captureWidth}x${_captureHeight}',
+                    'Original: ${_originalWidth}x$_originalHeight → Preview: ${_captureWidth}x$_captureHeight',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
                 ),
