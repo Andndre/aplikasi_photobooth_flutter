@@ -34,12 +34,18 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
       // Gunakan fungsi dari service
       final windows = await ScreenCaptureService.getWindowsList();
 
+      // Filter duplicate window handles to ensure uniqueness
+      final uniqueWindows = <int, WindowInfo>{};
+      for (var window in windows) {
+        uniqueWindows[window.hwnd] = window;
+      }
+
       // Add a slight delay to ensure UI updates properly
       await Future.delayed(const Duration(milliseconds: 100));
 
       if (mounted) {
         setState(() {
-          _availableWindows = windows;
+          _availableWindows = uniqueWindows.values.toList();
           _isLoading = false;
         });
       }
@@ -63,6 +69,12 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
   Widget build(BuildContext context) {
     final currentWindow = widget.provider.windowToCapture;
     final captureMethod = widget.provider.captureMethod;
+
+    // Check if current window handle is in available windows list
+    final currentHwnd = currentWindow?.hwnd;
+    final validHwnd =
+        currentHwnd != null &&
+        _availableWindows.any((window) => window.hwnd == currentHwnd);
 
     return Badge(
       isLabelVisible: currentWindow == null,
@@ -112,8 +124,9 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
                                         ),
                                       )
                                       : DropdownButton<int>(
-                                        value: currentWindow?.hwnd,
+                                        value: validHwnd ? currentHwnd : null,
                                         isExpanded: true,
+                                        hint: const Text("Select a window"),
                                         onChanged: (int? newValue) {
                                           if (newValue != null) {
                                             if (newValue == 0) {
