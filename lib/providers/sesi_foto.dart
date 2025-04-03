@@ -11,7 +11,7 @@ import 'package:photobooth/models/layout_model.dart';
 import 'package:photobooth/models/renderables/renderer.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
-// Import service baru
+// Import service
 import 'package:photobooth/services/screen_capture_service.dart';
 
 enum SortOrder { newest, oldest }
@@ -43,7 +43,6 @@ class SesiFotoProvider with ChangeNotifier {
   bool get extremeOptimizationMode =>
       _screenCaptureService.extremeOptimizationMode;
   WindowInfo? get windowToCapture => _screenCaptureService.windowToCapture;
-  bool get useGpuAcceleration => _screenCaptureService.useGpuAcceleration;
 
   List<File> get takenPhotos => _takenPhotos;
   List<File> get compositeImages => _compositeImages;
@@ -70,12 +69,6 @@ class SesiFotoProvider with ChangeNotifier {
 
   void setWindowToCapture(WindowInfo? window) {
     _screenCaptureService.setWindowToCapture(window);
-    notifyListeners();
-  }
-
-  // Toggle GPU acceleration
-  void toggleGpuAcceleration() {
-    _screenCaptureService.toggleGpuAcceleration();
     notifyListeners();
   }
 

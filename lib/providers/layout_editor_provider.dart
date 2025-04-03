@@ -15,7 +15,6 @@ import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math_64.dart' as vector_math;
 import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui' as ui;
 
 enum EditMode { select, move, text, image, camera }
 

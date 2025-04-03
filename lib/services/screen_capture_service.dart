@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:win32/win32.dart';
-import 'package:photobooth/services/gpu_capture_service.dart';
 
 // CaptureMethod enum yang sama dari file asli
 enum CaptureMethod {
@@ -80,16 +80,6 @@ class ScreenCaptureService {
   bool _useDirectBitmap =
       true; // Uses raw bitmap data without PNG encoding for preview
   bool _useCaching = true; // Uses frame caching to reduce processing
-
-  // Tambahkan flag untuk penggunaan GPU
-  bool _useGpuAcceleration = true;
-  bool get useGpuAcceleration => _useGpuAcceleration;
-
-  void toggleGpuAcceleration() {
-    _useGpuAcceleration = !_useGpuAcceleration;
-    _lastCaptureResult = null; // Reset cache saat mengubah mode
-    print('GPU Acceleration: ${_useGpuAcceleration ? 'Enabled' : 'Disabled'}');
-  }
 
   // Setting untuk performa
   CaptureMethod _captureMethod = CaptureMethod.standard;
@@ -206,57 +196,30 @@ class ScreenCaptureService {
         downsampleFactor = 2;
       }
 
-      // Capture with DXGI if GPU acceleration is enabled and available
+      // Use standard CPU-based capture methods
       Map<String, dynamic>? result;
 
-      if (_useGpuAcceleration) {
-        // Try using the true GPU acceleration via DXGI first
-        try {
-          if (await GpuCaptureService.isSupported()) {
-            print('Using true GPU acceleration via DXGI Desktop Duplication');
-            result = await GpuCaptureService.captureWindow(
-              _windowToCapture!.hwnd,
-            );
-
-            // Apply downsampling if needed
-            if (result != null && downsampleFactor > 1) {
-              result = _downsampleResult(result, downsampleFactor);
-            }
-          } else {
-            result = await _captureWithDirect3DFallback(
+      try {
+        switch (_captureMethod) {
+          case CaptureMethod.standard:
+            result = await _captureWithBitBlt(
               downsampleFactor: downsampleFactor,
             );
-          }
-        } catch (e) {
-          // Fallback to CPU methods if GPU methods fail
-          print('GPU capture failed, falling back to CPU: $e');
+            break;
+          case CaptureMethod.printWindow:
+            result = await _captureWithPrintWindow(
+              downsampleFactor: downsampleFactor,
+            );
+            break;
+          case CaptureMethod.fullscreen:
+            result = await _captureWithFullscreenApp(
+              downsampleFactor: downsampleFactor,
+            );
+            break;
         }
-      }
-
-      // Fallback to standard methods if direct3d capture fails or not enabled
-      if (result == null) {
-        try {
-          switch (_captureMethod) {
-            case CaptureMethod.standard:
-              result = await _captureWithBitBlt(
-                downsampleFactor: downsampleFactor,
-              );
-              break;
-            case CaptureMethod.printWindow:
-              result = await _captureWithPrintWindow(
-                downsampleFactor: downsampleFactor,
-              );
-              break;
-            case CaptureMethod.fullscreen:
-              result = await _captureWithFullscreenApp(
-                downsampleFactor: downsampleFactor,
-              );
-              break;
-          }
-        } catch (e) {
-          // Try other method if primary method fails
-          result = await _captureWithBitBlt(downsampleFactor: downsampleFactor);
-        }
+      } catch (e) {
+        // Try other method if primary method fails
+        result = await _captureWithBitBlt(downsampleFactor: downsampleFactor);
       }
 
       _lastCaptureTime = now;
@@ -453,9 +416,8 @@ class ScreenCaptureService {
       // Process image data
       final result = _processImageData(pixels, width, height, downsampleFactor);
 
-      // Mark result as GPU accelerated mode (though it's a software fallback)
+      // Mark result as using Direct3D software fallback
       if (result != null) {
-        result['isGpuAccelerated'] = false; // Changed from true to false
         result['captureMethod'] = 'direct3d_fallback';
         result['originalWidth'] = width;
         result['originalHeight'] = height;
@@ -930,7 +892,7 @@ class ScreenCaptureService {
       _WindowCollection.clear();
 
       // Use the static callback function
-      final enumWindowsProc = Pointer.fromFunction<EnumWindowsProc>(
+      final enumWindowsProc = Pointer.fromFunction<WNDENUMPROC>(
         _enumWindowsProc,
         0,
       );
