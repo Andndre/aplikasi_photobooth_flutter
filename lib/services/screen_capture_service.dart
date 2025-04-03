@@ -49,7 +49,10 @@ int _enumWindowsProc(int hwnd, int lParam) {
         // Filter out empty titles and system windows
         if (title.isNotEmpty &&
             !title.contains('Default IME') &&
+            !title.contains('Settings') &&
+            !title.contains('Films & TV') &&
             !title.contains('MSCTFIME UI') &&
+            !title.contains('Program Manager') &&
             !title.contains('Windows Input Experience')) {
           // Filter out this application's own window to prevent capturing itself
           if (!title.toLowerCase().contains('photobooth')) {
