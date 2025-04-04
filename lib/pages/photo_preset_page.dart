@@ -1013,19 +1013,6 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     );
   }
 
-  // Helper to build section headers
-  Widget _buildSectionHeader(String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        const Divider(),
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
   void _createNewPreset(BuildContext context) {
     final provider = Provider.of<PresetProvider>(context, listen: false);
 
