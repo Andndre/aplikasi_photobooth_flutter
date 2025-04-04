@@ -60,7 +60,10 @@ class ImageProcessor {
         );
       }
 
-      // 5. Black and White (if enabled)
+      // 5. Apply color mixer adjustments
+      processedImage = _applyColorMixer(processedImage, preset);
+
+      // 6. Black and White (if enabled)
       if (preset.blackAndWhite) {
         processedImage = img.grayscale(processedImage);
       }
@@ -69,12 +72,12 @@ class ImageProcessor {
         processedImage = _adjustSaturation(processedImage, preset.saturation);
       }
 
-      // 6. Adjust brightness (-1.0 to 1.0)
+      // 7. Adjust brightness (-1.0 to 1.0)
       if (preset.brightness != 0) {
         processedImage = _adjustBrightness(processedImage, preset.brightness);
       }
 
-      // 7. Adjust contrast (-1.0 to 1.0)
+      // 8. Adjust contrast (-1.0 to 1.0)
       if (preset.contrast != 0) {
         final contrastFactor =
             preset.contrast > 0
@@ -91,7 +94,7 @@ class ImageProcessor {
         }
       }
 
-      // 8. Apply border if needed
+      // 9. Apply border if needed
       if (preset.borderWidth > 0) {
         final borderSize = preset.borderWidth.round();
         final color = img.ColorRgb8(
@@ -620,5 +623,123 @@ class ImageProcessor {
     final file = File('${tempDir.path}/fallback_placeholder.jpg');
     await file.writeAsBytes(Uint8List.fromList(img.encodeJpg(image)));
     return file;
+  }
+
+  static img.Image _applyColorMixer(img.Image image, PresetModel preset) {
+    // If no color mixer adjustments, return original image
+    if (preset.redHue == 0.0 &&
+        preset.redSaturation == 0.0 &&
+        preset.redLuminance == 0.0 &&
+        preset.greenHue == 0.0 &&
+        preset.greenSaturation == 0.0 &&
+        preset.greenLuminance == 0.0 &&
+        preset.blueHue == 0.0 &&
+        preset.blueSaturation == 0.0 &&
+        preset.blueLuminance == 0.0) {
+      return image;
+    }
+
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Process each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Convert RGB to HSL
+        final hslRed = _rgbToHsl(r, 0, 0);
+        final hslGreen = _rgbToHsl(0, g, 0);
+        final hslBlue = _rgbToHsl(0, 0, b);
+
+        // Apply red channel adjustments
+        if (r > 0 &&
+            (preset.redHue != 0.0 ||
+                preset.redSaturation != 0.0 ||
+                preset.redLuminance != 0.0)) {
+          final strength = r / 255.0; // Strength based on red component
+
+          // Affect only the red channel
+          double hue = hslRed[0] + (preset.redHue * 0.1 * strength);
+          double sat = hslRed[1] * (1.0 + (preset.redSaturation * strength));
+          double lum =
+              hslRed[2] * (1.0 + (preset.redLuminance * 0.5 * strength));
+
+          // Clamp values
+          hue = (hue + 1.0) % 1.0; // Wrap hue
+          sat = math.max(0.0, math.min(1.0, sat));
+          lum = math.max(0.0, math.min(1.0, lum));
+
+          // Convert back to RGB and apply adjustment to red channel
+          final adjustedRed = _hslToRgb(hue, sat, lum)[0];
+          r = ((r * (1.0 - strength)) + (adjustedRed * strength)).round().clamp(
+            0,
+            255,
+          );
+        }
+
+        // Apply green channel adjustments
+        if (g > 0 &&
+            (preset.greenHue != 0.0 ||
+                preset.greenSaturation != 0.0 ||
+                preset.greenLuminance != 0.0)) {
+          final strength = g / 255.0; // Strength based on green component
+
+          // Affect only the green channel
+          double hue = hslGreen[0] + (preset.greenHue * 0.1 * strength);
+          double sat =
+              hslGreen[1] * (1.0 + (preset.greenSaturation * strength));
+          double lum =
+              hslGreen[2] * (1.0 + (preset.greenLuminance * 0.5 * strength));
+
+          // Clamp values
+          hue = (hue + 1.0) % 1.0; // Wrap hue
+          sat = math.max(0.0, math.min(1.0, sat));
+          lum = math.max(0.0, math.min(1.0, lum));
+
+          // Convert back to RGB and apply adjustment to green channel
+          final adjustedGreen = _hslToRgb(hue, sat, lum)[1];
+          g = ((g * (1.0 - strength)) + (adjustedGreen * strength))
+              .round()
+              .clamp(0, 255);
+        }
+
+        // Apply blue channel adjustments
+        if (b > 0 &&
+            (preset.blueHue != 0.0 ||
+                preset.blueSaturation != 0.0 ||
+                preset.blueLuminance != 0.0)) {
+          final strength = b / 255.0; // Strength based on blue component
+
+          // Affect only the blue channel
+          double hue = hslBlue[0] + (preset.blueHue * 0.1 * strength);
+          double sat = hslBlue[1] * (1.0 + (preset.blueSaturation * strength));
+          double lum =
+              hslBlue[2] * (1.0 + (preset.blueLuminance * 0.5 * strength));
+
+          // Clamp values
+          hue = (hue + 1.0) % 1.0; // Wrap hue
+          sat = math.max(0.0, math.min(1.0, sat));
+          lum = math.max(0.0, math.min(1.0, lum));
+
+          // Convert back to RGB and apply adjustment to blue channel
+          final adjustedBlue = _hslToRgb(hue, sat, lum)[2];
+          b = ((b * (1.0 - strength)) + (adjustedBlue * strength))
+              .round()
+              .clamp(0, 255);
+        }
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
   }
 }

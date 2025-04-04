@@ -23,6 +23,17 @@ class PresetModel {
   final double whites; // Reduce to increase (-1.0 to 1.0)
   final double blacks; // Increase to reduce (-1.0 to 1.0)
 
+  // Color Mixer adjustments
+  final double redHue;
+  final double redSaturation;
+  final double redLuminance;
+  final double greenHue;
+  final double greenSaturation;
+  final double greenLuminance;
+  final double blueHue;
+  final double blueSaturation;
+  final double blueLuminance;
+
   const PresetModel({
     required this.id,
     required this.name,
@@ -41,6 +52,16 @@ class PresetModel {
     this.shadows = 0.0,
     this.whites = 0.0,
     this.blacks = 0.0,
+    // Color mixer defaults
+    this.redHue = 0.0,
+    this.redSaturation = 0.0,
+    this.redLuminance = 0.0,
+    this.greenHue = 0.0,
+    this.greenSaturation = 0.0,
+    this.greenLuminance = 0.0,
+    this.blueHue = 0.0,
+    this.blueSaturation = 0.0,
+    this.blueLuminance = 0.0,
   });
 
   // Create a default preset with a specific ID
@@ -62,6 +83,16 @@ class PresetModel {
       shadows: 0.0,
       whites: 0.0,
       blacks: 0.0,
+      // Color mixer defaults
+      redHue: 0.0,
+      redSaturation: 0.0,
+      redLuminance: 0.0,
+      greenHue: 0.0,
+      greenSaturation: 0.0,
+      greenLuminance: 0.0,
+      blueHue: 0.0,
+      blueSaturation: 0.0,
+      blueLuminance: 0.0,
     );
   }
 
@@ -82,6 +113,16 @@ class PresetModel {
     double? shadows,
     double? whites,
     double? blacks,
+    // Color mixer properties
+    double? redHue,
+    double? redSaturation,
+    double? redLuminance,
+    double? greenHue,
+    double? greenSaturation,
+    double? greenLuminance,
+    double? blueHue,
+    double? blueSaturation,
+    double? blueLuminance,
   }) {
     return PresetModel(
       id: id,
@@ -100,6 +141,16 @@ class PresetModel {
       shadows: shadows ?? this.shadows,
       whites: whites ?? this.whites,
       blacks: blacks ?? this.blacks,
+      // Color mixer properties
+      redHue: redHue ?? this.redHue,
+      redSaturation: redSaturation ?? this.redSaturation,
+      redLuminance: redLuminance ?? this.redLuminance,
+      greenHue: greenHue ?? this.greenHue,
+      greenSaturation: greenSaturation ?? this.greenSaturation,
+      greenLuminance: greenLuminance ?? this.greenLuminance,
+      blueHue: blueHue ?? this.blueHue,
+      blueSaturation: blueSaturation ?? this.blueSaturation,
+      blueLuminance: blueLuminance ?? this.blueLuminance,
     );
   }
 
@@ -122,6 +173,16 @@ class PresetModel {
       shadows: shadows,
       whites: whites,
       blacks: blacks,
+      // Color mixer properties
+      redHue: redHue,
+      redSaturation: redSaturation,
+      redLuminance: redLuminance,
+      greenHue: greenHue,
+      greenSaturation: greenSaturation,
+      greenLuminance: greenLuminance,
+      blueHue: blueHue,
+      blueSaturation: blueSaturation,
+      blueLuminance: blueLuminance,
     );
   }
 
@@ -144,6 +205,16 @@ class PresetModel {
       'shadows': shadows,
       'whites': whites,
       'blacks': blacks,
+      // Color mixer properties
+      'redHue': redHue,
+      'redSaturation': redSaturation,
+      'redLuminance': redLuminance,
+      'greenHue': greenHue,
+      'greenSaturation': greenSaturation,
+      'greenLuminance': greenLuminance,
+      'blueHue': blueHue,
+      'blueSaturation': blueSaturation,
+      'blueLuminance': blueLuminance,
     };
   }
 
@@ -169,6 +240,16 @@ class PresetModel {
       shadows: json['shadows']?.toDouble() ?? 0.0,
       whites: json['whites']?.toDouble() ?? 0.0,
       blacks: json['blacks']?.toDouble() ?? 0.0,
+      // Color mixer properties
+      redHue: json['redHue']?.toDouble() ?? 0.0,
+      redSaturation: json['redSaturation']?.toDouble() ?? 0.0,
+      redLuminance: json['redLuminance']?.toDouble() ?? 0.0,
+      greenHue: json['greenHue']?.toDouble() ?? 0.0,
+      greenSaturation: json['greenSaturation']?.toDouble() ?? 0.0,
+      greenLuminance: json['greenLuminance']?.toDouble() ?? 0.0,
+      blueHue: json['blueHue']?.toDouble() ?? 0.0,
+      blueSaturation: json['blueSaturation']?.toDouble() ?? 0.0,
+      blueLuminance: json['blueLuminance']?.toDouble() ?? 0.0,
     );
   }
 
@@ -206,27 +287,59 @@ class PresetModel {
         other.highlights == highlights &&
         other.shadows == shadows &&
         other.whites == whites &&
-        other.blacks == blacks;
+        other.blacks == blacks &&
+        other.redHue == redHue &&
+        other.redSaturation == redSaturation &&
+        other.redLuminance == redLuminance &&
+        other.greenHue == greenHue &&
+        other.greenSaturation == greenSaturation &&
+        other.greenLuminance == greenLuminance &&
+        other.blueHue == blueHue &&
+        other.blueSaturation == blueSaturation &&
+        other.blueLuminance == blueLuminance;
   }
 
   // Override hashCode for value equality
   @override
-  int get hashCode => Object.hash(
-    id,
-    name,
-    brightness,
-    contrast,
-    saturation,
-    blackAndWhite,
-    borderWidth,
-    borderColor.value,
-    sampleImagePath,
-    temperature,
-    tint,
-    exposure,
-    highlights,
-    shadows,
-    whites,
-    blacks,
-  );
+  int get hashCode {
+    // First group of properties
+    final hash1 = Object.hash(
+      id,
+      name,
+      brightness,
+      contrast,
+      saturation,
+      blackAndWhite,
+      borderWidth,
+      borderColor.value,
+      sampleImagePath,
+      temperature,
+    );
+
+    // Second group of properties
+    final hash2 = Object.hash(
+      tint,
+      exposure,
+      highlights,
+      shadows,
+      whites,
+      blacks,
+      redHue,
+      redSaturation,
+      redLuminance,
+      greenHue,
+    );
+
+    // Third group of properties
+    final hash3 = Object.hash(
+      greenSaturation,
+      greenLuminance,
+      blueHue,
+      blueSaturation,
+      blueLuminance,
+    );
+
+    // Combine all hash values into one
+    return Object.hash(hash1, hash2, hash3);
+  }
 }

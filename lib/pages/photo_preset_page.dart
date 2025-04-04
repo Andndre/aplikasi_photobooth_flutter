@@ -245,6 +245,7 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                           });
                           _loadSampleImage();
                         },
+                        // Basic sliders
                         updateBrightness: (value) {
                           setState(() {
                             _tempValues['brightness'] = value;
@@ -305,6 +306,52 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                             _selectedPreset = _selectedPreset!.copyWith(
                               blackAndWhite: value,
                             );
+                          });
+                        },
+                        // Color Mixer sliders
+                        updateRedHue: (value) {
+                          setState(() {
+                            _tempValues['redHue'] = value;
+                          });
+                        },
+                        updateRedSaturation: (value) {
+                          setState(() {
+                            _tempValues['redSaturation'] = value;
+                          });
+                        },
+                        updateRedLuminance: (value) {
+                          setState(() {
+                            _tempValues['redLuminance'] = value;
+                          });
+                        },
+                        updateGreenHue: (value) {
+                          setState(() {
+                            _tempValues['greenHue'] = value;
+                          });
+                        },
+                        updateGreenSaturation: (value) {
+                          setState(() {
+                            _tempValues['greenSaturation'] = value;
+                          });
+                        },
+                        updateGreenLuminance: (value) {
+                          setState(() {
+                            _tempValues['greenLuminance'] = value;
+                          });
+                        },
+                        updateBlueHue: (value) {
+                          setState(() {
+                            _tempValues['blueHue'] = value;
+                          });
+                        },
+                        updateBlueSaturation: (value) {
+                          setState(() {
+                            _tempValues['blueSaturation'] = value;
+                          });
+                        },
+                        updateBlueLuminance: (value) {
+                          setState(() {
+                            _tempValues['blueLuminance'] = value;
                           });
                         },
                         pickSampleImage: _pickSampleImage,

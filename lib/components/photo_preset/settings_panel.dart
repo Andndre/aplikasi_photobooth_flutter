@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:photobooth/components/photo_preset/sections/action_buttons_section.dart';
 import 'package:photobooth/components/photo_preset/sections/basic_section.dart';
+import 'package:photobooth/components/photo_preset/sections/color_mixer_section.dart';
 import 'package:photobooth/components/photo_preset/sections/effects_section.dart';
 import 'package:photobooth/components/photo_preset/sections/preset_info_section.dart';
 import 'package:photobooth/models/preset_model.dart';
@@ -17,7 +18,7 @@ class SettingsPanel extends StatelessWidget {
   final Map<String, double?> tempValues;
   final Function() onCancel;
 
-  // Parameters for updating sliders
+  // Parameters for updating sliders - Basic
   final Function(double) updateBrightness;
   final Function(double) updateContrast;
   final Function(double) updateSaturation;
@@ -30,6 +31,18 @@ class SettingsPanel extends StatelessWidget {
   final Function(double) updateWhites;
   final Function(double) updateBlacks;
   final Function(bool) updateBlackAndWhite;
+
+  // Parameters for updating sliders - Color Mixer
+  final Function(double) updateRedHue;
+  final Function(double) updateRedSaturation;
+  final Function(double) updateRedLuminance;
+  final Function(double) updateGreenHue;
+  final Function(double) updateGreenSaturation;
+  final Function(double) updateGreenLuminance;
+  final Function(double) updateBlueHue;
+  final Function(double) updateBlueSaturation;
+  final Function(double) updateBlueLuminance;
+
   final Function() pickSampleImage;
 
   const SettingsPanel({
@@ -55,6 +68,15 @@ class SettingsPanel extends StatelessWidget {
     required this.updateWhites,
     required this.updateBlacks,
     required this.updateBlackAndWhite,
+    required this.updateRedHue,
+    required this.updateRedSaturation,
+    required this.updateRedLuminance,
+    required this.updateGreenHue,
+    required this.updateGreenSaturation,
+    required this.updateGreenLuminance,
+    required this.updateBlueHue,
+    required this.updateBlueSaturation,
+    required this.updateBlueLuminance,
     required this.pickSampleImage,
   });
 
@@ -97,6 +119,26 @@ class SettingsPanel extends StatelessWidget {
               updateContrast: updateContrast,
               updateSaturation: updateSaturation,
               updateBlackAndWhite: updateBlackAndWhite,
+              onPresetUpdated: onPresetUpdated,
+              onUpdatePreview: onUpdatePreview,
+            ),
+
+            const SizedBox(height: 8),
+
+            // Color Mixer Section
+            ColorMixerSection(
+              preset: preset,
+              isEditing: isEditing,
+              tempValues: tempValues,
+              updateRedHue: updateRedHue,
+              updateRedSaturation: updateRedSaturation,
+              updateRedLuminance: updateRedLuminance,
+              updateGreenHue: updateGreenHue,
+              updateGreenSaturation: updateGreenSaturation,
+              updateGreenLuminance: updateGreenLuminance,
+              updateBlueHue: updateBlueHue,
+              updateBlueSaturation: updateBlueSaturation,
+              updateBlueLuminance: updateBlueLuminance,
               onPresetUpdated: onPresetUpdated,
               onUpdatePreview: onUpdatePreview,
             ),
