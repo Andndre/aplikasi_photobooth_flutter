@@ -29,11 +29,20 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
   Uint8List? _processedImagePreview;
   bool _isProcessingImage = false;
 
-  // Create temporary values for sliders to hold changes during dragging
+  // Temporary values for sliders
   double? _tempBrightness;
   double? _tempContrast;
   double? _tempSaturation;
   double? _tempBorderWidth;
+
+  // Add temporary values for new sliders
+  double? _tempTemperature;
+  double? _tempTint;
+  double? _tempExposure;
+  double? _tempHighlights;
+  double? _tempShadows;
+  double? _tempWhites;
+  double? _tempBlacks;
 
   @override
   void initState() {
@@ -285,11 +294,29 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
       _tempContrast = _selectedPreset!.contrast;
       _tempSaturation = _selectedPreset!.saturation;
       _tempBorderWidth = _selectedPreset!.borderWidth;
+
+      // Reset new temp values
+      _tempTemperature = _selectedPreset!.temperature;
+      _tempTint = _selectedPreset!.tint;
+      _tempExposure = _selectedPreset!.exposure;
+      _tempHighlights = _selectedPreset!.highlights;
+      _tempShadows = _selectedPreset!.shadows;
+      _tempWhites = _selectedPreset!.whites;
+      _tempBlacks = _selectedPreset!.blacks;
     } else {
       _tempBrightness = null;
       _tempContrast = null;
       _tempSaturation = null;
       _tempBorderWidth = null;
+
+      // Reset new temp values to null
+      _tempTemperature = null;
+      _tempTint = null;
+      _tempExposure = null;
+      _tempHighlights = null;
+      _tempShadows = null;
+      _tempWhites = null;
+      _tempBlacks = null;
     }
   }
 
@@ -447,13 +474,164 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
               const SizedBox(height: 16),
             ],
 
-            // Divider between header and sliders
-            const Divider(),
+            // White Balance adjustments
+            _buildSectionHeader('White Balance'),
+            _buildSliderSetting(
+              'Temperature',
+              _tempTemperature ?? preset.temperature,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempTemperature = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(temperature: value);
+                  _tempTemperature = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Cool',
+              rightLabel: 'Warm',
+            ),
 
-            // Preset adjustments
-            Text('Adjustments', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+            _buildSliderSetting(
+              'Tint',
+              _tempTint ?? preset.tint,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempTint = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(tint: value);
+                  _tempTint = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Green',
+              rightLabel: 'Magenta',
+            ),
 
+            // Tone adjustments
+            _buildSectionHeader('Tone'),
+            _buildSliderSetting(
+              'Exposure',
+              _tempExposure ?? preset.exposure,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempExposure = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(exposure: value);
+                  _tempExposure = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+            ),
+
+            _buildSliderSetting(
+              'Highlights',
+              _tempHighlights ?? preset.highlights,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempHighlights = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(highlights: value);
+                  _tempHighlights = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Increase',
+              rightLabel: 'Reduce',
+            ),
+
+            _buildSliderSetting(
+              'Shadows',
+              _tempShadows ?? preset.shadows,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempShadows = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(shadows: value);
+                  _tempShadows = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Darker',
+              rightLabel: 'Brighter',
+            ),
+
+            _buildSliderSetting(
+              'Whites',
+              _tempWhites ?? preset.whites,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempWhites = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(whites: value);
+                  _tempWhites = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Reduce',
+              rightLabel: 'Increase',
+            ),
+
+            _buildSliderSetting(
+              'Blacks',
+              _tempBlacks ?? preset.blacks,
+              -1.0,
+              1.0,
+              (value) {
+                setState(() {
+                  _tempBlacks = value;
+                });
+              },
+              (value) {
+                setState(() {
+                  _selectedPreset = preset.copyWith(blacks: value);
+                  _tempBlacks = null;
+                });
+                _updateProcessedPreview();
+              },
+              _isEditing,
+              leftLabel: 'Deepen',
+              rightLabel: 'Lighten',
+            ),
+
+            // Presence adjustments
+            _buildSectionHeader('Presence'),
             _buildSliderSetting(
               'Brightness',
               _tempBrightness ?? preset.brightness,
@@ -531,13 +709,8 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                       : null,
             ),
 
-            const SizedBox(height: 8),
-            const Divider(),
-
-            // Border settings section
-            Text('Border', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-
+            // Effects section (border)
+            _buildSectionHeader('Effects'),
             _buildSliderSetting(
               'Border Width',
               _tempBorderWidth ?? preset.borderWidth,
@@ -724,8 +897,10 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     double max,
     Function(double) onChanged,
     Function(double) onChangeEnd,
-    bool enabled,
-  ) {
+    bool enabled, {
+    String? leftLabel,
+    String? rightLabel,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Column(
@@ -735,6 +910,35 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [Text('$label:'), Text(value.toStringAsFixed(2))],
           ),
+          if (leftLabel != null || rightLabel != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (leftLabel != null)
+                    Text(
+                      leftLabel,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  else
+                    const SizedBox(),
+                  if (rightLabel != null)
+                    Text(
+                      rightLabel,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  else
+                    const SizedBox(),
+                ],
+              ),
+            ),
           SizedBox(
             height: 30, // Fixed height for slider
             child: Slider(
@@ -805,6 +1009,19 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
           ),
         );
       },
+    );
+  }
+
+  // Helper to build section headers
+  Widget _buildSectionHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        const Divider(),
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }

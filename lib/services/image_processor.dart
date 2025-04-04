@@ -28,42 +28,70 @@ class ImageProcessor {
 
       // Apply image processing operations in the correct order:
 
-      // 1. Black and White (if enabled)
+      // 1. Apply temperature and tint (white balance)
+      if (preset.temperature != 0.0 || preset.tint != 0.0) {
+        processedImage = _adjustWhiteBalance(
+          processedImage,
+          preset.temperature,
+          preset.tint,
+        );
+      }
+
+      // 2. Apply exposure
+      if (preset.exposure != 0.0) {
+        processedImage = _adjustExposure(processedImage, preset.exposure);
+      }
+
+      // 3. Apply blacks and whites
+      if (preset.blacks != 0.0 || preset.whites != 0.0) {
+        processedImage = _adjustBlacksWhites(
+          processedImage,
+          preset.blacks,
+          preset.whites,
+        );
+      }
+
+      // 4. Apply highlights and shadows
+      if (preset.highlights != 0.0 || preset.shadows != 0.0) {
+        processedImage = _adjustHighlightsShadows(
+          processedImage,
+          preset.highlights,
+          preset.shadows,
+        );
+      }
+
+      // 5. Black and White (if enabled)
       if (preset.blackAndWhite) {
         processedImage = img.grayscale(processedImage);
       }
-      // 2. Otherwise apply saturation adjustment (only if not in B&W mode)
+      // Otherwise apply saturation adjustment (only if not in B&W mode)
       else if (preset.saturation != 0) {
         processedImage = _adjustSaturation(processedImage, preset.saturation);
       }
 
-      // 3. Adjust brightness (-1.0 to 1.0)
+      // 6. Adjust brightness (-1.0 to 1.0)
       if (preset.brightness != 0) {
-        // Manual brightness adjustment since the package may have changed
         processedImage = _adjustBrightness(processedImage, preset.brightness);
       }
 
-      // 4. Adjust contrast (-1.0 to 1.0)
+      // 7. Adjust contrast (-1.0 to 1.0)
       if (preset.contrast != 0) {
-        // Convert to a value between 0.0 and 4.0 for the library (0.5 to 2.0 is a reasonable range)
         final contrastFactor =
             preset.contrast > 0
                 ? 1.0 + preset.contrast
                 : 1.0 / (1.0 - preset.contrast);
 
         try {
-          // Try using the contrast method if available
           processedImage = img.contrast(
             processedImage,
             contrast: contrastFactor,
           );
         } catch (e) {
-          // Fallback to manual contrast adjustment
           processedImage = _adjustContrast(processedImage, preset.contrast);
         }
       }
 
-      // 5. Apply border if needed
+      // 8. Apply border if needed
       if (preset.borderWidth > 0) {
         final borderSize = preset.borderWidth.round();
         final color = img.ColorRgb8(
@@ -109,6 +137,228 @@ class ImageProcessor {
       print('Error processing image: $e');
       return null;
     }
+  }
+
+  // Adjust white balance (temperature and tint)
+  static img.Image _adjustWhiteBalance(
+    img.Image image,
+    double temperature,
+    double tint,
+  ) {
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Temperature adjustment approach: instead of adding directly to color channels,
+    // we'll use a more balanced approach based on color theory
+    // For cooler tones (negative temperature), boost blues subtly and reduce reds/yellows
+    // For warmer tones (positive temperature), boost reds/yellows subtly and reduce blues
+
+    // Scale the temperature to a reasonable strength (avoid harsh blue overlay)
+    final tempStrength =
+        (temperature * 20).abs(); // Reduced from 30 to 20 for subtlety
+
+    // Apply to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Apply temperature: shift color balance
+        if (temperature < 0) {
+          // Cooler/blue
+          // Instead of direct blue boost, use a multiplier approach for natural look
+          double coolFactor =
+              1.0 + (tempStrength.abs() / 100); // Subtle percentage boost
+
+          // Enhance blue relative to its current value (multiplication instead of addition)
+          b = math.min(255, (b * coolFactor).round());
+
+          // For cooler temperatures, reduce red and yellow (yellow = red + green)
+          r = math.max(0, (r * (1.0 - tempStrength.abs() / 200)).round());
+          g = math.max(
+            0,
+            (g * (1.0 - tempStrength.abs() / 400)).round(),
+          ); // Less reduction for green
+        } else if (temperature > 0) {
+          // Warmer/yellow
+          // Warm up the image (boost red and green, which makes yellow)
+          double warmFactor = 1.0 + (tempStrength / 100);
+
+          // Enhance red and green for a warm yellow/orange look
+          r = math.min(255, (r * warmFactor).round());
+          g = math.min(
+            255,
+            (g * (1.0 + tempStrength / 200)).round(),
+          ); // Slightly less boost for green
+
+          // Reduce blue for warmer appearance
+          b = math.max(0, (b * (1.0 - tempStrength / 200)).round());
+        }
+
+        // Apply tint: shift green-magenta balance
+        if (tint < 0) {
+          // More green
+          // Enhance greens, reduce magenta (red and blue)
+          double greenFactor = 1.0 + (tint.abs() * 0.2);
+          g = math.min(255, (g * greenFactor).round());
+          r = math.max(0, (r * (1.0 - tint.abs() * 0.1)).round());
+          b = math.max(0, (b * (1.0 - tint.abs() * 0.1)).round());
+        } else if (tint > 0) {
+          // More magenta
+          // Enhance red and blue (magenta), reduce green
+          double magentaFactor = 1.0 + (tint * 0.2);
+          r = math.min(255, (r * magentaFactor).round());
+          b = math.min(255, (b * magentaFactor).round());
+          g = math.max(0, (g * (1.0 - tint * 0.2)).round());
+        }
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
+  }
+
+  // Adjust exposure
+  static img.Image _adjustExposure(img.Image image, double exposure) {
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Convert exposure to a factor (negative = darker, positive = brighter)
+    final factor = math.pow(2, exposure).toDouble();
+
+    // Apply to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Apply exposure factor
+        r = (r * factor).round().clamp(0, 255);
+        g = (g * factor).round().clamp(0, 255);
+        b = (b * factor).round().clamp(0, 255);
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
+  }
+
+  // Adjust blacks and whites
+  static img.Image _adjustBlacksWhites(
+    img.Image image,
+    double blacks,
+    double whites,
+  ) {
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Compute black and white points adjustment
+    final blackPoint = (blacks * 50).round(); // Max 50 points shift
+    final whitePoint =
+        (whites * -50).round(); // Max 50 points shift (note: inverted)
+
+    // Apply to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Apply blacks adjustment
+        if (blacks != 0) {
+          r = (r > blackPoint) ? r : 0;
+          g = (g > blackPoint) ? g : 0;
+          b = (b > blackPoint) ? b : 0;
+        }
+
+        // Apply whites adjustment
+        if (whites != 0) {
+          r = (r < 255 - whitePoint) ? r : 255;
+          g = (g < 255 - whitePoint) ? g : 255;
+          b = (b < 255 - whitePoint) ? b : 255;
+        }
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
+  }
+
+  // Adjust highlights and shadows
+  static img.Image _adjustHighlightsShadows(
+    img.Image image,
+    double highlights,
+    double shadows,
+  ) {
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Convert adjustments to factors
+    // Fix: Invert the highlights factor so negative values increase highlights
+    // and positive values reduce highlights (match Lightroom behavior)
+    final highlightsFactor =
+        1.0 + highlights; // Positive means darker highlights
+    final shadowsFactor = 1.0 + shadows; // Positive means brighter shadows
+
+    // Apply to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Calculate luminance to determine if pixel is highlight or shadow
+        final luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+        // Apply highlight adjustment (for brighter pixels)
+        if (highlights != 0 && luminance > 0.5) {
+          // Fix: Use highlights directly (negative means brighter, positive means darker)
+          // Stronger effect as we approach pure white (luminance = 1.0)
+          final adjustment = 1.0 - (highlights * (luminance - 0.5) * 2);
+          r = (r * adjustment).round().clamp(0, 255);
+          g = (g * adjustment).round().clamp(0, 255);
+          b = (b * adjustment).round().clamp(0, 255);
+        }
+
+        // Apply shadow adjustment (for darker pixels)
+        if (shadows != 0 && luminance <= 0.5) {
+          // Stronger effect as we approach pure black (luminance = 0.0)
+          final factor = 1.0 + (shadows * (0.5 - luminance) * 2);
+          r = (r * factor).round().clamp(0, 255);
+          g = (g * factor).round().clamp(0, 255);
+          b = (b * factor).round().clamp(0, 255);
+        }
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
   }
 
   // Manual brightness adjustment implementation
