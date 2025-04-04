@@ -26,6 +26,9 @@ class SliderSetting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final disabledColor = Theme.of(context).disabledColor.withOpacity(0.3);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Column(
@@ -65,18 +68,81 @@ class SliderSetting extends StatelessWidget {
               ),
             ),
           SizedBox(
-            height: 30, // Fixed height for slider
-            child: Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: 100,
-              onChanged: enabled ? onChanged : null,
-              onChangeEnd: enabled ? onChangeEnd : null,
+            height: 26, // Reduced height for thinner slider
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 2.0, // Thinner track
+                activeTrackColor: enabled ? primaryColor : disabledColor,
+                inactiveTrackColor: (enabled ? primaryColor : disabledColor)
+                    .withOpacity(0.3),
+                thumbColor: enabled ? primaryColor : disabledColor,
+                overlayColor: Colors.transparent, // Remove the overlay effect
+                thumbShape:
+                    const RoundedRectangleSliderThumbShape(), // Custom square thumb shape
+                overlayShape: SliderComponentShape.noOverlay, // No overlay
+              ),
+              child: Slider(
+                value: value,
+                min: min,
+                max: max,
+                divisions: 100,
+                onChanged: enabled ? onChanged : null,
+                onChangeEnd: enabled ? onChangeEnd : null,
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Custom slider thumb shape that creates a square thumb instead of circular
+class RoundedRectangleSliderThumbShape extends SliderComponentShape {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const RoundedRectangleSliderThumbShape({
+    this.width = 10.0,
+    this.height = 10.0,
+    this.borderRadius = 2.0,
+  });
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) {
+    return Size(width, height);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final Canvas canvas = context.canvas;
+
+    final rect = Rect.fromCenter(center: center, width: width, height: height);
+
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(borderRadius),
+    );
+
+    final fillPaint =
+        Paint()
+          ..color = sliderTheme.thumbColor!
+          ..style = PaintingStyle.fill;
+
+    canvas.drawRRect(rrect, fillPaint);
   }
 }
