@@ -38,12 +38,12 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Photobooth',
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
             useMaterial3: true,
           ),
           darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.deepPurple,
+              seedColor: Colors.lightBlue,
               brightness: Brightness.dark,
             ),
           ),
