@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:photobooth/models/event_model.dart';
+import 'package:photobooth/models/preset_model.dart';
 
 import 'package:flutter/material.dart';
-import 'package:photobooth/models/event_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class EventsProvider extends ChangeNotifier {
   List<EventModel> _events = [];
@@ -43,5 +45,33 @@ class EventsProvider extends ChangeNotifier {
       _events.map((event) => event.toJson()).toList(),
     );
     prefs.setString('events', eventsString);
+  }
+
+  // Add a method to update an event's preset
+  void updateEventPreset(int eventId, PresetModel preset) {
+    final index = _events.indexWhere((event) => event.layoutId == eventId);
+    if (index != -1) {
+      _events[index].updatePreset(preset);
+      _saveToLocalStorage();
+      notifyListeners();
+    }
+  }
+
+  // Add a method to get an event's preset
+  PresetModel getEventPreset(int eventId) {
+    final event = _events.firstWhere(
+      (event) => event.layoutId == eventId,
+      orElse:
+          () => EventModel(
+            name: '',
+            description: '',
+            date: '',
+            layoutId: 0,
+            saveFolder: '',
+            uploadFolder: '',
+          ),
+    );
+
+    return event.preset;
   }
 }

@@ -2,6 +2,7 @@ import 'dart:ffi' hide Size; // Add 'hide Size' to prevent ambiguity
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photobooth/models/event_model.dart';
+import 'package:photobooth/pages/photo_preset_page.dart'; // Add this import
 import 'package:photobooth/providers/layout_provider.dart';
 import 'package:photobooth/providers/sesi_foto.dart';
 import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
@@ -128,6 +129,17 @@ class SesiFotoState extends State<SesiFoto> {
     return AppBar(
       title: Text('Sesi Foto: ${widget.event.name}'),
       actions: [
+        // Add photo presets button
+        IconButton(
+          icon: const Icon(Icons.auto_fix_high),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PhotoPresetPage()),
+            );
+          },
+          tooltip: 'Photo Presets',
+        ),
         // Add new gallery button
         IconButton(
           icon: const Icon(Icons.photo_library),

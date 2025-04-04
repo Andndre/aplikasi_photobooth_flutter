@@ -1,7 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:photobooth/models/layout_model.dart';
+import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/providers/layout_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/material.dart';
 
 class EventModel {
   String name;
@@ -10,6 +11,8 @@ class EventModel {
   int layoutId;
   String saveFolder;
   String uploadFolder;
+  // Add preset to event model
+  PresetModel preset;
 
   EventModel({
     required this.name,
@@ -18,7 +21,8 @@ class EventModel {
     required this.layoutId,
     required this.saveFolder,
     required this.uploadFolder,
-  });
+    PresetModel? preset,
+  }) : preset = preset ?? PresetModel.defaultPreset();
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
     return EventModel(
@@ -28,6 +32,11 @@ class EventModel {
       layoutId: json['layoutId'],
       saveFolder: json['saveFolder'],
       uploadFolder: json['uploadFolder'],
+      // Parse preset if available
+      preset:
+          json['preset'] != null
+              ? PresetModel.fromJson(json['preset'])
+              : PresetModel.defaultPreset(),
     );
   }
 
@@ -39,7 +48,14 @@ class EventModel {
       'layoutId': layoutId,
       'saveFolder': saveFolder,
       'uploadFolder': uploadFolder,
+      // Include preset in event JSON
+      'preset': preset.toJson(),
     };
+  }
+
+  // Update event preset
+  void updatePreset(PresetModel newPreset) {
+    preset = newPreset;
   }
 
   LayoutModel getLayout(BuildContext context) {
