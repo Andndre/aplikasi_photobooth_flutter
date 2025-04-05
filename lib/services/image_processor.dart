@@ -841,21 +841,24 @@ class ImageProcessor {
     return result;
   }
 
-  // Check if curve is linear (default diagonal line)
-  static bool _isLinearCurve(List<Offset> points) {
+  // Check if curve is linear (default diagonal line) - now accepts CurvePointData
+  static bool _isLinearCurve(List<CurvePointData> points) {
     if (points.length != 2) return false;
 
     // Check if points are at opposite corners
-    return (points[0].dx < 1 &&
-        points[0].dy > 255 &&
-        points[1].dx > 255 &&
-        points[1].dy < 1);
+    return (points[0].point.dx < 1 &&
+        points[0].point.dy > 255 &&
+        points[1].point.dx > 255 &&
+        points[1].point.dy < 1);
   }
 
-  // Create lookup table from curve points for faster processing
-  static List<int> _createLookupTable(List<Offset> points) {
+  // Create lookup table from curve points for faster processing - now accepts CurvePointData
+  static List<int> _createLookupTable(List<CurvePointData> curvePointsData) {
     const tableSize = 256;
     final lookupTable = List<int>.filled(tableSize, 0);
+
+    // Extract the points from CurvePointData objects
+    final points = curvePointsData.map((cp) => cp.point).toList();
 
     // For each possible input value (0-255)
     for (int i = 0; i < tableSize; i++) {

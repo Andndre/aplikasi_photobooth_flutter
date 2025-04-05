@@ -79,6 +79,13 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
     super.initState();
     // Initialize curve points from preset
     _initializeCurvePoints();
+
+    // Debug the initial points
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print("Initial RGB points: ${widget.preset.rgbCurvePoints.length}");
+      print("Initial RED points: ${widget.preset.redCurvePoints.length}");
+      print("Initial curve points for RGB: ${_curvePoints['rgb']?.length}");
+    });
   }
 
   @override
@@ -92,12 +99,114 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
 
   // Initialize curve points with their handles from preset data
   void _initializeCurvePoints() {
-    _curvePoints['rgb'] = _convertToCurvePoints(widget.preset.rgbCurvePoints);
-    _curvePoints['red'] = _convertToCurvePoints(widget.preset.redCurvePoints);
-    _curvePoints['green'] = _convertToCurvePoints(
+    // Konversi dari CurvePointData dalam preset ke CurvePoint untuk UI
+    _curvePoints['rgb'] = _convertFromPresetCurvePoints(
+      widget.preset.rgbCurvePoints,
+    );
+    _curvePoints['red'] = _convertFromPresetCurvePoints(
+      widget.preset.redCurvePoints,
+    );
+    _curvePoints['green'] = _convertFromPresetCurvePoints(
       widget.preset.greenCurvePoints,
     );
-    _curvePoints['blue'] = _convertToCurvePoints(widget.preset.blueCurvePoints);
+    _curvePoints['blue'] = _convertFromPresetCurvePoints(
+      widget.preset.blueCurvePoints,
+    );
+  }
+
+  // Konversi dari CurvePointData dalam preset ke CurvePoint untuk UI
+  List<CurvePoint> _convertFromPresetCurvePoints(
+    List<CurvePointData> presetPoints,
+  ) {
+    List<CurvePoint> result = [];
+
+    for (int i = 0; i < presetPoints.length; i++) {
+      final presetPoint = presetPoints[i];
+
+      // Untuk titik ujung (pertama dan terakhir), kita tetap berikan handle
+      if (i == 0) {
+        // Titik pertama: hanya outHandle yang diperlukan
+        result.add(
+          CurvePoint(
+            point: presetPoint.point,
+            inHandle:
+                presetPoint
+                    .point, // Tetapkan ke posisi point (tidak dapat digerakkan)
+            outHandle:
+                presetPoint.outHandle ??
+                Offset(presetPoint.point.dx + 30, presetPoint.point.dy),
+          ),
+        );
+      } else if (i == presetPoints.length - 1) {
+        // Titik terakhir: hanya inHandle yang diperlukan
+        result.add(
+          CurvePoint(
+            point: presetPoint.point,
+            inHandle:
+                presetPoint.inHandle ??
+                Offset(presetPoint.point.dx - 30, presetPoint.point.dy),
+            outHandle:
+                presetPoint
+                    .point, // Tetapkan ke posisi point (tidak dapat digerakkan)
+          ),
+        );
+      } else {
+        // Titik tengah dengan kedua handle
+        result.add(
+          CurvePoint(
+            point: presetPoint.point,
+            inHandle:
+                presetPoint.inHandle ??
+                Offset(presetPoint.point.dx - 30, presetPoint.point.dy),
+            outHandle:
+                presetPoint.outHandle ??
+                Offset(presetPoint.point.dx + 30, presetPoint.point.dy),
+          ),
+        );
+      }
+    }
+
+    return result;
+  }
+
+  // Konversi dari CurvePoint untuk UI ke CurvePointData untuk preset
+  List<CurvePointData> _convertToPresetCurvePoints(
+    List<CurvePoint> curvePoints,
+  ) {
+    List<CurvePointData> result = [];
+
+    for (int i = 0; i < curvePoints.length; i++) {
+      final uiPoint = curvePoints[i];
+
+      if (i == 0) {
+        // Titik pertama: simpan outHandle
+        result.add(
+          CurvePointData(
+            point: uiPoint.point,
+            outHandle: uiPoint.outHandle, // Simpan outHandle
+          ),
+        );
+      } else if (i == curvePoints.length - 1) {
+        // Titik terakhir: simpan inHandle
+        result.add(
+          CurvePointData(
+            point: uiPoint.point,
+            inHandle: uiPoint.inHandle, // Simpan inHandle
+          ),
+        );
+      } else {
+        // Titik tengah: simpan kedua handle
+        result.add(
+          CurvePointData(
+            point: uiPoint.point,
+            inHandle: uiPoint.inHandle,
+            outHandle: uiPoint.outHandle,
+          ),
+        );
+      }
+    }
+
+    return result;
   }
 
   // Convert flat list of points to CurvePoint objects with handles
@@ -117,6 +226,7 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
       final prevPoint = points[i - 1];
       final nextPoint = points[i + 1];
 
+      // Calculate default handle positions if this is a brand new point
       final inHandleX = point.dx - (point.dx - prevPoint.dx) / 3;
       final outHandleX = point.dx + (nextPoint.dx - point.dx) / 3;
 
@@ -336,6 +446,9 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
   void _handleDoubleTap(Offset position, String channel) {
     if (!widget.isEditing) return;
 
+    // Print the position for debugging
+    print('Double-tap at position: $position');
+
     // Ensure position is within valid range
     final validPosition = Offset(
       position.dx.clamp(0, 256),
@@ -343,7 +456,11 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
     );
 
     final curvePoints = List<CurvePoint>.from(_curvePoints[channel] ?? []);
-    if (curvePoints.isEmpty) return;
+    if (curvePoints.isEmpty) {
+      // Initialize with default points if empty
+      curvePoints.add(CurvePoint(point: const Offset(0, 256)));
+      curvePoints.add(CurvePoint(point: const Offset(256, 0)));
+    }
 
     // Find where to insert the new point
     int insertIndex = 1; // Default after first point
@@ -357,16 +474,22 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
     }
 
     // Can't add points before first or after last point
-    if (insertIndex <= 0 || insertIndex >= curvePoints.length) return;
+    if (insertIndex <= 0 || insertIndex >= curvePoints.length) {
+      print('Cannot insert point at index $insertIndex (out of bounds)');
+      return;
+    }
 
-    // Create new curve point with default handles
-    final newPoint = CurvePoint(point: validPosition);
+    print('Inserting point at index $insertIndex');
+
+    // Create new curve point with handles
+    final newPoint = _createNewCurvePoint(
+      validPosition,
+      curvePoints,
+      insertIndex,
+    );
     curvePoints.insert(insertIndex, newPoint);
 
-    // Recalculate handles for a smooth curve
-    _recalculateHandles(curvePoints);
-
-    // Update curve points
+    // Update curve points without recalculating handles
     setState(() {
       _curvePoints[channel] = curvePoints;
     });
@@ -383,40 +506,82 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
       position.dy.clamp(0, 256),
     );
 
+    // Make sure we have curve points
     final curvePoints = _curvePoints[channel] ?? [];
-    if (curvePoints.isEmpty) return;
+    if (curvePoints.isEmpty) {
+      print("No curve points available");
+      return;
+    }
 
-    // Check if we're clicking on a handle
-    for (int i = 1; i < curvePoints.length - 1; i++) {
+    // First try to find a handle that was clicked
+    for (int i = 0; i < curvePoints.length; i++) {
       final point = curvePoints[i];
 
-      // Check in handle
-      if ((point.inHandle - validPosition).distance < 15) {
-        setState(() {
-          _activePointIndex = i;
-          _activeHandle = point.inHandle;
-          _isHandleDragging = true;
-          _isDraggingInHandle = true;
-        });
-        return;
-      }
+      // Khusus untuk titik-titik ujung
+      if (i == 0) {
+        // Titik pertama hanya periksa outHandle
+        if ((point.outHandle - validPosition).distance < 15) {
+          print("Selected first point out-handle");
+          setState(() {
+            _activePointIndex = i;
+            _activeHandle = point.outHandle;
+            _isHandleDragging = true;
+            _isDraggingInHandle = false; // Flag sebagai outHandle
+            _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+          });
+          return;
+        }
+      } else if (i == curvePoints.length - 1) {
+        // Titik terakhir hanya periksa inHandle
+        if ((point.inHandle - validPosition).distance < 15) {
+          print("Selected last point in-handle");
+          setState(() {
+            _activePointIndex = i;
+            _activeHandle = point.inHandle;
+            _isHandleDragging = true;
+            _isDraggingInHandle = true; // Flag sebagai inHandle
+            _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+          });
+          return;
+        }
+      } else {
+        // Titik tengah periksa kedua handle
+        // Check in handle
+        if ((point.inHandle - validPosition).distance < 15) {
+          print("Selected in-handle for point $i");
+          setState(() {
+            _activePointIndex = i;
+            _activeHandle = point.inHandle;
+            _isHandleDragging = true;
+            _isDraggingInHandle = true;
+            _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+          });
+          return;
+        }
 
-      // Check out handle
-      if ((point.outHandle - validPosition).distance < 15) {
-        setState(() {
-          _activePointIndex = i;
-          _activeHandle = point.outHandle;
-          _isHandleDragging = true;
-          _isDraggingInHandle = false;
-        });
-        return;
+        // Check out handle
+        if ((point.outHandle - validPosition).distance < 15) {
+          print("Selected out-handle for point $i");
+          setState(() {
+            _activePointIndex = i;
+            _activeHandle = point.outHandle;
+            _isHandleDragging = true;
+            _isDraggingInHandle = false;
+            _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+          });
+          return;
+        }
       }
     }
 
-    // Not dragging a handle, check if dragging a point
-    _isHandleDragging = false;
+    // If we're here, we're not dragging a handle
+    setState(() {
+      _activeHandle = null;
+      _isHandleDragging = false;
+      _isDraggingInHandle = false;
+    });
 
-    // Find nearest point
+    // Now check if we're clicking on a control point
     int? nearestIndex;
     double minDistance = double.infinity;
 
@@ -431,9 +596,16 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
     if (nearestIndex != null) {
       // Don't allow dragging endpoints
       if (nearestIndex > 0 && nearestIndex < curvePoints.length - 1) {
-        _activePointIndex = nearestIndex;
-        _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+        print("Selected control point $nearestIndex");
+        setState(() {
+          _activePointIndex = nearestIndex;
+          _tempDragCurvePoints = List<CurvePoint>.from(curvePoints);
+        });
       }
+    } else {
+      // Reset active point if we didn't click on anything
+      _activePointIndex = null;
+      print("No point selected");
     }
   }
 
@@ -455,7 +627,7 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
   }
 
   void _handleHandleDrag(Offset position, String channel) {
-    if (_activePointIndex == null || _activePointIndex! <= 0) return;
+    if (_activePointIndex == null) return;
 
     _tempDragCurvePoints ??= List<CurvePoint>.from(_curvePoints[channel] ?? []);
     if (_tempDragCurvePoints!.isEmpty) return;
@@ -468,22 +640,54 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
 
     // Update the appropriate handle
     setState(() {
-      if (_isDraggingInHandle) {
-        // Update in-handle (left)
-        // Constrain x-coordinate to be less than the point
-        final newX = math.min(position.dx, point.dx - 1);
-        _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
-          inHandle: Offset(newX, position.dy),
-        );
+      if (pointIndex == 0) {
+        // Titik pertama: hanya outHandle yang bisa digerakkan
+        if (!_isDraggingInHandle) {
+          // Khusus outHandle: x harus lebih besar dari posisi titik
+          final newX = math.max(position.dx, point.dx + 1);
+          final newPosition = Offset(newX, position.dy);
+          _activeHandle = newPosition;
+          _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
+            outHandle: newPosition,
+          );
+        }
+      } else if (pointIndex == _tempDragCurvePoints!.length - 1) {
+        // Titik terakhir: hanya inHandle yang bisa digerakkan
+        if (_isDraggingInHandle) {
+          // Khusus inHandle: x harus lebih kecil dari posisi titik
+          final newX = math.min(position.dx, point.dx - 1);
+          final newPosition = Offset(newX, position.dy);
+          _activeHandle = newPosition;
+          _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
+            inHandle: newPosition,
+          );
+        }
       } else {
-        // Update out-handle (right)
-        // Constrain x-coordinate to be greater than the point
-        final newX = math.max(position.dx, point.dx + 1);
-        _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
-          outHandle: Offset(newX, position.dy),
-        );
+        // Titik tengah: kedua handle bisa digerakkan
+        if (_isDraggingInHandle) {
+          // Update in-handle (left)
+          // Constrain x-coordinate to be less than the point
+          final newX = math.min(position.dx, point.dx - 1);
+          final newPosition = Offset(newX, position.dy);
+          _activeHandle = newPosition;
+          _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
+            inHandle: newPosition,
+          );
+        } else {
+          // Update out-handle (right)
+          // Constrain x-coordinate to be greater than the point
+          final newX = math.max(position.dx, point.dx + 1);
+          final newPosition = Offset(newX, position.dy);
+          _activeHandle = newPosition;
+          _tempDragCurvePoints![pointIndex] = curvePoint.copyWith(
+            outHandle: newPosition,
+          );
+        }
       }
     });
+
+    // Cetak untuk debug
+    print("Updated handle: ${_activeHandle}");
   }
 
   void _handlePointDrag(Offset position, String channel) {
@@ -515,13 +719,23 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
 
   void _handlePanEnd(String channel) {
     if (_tempDragCurvePoints != null) {
-      // Important: Store the updated curve points in our map BEFORE updating the preset
+      // Buat salinan dalam untuk memastikan perubahan handle disimpan
+      final updatedCurvePoints = List<CurvePoint>.from(_tempDragCurvePoints!);
+
+      // Simpan ke points map
       setState(() {
-        _curvePoints[channel] = List<CurvePoint>.from(_tempDragCurvePoints!);
+        _curvePoints[channel] = updatedCurvePoints;
         _tempDragCurvePoints = null;
       });
 
-      // Now update the preset with the current points
+      print("Saved points after drag: ${updatedCurvePoints.length}");
+      // Cetak posisi handle untuk debugging
+      if (updatedCurvePoints.length >= 2) {
+        print("Point 0 outHandle: ${updatedCurvePoints[0].outHandle}");
+        print("Point 1 inHandle: ${updatedCurvePoints[1].inHandle}");
+      }
+
+      // Update preset hanya SETELAH kita simpan perubahan
       _updatePresetCurvePoints();
     }
 
@@ -534,11 +748,13 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
 
   // Update preset with the current curve points
   void _updatePresetCurvePoints() {
-    // Convert curve points to simple offset lists
-    final rgbPoints = _convertToOffsets(_curvePoints['rgb'] ?? []);
-    final redPoints = _convertToOffsets(_curvePoints['red'] ?? []);
-    final greenPoints = _convertToOffsets(_curvePoints['green'] ?? []);
-    final bluePoints = _convertToOffsets(_curvePoints['blue'] ?? []);
+    // Konversi CurvePoint ke CurvePointData untuk disimpan dalam preset
+    final rgbPoints = _convertToPresetCurvePoints(_curvePoints['rgb'] ?? []);
+    final redPoints = _convertToPresetCurvePoints(_curvePoints['red'] ?? []);
+    final greenPoints = _convertToPresetCurvePoints(
+      _curvePoints['green'] ?? [],
+    );
+    final bluePoints = _convertToPresetCurvePoints(_curvePoints['blue'] ?? []);
 
     // Update the preset
     widget.onPresetUpdated(
@@ -554,107 +770,148 @@ class _ToneCurveSectionState extends State<ToneCurveSection> {
     widget.onUpdatePreview();
   }
 
-  // Recalculate handles for smooth curves
-  void _recalculateHandles(List<CurvePoint> curvePoints) {
-    for (int i = 1; i < curvePoints.length - 1; i++) {
-      final point = curvePoints[i].point;
-      final prevPoint = curvePoints[i - 1].point;
-      final nextPoint = curvePoints[i + 1].point;
+  // Method to create initial handles for a new point
+  CurvePoint _createNewCurvePoint(
+    Offset pointPosition,
+    List<CurvePoint> curvePoints,
+    int insertIndex,
+  ) {
+    final prevPoint = curvePoints[insertIndex - 1].point;
+    final nextPoint =
+        curvePoints[insertIndex]
+            .point; // This is the current point at insertIndex that will be shifted
 
-      final inHandleX = point.dx - (point.dx - prevPoint.dx) / 3;
-      final outHandleX = point.dx + (nextPoint.dx - point.dx) / 3;
+    // Calculate default handle positions
+    final inHandleX = pointPosition.dx - (pointPosition.dx - prevPoint.dx) / 3;
+    final outHandleX = pointPosition.dx + (nextPoint.dx - pointPosition.dx) / 3;
 
-      curvePoints[i] = curvePoints[i].copyWith(
-        inHandle: Offset(inHandleX, point.dy),
-        outHandle: Offset(outHandleX, point.dy),
-      );
-    }
+    return CurvePoint(
+      point: pointPosition,
+      inHandle: Offset(inHandleX, pointPosition.dy),
+      outHandle: Offset(outHandleX, pointPosition.dy),
+    );
   }
 
   // Modified curve editor using the new data structure
   Widget _buildCurveEditor(String channel) {
     final curvePoints = _tempDragCurvePoints ?? _curvePoints[channel] ?? [];
 
-    return GestureDetector(
-      onDoubleTap: () => _handleDoubleTap(const Offset(0, 0), channel),
-      onPanDown: (details) => _handlePanDown(details.localPosition, channel),
-      onPanUpdate:
-          (details) => _handlePanUpdate(details.localPosition, channel),
-      onPanEnd: (details) => _handlePanEnd(channel),
-      child: Stack(
-        children: [
-          // Make the whole area tappable
-          GestureDetector(
-            onDoubleTapDown: (details) {
-              _handleDoubleTap(details.localPosition, channel);
-            },
-            child: Container(
-              width: 256,
-              height: 256,
-              color: Colors.transparent,
-            ),
-          ),
-
-          // Points visualization
-          ...curvePoints.map(
-            (curvePoint) => Positioned(
-              left: curvePoint.point.dx - 6,
-              top: curvePoint.point.dy - 6,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: _getChannelColor(channel),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+    return SizedBox(
+      width: 256,
+      height: 256,
+      child: GestureDetector(
+        behavior:
+            HitTestBehavior.opaque, // Important: make entire area responsive
+        onDoubleTapDown: (details) {
+          if (widget.isEditing) {
+            _handleDoubleTap(details.localPosition, channel);
+          }
+        },
+        onPanDown: (details) {
+          if (widget.isEditing) {
+            _handlePanDown(details.localPosition, channel);
+          }
+        },
+        onPanUpdate: (details) {
+          if (widget.isEditing) {
+            _handlePanUpdate(details.localPosition, channel);
+          }
+        },
+        onPanEnd: (details) {
+          if (widget.isEditing) {
+            _handlePanEnd(channel);
+          }
+        },
+        child: Stack(
+          children: [
+            // Points visualization (draw under the finger)
+            ...curvePoints.map(
+              (curvePoint) => Positioned(
+                left: curvePoint.point.dx - 6,
+                top: curvePoint.point.dy - 6,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: _getChannelColor(channel),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Draw handles for curve control (skip endpoints)
-          if (widget.isEditing)
-            ...List.generate(curvePoints.length, (i) {
-              if (i == 0 || i == curvePoints.length - 1) return <Widget>[];
+            // Visualisasi handle untuk semua titik (termasuk ujung)
+            if (widget.isEditing)
+              ...List.generate(curvePoints.length, (i) {
+                final curvePoint = curvePoints[i];
+                final isActive = _activePointIndex == i;
+                final widgets = <Widget>[];
 
-              final curvePoint = curvePoints[i];
-
-              // Helper function to build handle
-              Widget buildHandle(Offset position, bool isInHandle) {
-                return Positioned(
-                  left: position.dx - 4,
-                  top: position.dy - 4,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.7),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _getChannelColor(channel).withOpacity(0.8),
-                        width: 1,
+                // Container untuk garis handle
+                widgets.add(
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: HandleLinePainter(
+                        curvePoint.point,
+                        i == 0
+                            ? [curvePoint.outHandle]
+                            : i == curvePoints.length - 1
+                            ? [curvePoint.inHandle]
+                            : [curvePoint.inHandle, curvePoint.outHandle],
+                        _getChannelColor(channel).withOpacity(0.6),
                       ),
                     ),
                   ),
                 );
-              }
 
-              // Return a list with both handles and the connecting line
-              return [
-                buildHandle(curvePoint.inHandle, true), // In handle
-                buildHandle(curvePoint.outHandle, false), // Out handle
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: HandleLinePainter(
-                      curvePoint.point,
-                      [curvePoint.inHandle, curvePoint.outHandle],
-                      _getChannelColor(channel).withOpacity(0.6),
+                // Helper function to build handle
+                Widget buildHandle(Offset position, bool isInHandle) {
+                  final isActiveHandle =
+                      isActive &&
+                      ((isInHandle && _isDraggingInHandle) ||
+                          (!isInHandle &&
+                              !_isDraggingInHandle &&
+                              _isHandleDragging));
+
+                  return Positioned(
+                    left: position.dx - 4,
+                    top: position.dy - 4,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color:
+                            isActiveHandle
+                                ? Colors.yellow.withOpacity(0.9)
+                                : Colors.white.withOpacity(0.7),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _getChannelColor(channel).withOpacity(0.8),
+                          width: isActiveHandle ? 2 : 1,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ];
-            }).expand((widgets) => widgets).toList(),
-        ],
+                  );
+                }
+
+                // Visualisasi handle sesuai posisi titik
+                if (i == 0) {
+                  // Titik pertama: hanya visualisasi outHandle
+                  widgets.add(buildHandle(curvePoint.outHandle, false));
+                } else if (i == curvePoints.length - 1) {
+                  // Titik terakhir: hanya visualisasi inHandle
+                  widgets.add(buildHandle(curvePoint.inHandle, true));
+                } else {
+                  // Titik tengah: visualisasi kedua handle
+                  widgets.add(buildHandle(curvePoint.inHandle, true));
+                  widgets.add(buildHandle(curvePoint.outHandle, false));
+                }
+
+                return widgets;
+              }).expand((widgets) => widgets).toList(),
+          ],
+        ),
       ),
     );
   }
