@@ -1,8 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -269,10 +266,24 @@ class ImageProcessor {
     // Create a copy to modify
     final result = img.Image.from(image);
 
-    // Compute black and white points adjustment
-    final blackPoint = (blacks * 50).round(); // Max 50 points shift
-    final whitePoint =
-        (whites * -50).round(); // Max 50 points shift (note: inverted)
+    // Calculate the luminance histogram to analyze image brightness distribution
+    final histogram = List<int>.filled(256, 0);
+
+    // Build histogram
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+        final r = pixel.r.toInt();
+        final g = pixel.g.toInt();
+        final b = pixel.b.toInt();
+
+        // Calculate luminance
+        final luminance = ((0.299 * r + 0.587 * g + 0.114 * b)).round();
+        if (luminance >= 0 && luminance < 256) {
+          histogram[luminance]++;
+        }
+      }
+    }
 
     // Apply to each pixel
     for (var y = 0; y < result.height; y++) {
@@ -285,18 +296,54 @@ class ImageProcessor {
         int b = pixel.b.toInt();
         int a = pixel.a.toInt();
 
-        // Apply blacks adjustment
-        if (blacks != 0) {
-          r = (r > blackPoint) ? r : 0;
-          g = (g > blackPoint) ? g : 0;
-          b = (b > blackPoint) ? b : 0;
+        // Calculate luminance
+        final luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+        // Whites: Controls the very brightest parts of the image
+        // Proper whites adjustment - affects only the brightest areas
+        if (whites != 0) {
+          // Only apply to very bright areas (top 15% of brightness)
+          if (luminance > 0.85) {
+            // Calculate strength factor based on how close to pure white
+            final strength = (luminance - 0.85) / 0.15;
+
+            if (whites > 0) {
+              // Increase brightness of light areas - push whites up
+              final factor = 1.0 + (whites * 0.5 * strength);
+              r = (r * factor).round().clamp(0, 255);
+              g = (g * factor).round().clamp(0, 255);
+              b = (b * factor).round().clamp(0, 255);
+            } else {
+              // Pull down whites (reduce brightness of bright areas)
+              final factor = 1.0 + (whites * 0.3 * strength);
+              r = (r * factor).round().clamp(0, 255);
+              g = (g * factor).round().clamp(0, 255);
+              b = (b * factor).round().clamp(0, 255);
+            }
+          }
         }
 
-        // Apply whites adjustment
-        if (whites != 0) {
-          r = (r < 255 - whitePoint) ? r : 255;
-          g = (g < 255 - whitePoint) ? g : 255;
-          b = (b < 255 - whitePoint) ? b : 255;
+        // Blacks: Controls the very darkest parts of the image
+        if (blacks != 0) {
+          // Only apply to very dark areas (bottom 15% of brightness)
+          if (luminance < 0.15) {
+            // Calculate strength factor based on how close to pure black
+            final strength = (0.15 - luminance) / 0.15;
+
+            if (blacks > 0) {
+              // Lift blacks (increase brightness of dark areas)
+              final factor = 1.0 + (blacks * 0.5 * strength);
+              r = (r * factor).round().clamp(0, 255);
+              g = (g * factor).round().clamp(0, 255);
+              b = (b * factor).round().clamp(0, 255);
+            } else {
+              // Crush blacks (decrease brightness of dark areas)
+              final factor = 1.0 + (blacks * 0.5 * strength);
+              r = (r * factor).round().clamp(0, 255);
+              g = (g * factor).round().clamp(0, 255);
+              b = (b * factor).round().clamp(0, 255);
+            }
+          }
         }
 
         // Set the adjusted pixel
@@ -316,13 +363,6 @@ class ImageProcessor {
     // Create a copy to modify
     final result = img.Image.from(image);
 
-    // Convert adjustments to factors
-    // Fix: Invert the highlights factor so negative values increase highlights
-    // and positive values reduce highlights (match Lightroom behavior)
-    final highlightsFactor =
-        1.0 + highlights; // Positive means darker highlights
-    final shadowsFactor = 1.0 + shadows; // Positive means brighter shadows
-
     // Apply to each pixel
     for (var y = 0; y < result.height; y++) {
       for (var x = 0; x < result.width; x++) {
@@ -337,23 +377,30 @@ class ImageProcessor {
         // Calculate luminance to determine if pixel is highlight or shadow
         final luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-        // Apply highlight adjustment (for brighter pixels)
-        if (highlights != 0 && luminance > 0.5) {
-          // Fix: Use highlights directly (negative means brighter, positive means darker)
-          // Stronger effect as we approach pure white (luminance = 1.0)
-          final adjustment = 1.0 - (highlights * (luminance - 0.5) * 2);
-          r = (r * adjustment).round().clamp(0, 255);
-          g = (g * adjustment).round().clamp(0, 255);
-          b = (b * adjustment).round().clamp(0, 255);
+        // Apply highlight adjustment - affects mid-high tones but not pure whites
+        // (affects a narrower range than whites slider)
+        if (highlights != 0 && luminance > 0.5 && luminance < 0.85) {
+          // Calculate adjustment factor based on luminance and highlights value
+          // Higher luminance = stronger effect, scaled by highlights parameter
+          // Will affect mostly the mid-high tones, not the brightest areas
+          final highlightStrength = (luminance - 0.5) / (0.85 - 0.5);
+          final highlightsFactor = 1.0 - (highlights * highlightStrength * 0.7);
+
+          r = (r * highlightsFactor).round().clamp(0, 255);
+          g = (g * highlightsFactor).round().clamp(0, 255);
+          b = (b * highlightsFactor).round().clamp(0, 255);
         }
 
-        // Apply shadow adjustment (for darker pixels)
-        if (shadows != 0 && luminance <= 0.5) {
-          // Stronger effect as we approach pure black (luminance = 0.0)
-          final factor = 1.0 + (shadows * (0.5 - luminance) * 2);
-          r = (r * factor).round().clamp(0, 255);
-          g = (g * factor).round().clamp(0, 255);
-          b = (b * factor).round().clamp(0, 255);
+        // Apply shadow adjustment (for darker pixels - but not pure blacks)
+        if (shadows != 0 && luminance > 0.15 && luminance <= 0.5) {
+          // Calculate shadow factor based on luminance and shadows value
+          // Lower luminance = stronger effect, scaled by shadows parameter
+          final shadowStrength = (0.5 - luminance) / (0.5 - 0.15);
+          final shadowsFactor = 1.0 + (shadows * shadowStrength * 0.7);
+
+          r = (r * shadowsFactor).round().clamp(0, 255);
+          g = (g * shadowsFactor).round().clamp(0, 255);
+          b = (b * shadowsFactor).round().clamp(0, 255);
         }
 
         // Set the adjusted pixel
