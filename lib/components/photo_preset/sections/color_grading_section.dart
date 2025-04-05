@@ -112,18 +112,15 @@ class _ColorGradingSectionState extends State<ColorGradingSection> {
       segments: const [
         ButtonSegment(
           value: 'shadows',
-          label: Text('Shadows'),
-          icon: Icon(Icons.nights_stay),
+          label: Text('Shadows', style: TextStyle(fontSize: 12)),
         ),
         ButtonSegment(
           value: 'midtones',
-          label: Text('Midtones'),
-          icon: Icon(Icons.brightness_medium),
+          label: Text('Midtones', style: TextStyle(fontSize: 12)),
         ),
         ButtonSegment(
           value: 'highlights',
-          label: Text('Highlights'),
-          icon: Icon(Icons.brightness_high),
+          label: Text('Highlight', style: TextStyle(fontSize: 12)),
         ),
       ],
       selected: {_selectedRegion},
@@ -135,6 +132,7 @@ class _ColorGradingSectionState extends State<ColorGradingSection> {
                 });
               }
               : null,
+      showSelectedIcon: false,
     );
   }
 
