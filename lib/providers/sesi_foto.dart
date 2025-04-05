@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'package:collection/collection.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -8,7 +9,12 @@ import 'package:image/image.dart' as img;
 import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
 import 'package:photobooth/components/dialogs/captured_photos_dialog.dart';
 import 'package:photobooth/models/layout_model.dart';
+import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/models/renderables/renderer.dart';
+import 'package:photobooth/providers/preset_provider.dart';
+import 'package:photobooth/providers/event_provider.dart'; // Add this import
+import 'package:photobooth/services/image_processor.dart';
+import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
 // Import service
@@ -277,6 +283,12 @@ class SesiFotoProvider with ChangeNotifier {
     LayoutModel layout,
     BuildContext context,
   ) async {
+    // Add assertions for debugging
+    assert(uploadFolder.isNotEmpty, 'Upload folder is empty');
+    assert(eventName.isNotEmpty, 'Event name is empty');
+    assert(layout != null, 'Layout is null');
+    assert(context != null, 'Context is null');
+
     final existingFiles =
         Directory(uploadFolder).listSync().whereType<File>().toList();
     int maxCompositeIndex = 0;
@@ -308,14 +320,172 @@ class SesiFotoProvider with ChangeNotifier {
       'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
     );
 
-    _setLoading(true, 'Creating composite image and GIF...');
+    _setLoading(true, 'Processing photos with preset...');
 
     try {
-      // Export the composite image using the layout's exportAsImage method
+      // Find the event by name
+      final eventProvider = Provider.of<EventsProvider>(context, listen: false);
+      assert(eventProvider != null, 'EventsProvider is null');
+
+      final event = eventProvider.events.firstWhereOrNull(
+        (e) => e.name == eventName,
+      );
+
+      // Debug prints for event and preset
+      print(
+        '📸 Processing composite for event: ${event?.name ?? "NO EVENT FOUND"}',
+      );
+
+      if (event != null) {
+        print('📋 Event preset ID: "${event.presetId}"');
+      } else {
+        print('⚠️ Event not found by name: $eventName');
+      }
+
+      PresetModel? eventPreset;
+      final presetProvider = Provider.of<PresetProvider>(
+        context,
+        listen: false,
+      );
+      assert(presetProvider != null, 'PresetProvider is null');
+
+      print(
+        'Available presets: ${presetProvider.savedPresets.map((p) => "${p.id} (${p.name})").join(", ")}',
+      );
+
+      // DEBUG line to help diagnose preset issues
+      print(
+        '❗ DEBUG: Event presetId = "${event?.presetId}", Default preset ID = "default"',
+      );
+
+      if (event != null && event.presetId.isNotEmpty) {
+        // FIXED: First ensure we're using the correct preset ID, not attempting to match by name
+        if (event.presetId == "default" &&
+            presetProvider.savedPresets.length > 1) {
+          print(
+            '⚠️ Event is using default preset ID, trying active preset instead',
+          );
+
+          // Use active preset if available
+          final activePreset = presetProvider.activePreset;
+          if (activePreset != null && activePreset.id != "default") {
+            print(
+              '✅ Using active preset instead: ${activePreset.name} (${activePreset.id})',
+            );
+
+            // Also update the event's preset ID to match the active preset for future use
+            event.updatePresetId(activePreset.id);
+            eventPreset = activePreset;
+
+            // Save the updated event
+            try {
+              final eventsProvider = Provider.of<EventsProvider>(
+                context,
+                listen: false,
+              );
+              eventsProvider.saveEvents();
+              print(
+                '✅ Updated event "${event.name}" preset ID to: ${activePreset.id}',
+              );
+            } catch (e) {
+              print('⚠️ Could not save updated event: $e');
+            }
+          }
+        }
+
+        // If we didn't find a preset yet, use direct lookup
+        if (eventPreset == null) {
+          // Direct lookup from PresetProvider by ID for reliability
+          print('Looking up preset directly by ID: "${event.presetId}"');
+          eventPreset = presetProvider.getPresetById(event.presetId);
+        }
+
+        if (eventPreset != null) {
+          print('✅ Successfully found preset by ID: ${eventPreset.name}');
+        } else {
+          print(
+            '⚠️ Direct preset lookup failed, trying through event.getPreset()',
+          );
+
+          // If direct lookup fails, try through the event's getPreset method
+          eventPreset = event.getPreset(context);
+          print('📋 Result from event.getPreset(): ${eventPreset?.name}');
+        }
+      } else {
+        // No event or no preset ID, use active preset directly from provider
+        print('⚠️ No event/presetId, falling back to active preset');
+        eventPreset = presetProvider.activePreset;
+        print('📋 Active preset: ${eventPreset?.name ?? "None"}');
+      }
+
+      // Final fallback to default preset - should rarely get here
+      if (eventPreset == null) {
+        print('❌ All preset lookups failed, creating default preset');
+        eventPreset = PresetModel.defaultPreset();
+      }
+
+      // Print preset parameters to verify we got the right one
+      print('✅ Using preset: ${eventPreset.name} (ID: ${eventPreset.id})');
+      print('   - Brightness: ${eventPreset.brightness}');
+      print('   - Contrast: ${eventPreset.contrast}');
+      print('   - Saturation: ${eventPreset.saturation}');
+
+      // PROCESS THE PHOTOS WITH PRESET
+      _setLoading(true, 'Applying preset "${eventPreset.name}" to photos...');
+
+      print(
+        "About to process ${_takenPhotos.length} photos with preset: ${eventPreset.name}",
+      );
+
+      List<File> processedPhotos = [];
+
+      try {
+        // Process each photo individually for better error tracking
+        for (int i = 0; i < _takenPhotos.length; i++) {
+          _setLoading(
+            true,
+            'Processing photo ${i + 1} of ${_takenPhotos.length}...',
+          );
+
+          try {
+            final processed = await ImageProcessor.processImage(
+              _takenPhotos[i],
+              eventPreset,
+            );
+            if (processed != null) {
+              processedPhotos.add(processed);
+              print('Successfully processed photo ${i + 1}');
+            } else {
+              print('Failed to process photo ${i + 1}, using original');
+              processedPhotos.add(_takenPhotos[i]);
+            }
+          } catch (e) {
+            print('Error processing individual photo ${i + 1}: $e');
+            processedPhotos.add(_takenPhotos[i]);
+          }
+        }
+
+        assert(
+          processedPhotos.length == _takenPhotos.length,
+          'Processed photos count (${processedPhotos.length}) doesn\'t match original count (${_takenPhotos.length})',
+        );
+
+        print(
+          "Successfully processed ${processedPhotos.length} photos with preset",
+        );
+      } catch (e) {
+        print("Error applying preset to photos: $e");
+        // Fallback to original photos
+        processedPhotos = _takenPhotos;
+      }
+
+      _setLoading(true, 'Creating composite image and GIF...');
+
+      // Export the composite image using processed photos
       final exportedFile = await Renderer.exportLayoutWithImages(
         layout: layout,
         exportPath: compositeImagePath,
-        filePaths: _takenPhotos.map((file) => file.path).toList(),
+        filePaths: processedPhotos.map((file) => file.path).toList(),
         resolutionMultiplier: 1,
       );
 
@@ -325,9 +495,9 @@ class SesiFotoProvider with ChangeNotifier {
         print('Failed to create composite image');
       }
 
-      // Create GIF from captured photos
+      // Create GIF from processed photos
       await _createSimpleGif(
-        images: _takenPhotos.map((file) => file.path).toList(),
+        images: processedPhotos.map((file) => file.path).toList(),
         outputPath: gifPath,
       );
 
@@ -349,44 +519,6 @@ class SesiFotoProvider with ChangeNotifier {
       print('Error creating composite image or GIF: $e');
     } finally {
       _setLoading(false);
-    }
-  }
-
-  void _clearTakenPhotos() {
-    _takenPhotos.clear();
-    notifyListeners();
-  }
-
-  Future<void> _createSimpleGif({
-    required List<String> images,
-    required String outputPath,
-  }) async {
-    if (images.isEmpty) return;
-
-    try {
-      final frames = await compute((Map<String, dynamic> params) {
-        final paths = params['imagePaths'] as List<String>;
-        return paths.map((imagePath) {
-          final image = img.decodeImage(File(imagePath).readAsBytesSync())!;
-          return img.copyResize(
-            image,
-            width: image.width ~/ 3,
-            height: image.height ~/ 3,
-          );
-        }).toList();
-      }, {'imagePaths': images});
-
-      final encoder = img.GifEncoder();
-      encoder.repeat = 3;
-      for (var frame in frames) {
-        encoder.addFrame(frame, duration: 50);
-      }
-      final gif = encoder.finish()!;
-
-      await File(outputPath).writeAsBytes(Uint8List.fromList(gif));
-      print('GIF created: $outputPath');
-    } catch (e) {
-      print('Error creating GIF: $e');
     }
   }
 
@@ -447,6 +579,44 @@ class SesiFotoProvider with ChangeNotifier {
   // Helper method to update state and notify listeners
   void setState(VoidCallback fn) {
     fn();
+    notifyListeners();
+  }
+
+  Future<void> _createSimpleGif({
+    required List<String> images,
+    required String outputPath,
+  }) async {
+    if (images.isEmpty) return;
+
+    try {
+      final frames = await compute((Map<String, dynamic> params) {
+        final paths = params['imagePaths'] as List<String>;
+        return paths.map((imagePath) {
+          final image = img.decodeImage(File(imagePath).readAsBytesSync())!;
+          return img.copyResize(
+            image,
+            width: image.width ~/ 3,
+            height: image.height ~/ 3,
+          );
+        }).toList();
+      }, {'imagePaths': images});
+
+      final encoder = img.GifEncoder();
+      encoder.repeat = 3;
+      for (var frame in frames) {
+        encoder.addFrame(frame, duration: 50);
+      }
+      final gif = encoder.finish()!;
+
+      await File(outputPath).writeAsBytes(Uint8List.fromList(gif));
+      print('GIF created: $outputPath');
+    } catch (e) {
+      print('Error creating GIF: $e');
+    }
+  }
+
+  void _clearTakenPhotos() {
+    _takenPhotos.clear();
     notifyListeners();
   }
 }

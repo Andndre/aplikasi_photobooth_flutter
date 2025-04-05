@@ -224,6 +224,26 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Get the current event from route arguments if available
+    String? currentEventName;
+    try {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map<String, dynamic> && args.containsKey('event')) {
+        final event = args['event'];
+        if (event != null) {
+          currentEventName = event.name;
+        }
+      } else if (widget.eventId != null) {
+        currentEventName = widget.eventId;
+      }
+
+      if (currentEventName != null) {
+        print('PhotoPresetPage: Working with event: $currentEventName');
+      }
+    } catch (e) {
+      print('Error getting event from route: $e');
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Photo Presets'),
@@ -292,7 +312,8 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                         },
                         onUpdatePreview: _updateProcessedPreview,
                         onPickColor: _pickColor,
-                        eventId: widget.eventId,
+                        // Pass the current event name here
+                        eventId: currentEventName,
                         tempValues: _tempValues,
                         onCancel: () {
                           setState(() {

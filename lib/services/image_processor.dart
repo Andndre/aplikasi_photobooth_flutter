@@ -10,11 +10,30 @@ class ImageProcessor {
   // Process an image with a preset and return the modified image
   static Future<File?> processImage(File imageFile, PresetModel preset) async {
     try {
+      // Add assertions for debugging
+      assert(imageFile != null, 'Image file is null');
+      assert(
+        await imageFile.exists(),
+        'Image file does not exist: ${imageFile.path}',
+      );
+      assert(preset != null, 'Preset is null');
+
+      print('Processing image with preset: ${preset.name}');
+      print('Image path: ${imageFile.path}');
+      print(
+        'Preset brightness: ${preset.brightness}, contrast: ${preset.contrast}, saturation: ${preset.saturation}',
+      );
+
       // Read the image
       final bytes = await imageFile.readAsBytes();
       final image = img.decodeImage(bytes);
 
-      if (image == null) return null;
+      if (image == null) {
+        print('Failed to decode image: ${imageFile.path}');
+        return null;
+      }
+
+      print('Image decoded successfully: ${image.width}x${image.height}');
 
       // Create a copy to modify
       img.Image processedImage = img.copyResize(
@@ -27,6 +46,9 @@ class ImageProcessor {
 
       // 1. Apply temperature and tint (white balance)
       if (preset.temperature != 0.0 || preset.tint != 0.0) {
+        print(
+          'Applying white balance: temp=${preset.temperature}, tint=${preset.tint}',
+        );
         processedImage = _adjustWhiteBalance(
           processedImage,
           preset.temperature,
@@ -145,9 +167,11 @@ class ImageProcessor {
 
       // Save the processed image to a temporary file
       final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = path.basename(imageFile.path);
       final outputPath = path.join(
         tempDir.path,
-        'processed_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        'processed_${timestamp}_$filename',
       );
 
       final outputFile = File(outputPath);
@@ -155,11 +179,49 @@ class ImageProcessor {
         Uint8List.fromList(img.encodeJpg(processedImage)),
       );
 
+      print('Successfully saved processed image to: ${outputFile.path}');
       return outputFile;
     } catch (e) {
       print('Error processing image: $e');
       return null;
     }
+  }
+
+  // New method to apply preset to multiple photos at once with better error handling
+  static Future<List<File>> batchProcessImages(
+    List<File> imageFiles,
+    PresetModel preset,
+  ) async {
+    assert(imageFiles != null, 'Image files list is null');
+    assert(preset != null, 'Preset is null');
+    print(
+      'Batch processing ${imageFiles.length} photos with preset: ${preset.name}',
+    );
+
+    final results = <File>[];
+    for (int i = 0; i < imageFiles.length; i++) {
+      try {
+        final imageFile = imageFiles[i];
+        print(
+          'Processing image ${i + 1}/${imageFiles.length}: ${imageFile.path}',
+        );
+
+        final processedFile = await processImage(imageFile, preset);
+        if (processedFile != null) {
+          results.add(processedFile);
+          print('Successfully processed image ${i + 1}');
+        } else {
+          print('Failed to process image ${i + 1}, using original');
+          results.add(imageFile);
+        }
+      } catch (e) {
+        print('Error processing image ${i + 1}: $e');
+        results.add(imageFiles[i]); // Use original on error
+      }
+    }
+
+    print('Completed batch processing: ${results.length} images');
+    return results;
   }
 
   // Adjust white balance (temperature and tint)

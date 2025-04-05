@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photobooth/models/event_model.dart';
 import 'package:photobooth/models/preset_model.dart';
-
-import 'package:flutter/material.dart';
+import 'package:photobooth/providers/preset_provider.dart';
+import 'package:provider/provider.dart';
 
 class EventsProvider extends ChangeNotifier {
   List<EventModel> _events = [];
@@ -47,6 +49,11 @@ class EventsProvider extends ChangeNotifier {
     prefs.setString('events', eventsString);
   }
 
+  // Make the save method public so it can be called from outside
+  Future<void> saveEvents() async {
+    return _saveToLocalStorage();
+  }
+
   // Add a method to update an event's preset
   void updateEventPreset(int eventId, PresetModel preset) {
     final index = _events.indexWhere((event) => event.layoutId == eventId);
@@ -57,21 +64,29 @@ class EventsProvider extends ChangeNotifier {
     }
   }
 
-  // Add a method to get an event's preset
-  PresetModel getEventPreset(int eventId) {
-    final event = _events.firstWhere(
+  // Update a method to get an event's preset
+  PresetModel? getEventPreset(BuildContext context, int eventId) {
+    // Find the event by ID
+    final event = _events.firstWhereOrNull(
       (event) => event.layoutId == eventId,
-      orElse:
-          () => EventModel(
-            name: '',
-            description: '',
-            date: '',
-            layoutId: 0,
-            saveFolder: '',
-            uploadFolder: '',
-          ),
     );
 
-    return event.preset;
+    // If no event found, return null
+    if (event == null) return null;
+
+    // Get the preset from the PresetProvider using the event's presetId
+    final presetProvider = Provider.of<PresetProvider>(context, listen: false);
+    return presetProvider.getPresetById(event.presetId) ??
+        presetProvider.activePreset ??
+        PresetModel.defaultPreset();
+  }
+
+  // Add method to get event by name
+  EventModel? getEventByName(String name) {
+    try {
+      return _events.firstWhere((event) => event.name == name);
+    } catch (e) {
+      return null;
+    }
   }
 }
