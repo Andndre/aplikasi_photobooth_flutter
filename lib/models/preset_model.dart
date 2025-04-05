@@ -101,6 +101,16 @@ class PresetModel {
   final double detail; // Controls detail enhancement (0.0-1.0)
   final double noiseReduction; // Controls noise reduction (0.0-1.0)
 
+  // Color Grading properties
+  final Color shadowsColor; // Color for shadows
+  final double shadowsIntensity; // Intensity of shadow color (0.0 - 1.0)
+  final Color midtonesColor; // Color for midtones
+  final double midtonesIntensity; // Intensity of midtone color (0.0 - 1.0)
+  final Color highlightsColor; // Color for highlights
+  final double highlightsIntensity; // Intensity of highlight color (0.0 - 1.0)
+  final double
+  colorBalance; // Balance between shadows and highlights (-1.0 to 1.0)
+
   const PresetModel({
     required this.id,
     required this.name,
@@ -150,6 +160,14 @@ class PresetModel {
     this.sharpness = 0.0,
     this.detail = 0.0,
     this.noiseReduction = 0.0,
+    // Initialize color grading properties with defaults
+    this.shadowsColor = const Color(0xFF000080), // Dark blue for shadows
+    this.shadowsIntensity = 0.0, // Default no color grading
+    this.midtonesColor = const Color(0xFF808080), // Gray for midtones
+    this.midtonesIntensity = 0.0, // Default no color grading
+    this.highlightsColor = const Color(0xFFFFFF80), // Yellow-ish for highlights
+    this.highlightsIntensity = 0.0, // Default no color grading
+    this.colorBalance = 0.0, // Default balanced
   });
 
   // Create a default preset with a specific ID
@@ -202,6 +220,14 @@ class PresetModel {
       sharpness: 0.0,
       detail: 0.0,
       noiseReduction: 0.0,
+      // Color grading properties
+      shadowsColor: Color(0xFF000080),
+      shadowsIntensity: 0.0,
+      midtonesColor: Color(0xFF808080),
+      midtonesIntensity: 0.0,
+      highlightsColor: Color(0xFFFFFF80),
+      highlightsIntensity: 0.0,
+      colorBalance: 0.0,
     );
   }
 
@@ -241,6 +267,14 @@ class PresetModel {
     double? sharpness,
     double? detail,
     double? noiseReduction,
+    // Color grading properties
+    Color? shadowsColor,
+    double? shadowsIntensity,
+    Color? midtonesColor,
+    double? midtonesIntensity,
+    Color? highlightsColor,
+    double? highlightsIntensity,
+    double? colorBalance,
   }) {
     return PresetModel(
       id: id,
@@ -282,6 +316,14 @@ class PresetModel {
       sharpness: sharpness ?? this.sharpness,
       detail: detail ?? this.detail,
       noiseReduction: noiseReduction ?? this.noiseReduction,
+      // Color grading properties
+      shadowsColor: shadowsColor ?? this.shadowsColor,
+      shadowsIntensity: shadowsIntensity ?? this.shadowsIntensity,
+      midtonesColor: midtonesColor ?? this.midtonesColor,
+      midtonesIntensity: midtonesIntensity ?? this.midtonesIntensity,
+      highlightsColor: highlightsColor ?? this.highlightsColor,
+      highlightsIntensity: highlightsIntensity ?? this.highlightsIntensity,
+      colorBalance: colorBalance ?? this.colorBalance,
     );
   }
 
@@ -323,6 +365,14 @@ class PresetModel {
       sharpness: sharpness,
       detail: detail,
       noiseReduction: noiseReduction,
+      // Color grading properties
+      shadowsColor: shadowsColor,
+      shadowsIntensity: shadowsIntensity,
+      midtonesColor: midtonesColor,
+      midtonesIntensity: midtonesIntensity,
+      highlightsColor: highlightsColor,
+      highlightsIntensity: highlightsIntensity,
+      colorBalance: colorBalance,
     );
   }
 
@@ -370,6 +420,14 @@ class PresetModel {
       'sharpness': sharpness,
       'detail': detail,
       'noiseReduction': noiseReduction,
+      // Color grading properties
+      'shadowsColor': shadowsColor.value,
+      'shadowsIntensity': shadowsIntensity,
+      'midtonesColor': midtonesColor.value,
+      'midtonesIntensity': midtonesIntensity,
+      'highlightsColor': highlightsColor.value,
+      'highlightsIntensity': highlightsIntensity,
+      'colorBalance': colorBalance,
     };
   }
 
@@ -495,6 +553,23 @@ class PresetModel {
       sharpness: json['sharpness']?.toDouble() ?? 0.0,
       detail: json['detail']?.toDouble() ?? 0.0,
       noiseReduction: json['noiseReduction']?.toDouble() ?? 0.0,
+      // Color grading properties
+      shadowsColor:
+          json['shadowsColor'] != null
+              ? Color(json['shadowsColor'])
+              : const Color(0xFF000080),
+      shadowsIntensity: json['shadowsIntensity']?.toDouble() ?? 0.0,
+      midtonesColor:
+          json['midtonesColor'] != null
+              ? Color(json['midtonesColor'])
+              : const Color(0xFF808080),
+      midtonesIntensity: json['midtonesIntensity']?.toDouble() ?? 0.0,
+      highlightsColor:
+          json['highlightsColor'] != null
+              ? Color(json['highlightsColor'])
+              : const Color(0xFFFFFF80),
+      highlightsIntensity: json['highlightsIntensity']?.toDouble() ?? 0.0,
+      colorBalance: json['colorBalance']?.toDouble() ?? 0.0,
     );
   }
 
@@ -548,7 +623,14 @@ class PresetModel {
         other.blueCurvePoints == blueCurvePoints &&
         other.sharpness == sharpness &&
         other.detail == detail &&
-        other.noiseReduction == noiseReduction;
+        other.noiseReduction == noiseReduction &&
+        other.shadowsColor == shadowsColor &&
+        other.shadowsIntensity == shadowsIntensity &&
+        other.midtonesColor == midtonesColor &&
+        other.midtonesIntensity == midtonesIntensity &&
+        other.highlightsColor == highlightsColor &&
+        other.highlightsIntensity == highlightsIntensity &&
+        other.colorBalance == colorBalance;
   }
 
   // Override hashCode for value equality
@@ -598,7 +680,18 @@ class PresetModel {
       Object.hashAll(blueCurvePoints),
     );
 
+    // Fourth group of properties
+    final hash4 = Object.hash(
+      shadowsColor,
+      shadowsIntensity,
+      midtonesColor,
+      midtonesIntensity,
+      highlightsColor,
+      highlightsIntensity,
+      colorBalance,
+    );
+
     // Combine all hash values into one
-    return Object.hash(hash1, hash2, hash3);
+    return Object.hash(hash1, hash2, hash3, hash4);
   }
 }

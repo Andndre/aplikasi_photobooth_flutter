@@ -179,6 +179,49 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     });
   }
 
+  // Add Color Grading handlers
+  void _updateShadowsColor(Color color) {
+    setState(() {
+      _selectedPreset = _selectedPreset!.copyWith(shadowsColor: color);
+    });
+  }
+
+  void _updateShadowsIntensity(double value) {
+    setState(() {
+      _tempValues['shadowsIntensity'] = value;
+    });
+  }
+
+  void _updateMidtonesColor(Color color) {
+    setState(() {
+      _selectedPreset = _selectedPreset!.copyWith(midtonesColor: color);
+    });
+  }
+
+  void _updateMidtonesIntensity(double value) {
+    setState(() {
+      _tempValues['midtonesIntensity'] = value;
+    });
+  }
+
+  void _updateHighlightsColor(Color color) {
+    setState(() {
+      _selectedPreset = _selectedPreset!.copyWith(highlightsColor: color);
+    });
+  }
+
+  void _updateHighlightsIntensity(double value) {
+    setState(() {
+      _tempValues['highlightsIntensity'] = value;
+    });
+  }
+
+  void _updateColorBalance(double value) {
+    setState(() {
+      _tempValues['colorBalance'] = value;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -379,6 +422,15 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                         updateSharpness: _updateSharpness,
                         updateDetail: _updateDetail,
                         updateNoiseReduction: _updateNoiseReduction,
+
+                        // Add color grading handlers
+                        updateShadowsColor: _updateShadowsColor,
+                        updateShadowsIntensity: _updateShadowsIntensity,
+                        updateMidtonesColor: _updateMidtonesColor,
+                        updateMidtonesIntensity: _updateMidtonesIntensity,
+                        updateHighlightsColor: _updateHighlightsColor,
+                        updateHighlightsIntensity: _updateHighlightsIntensity,
+                        updateColorBalance: _updateColorBalance,
                       ),
                     ),
                 ],

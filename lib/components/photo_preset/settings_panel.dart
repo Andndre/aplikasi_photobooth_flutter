@@ -7,6 +7,7 @@ import 'package:photobooth/components/photo_preset/sections/preset_info_section.
 import 'package:photobooth/components/photo_preset/sections/tone_curve_section.dart';
 import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/providers/preset_provider.dart';
+import 'package:photobooth/components/photo_preset/sections/color_grading_section.dart';
 
 class SettingsPanel extends StatelessWidget {
   final PresetModel preset;
@@ -51,6 +52,15 @@ class SettingsPanel extends StatelessWidget {
 
   final Function() pickSampleImage;
 
+  // Color grading callbacks
+  final Function(Color) updateShadowsColor;
+  final Function(double) updateShadowsIntensity;
+  final Function(Color) updateMidtonesColor;
+  final Function(double) updateMidtonesIntensity;
+  final Function(Color) updateHighlightsColor;
+  final Function(double) updateHighlightsIntensity;
+  final Function(double) updateColorBalance;
+
   const SettingsPanel({
     super.key,
     required this.preset,
@@ -87,6 +97,13 @@ class SettingsPanel extends StatelessWidget {
     required this.updateDetail,
     required this.updateNoiseReduction,
     required this.pickSampleImage,
+    required this.updateShadowsColor,
+    required this.updateShadowsIntensity,
+    required this.updateMidtonesColor,
+    required this.updateMidtonesIntensity,
+    required this.updateHighlightsColor,
+    required this.updateHighlightsIntensity,
+    required this.updateColorBalance,
   });
 
   @override
@@ -172,6 +189,24 @@ class SettingsPanel extends StatelessWidget {
               updateBlueHue: updateBlueHue,
               updateBlueSaturation: updateBlueSaturation,
               updateBlueLuminance: updateBlueLuminance,
+              onPresetUpdated: onPresetUpdated,
+              onUpdatePreview: onUpdatePreview,
+            ),
+
+            const SizedBox(height: 8),
+
+            // Color Grading Section
+            ColorGradingSection(
+              preset: preset,
+              isEditing: isEditing,
+              tempValues: tempValues,
+              updateShadowsColor: updateShadowsColor,
+              updateShadowsIntensity: updateShadowsIntensity,
+              updateMidtonesColor: updateMidtonesColor,
+              updateMidtonesIntensity: updateMidtonesIntensity,
+              updateHighlightsColor: updateHighlightsColor,
+              updateHighlightsIntensity: updateHighlightsIntensity,
+              updateColorBalance: updateColorBalance,
               onPresetUpdated: onPresetUpdated,
               onUpdatePreview: onUpdatePreview,
             ),

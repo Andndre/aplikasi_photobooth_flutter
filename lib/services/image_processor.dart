@@ -63,6 +63,13 @@ class ImageProcessor {
       // 6. Apply color mixer adjustments
       processedImage = _applyColorMixer(processedImage, preset);
 
+      // Apply Color Grading after color mixer but before black and white conversion
+      if (preset.shadowsIntensity > 0 ||
+          preset.midtonesIntensity > 0 ||
+          preset.highlightsIntensity > 0) {
+        processedImage = _applyColorGrading(processedImage, preset);
+      }
+
       // 7. Black and White (if enabled)
       if (preset.blackAndWhite) {
         processedImage = img.grayscale(processedImage);
@@ -1136,5 +1143,155 @@ class ImageProcessor {
     }
 
     return result;
+  }
+
+  // Apply color grading (shadows, midtones, highlights)
+  static img.Image _applyColorGrading(img.Image image, PresetModel preset) {
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Apply to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Calculate luminance to determine if pixel is shadow, midtone or highlight
+        final luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+        // Apply color grading based on luminance range
+        // Apply shadows color (dark areas)
+        if (luminance < 0.33 && preset.shadowsIntensity > 0) {
+          final strength = preset.shadowsIntensity * (1.0 - luminance / 0.33);
+          final adjustedRGB = _applyColorToPixel(
+            r,
+            g,
+            b,
+            preset.shadowsColor,
+            strength,
+          );
+          r = adjustedRGB[0];
+          g = adjustedRGB[1];
+          b = adjustedRGB[2];
+        }
+
+        // Apply midtones color (mid-brightness areas)
+        if (luminance >= 0.33 &&
+            luminance <= 0.66 &&
+            preset.midtonesIntensity > 0) {
+          // Peak at 0.5, fade toward ends
+          final midPoint = 0.5;
+          final distance = (luminance - midPoint).abs();
+          final maxDistance =
+              0.17; // Distance from 0.5 to 0.33 or 0.66 (slightly adjusted)
+          final strength =
+              preset.midtonesIntensity * (1.0 - distance / maxDistance);
+          final adjustedRGB = _applyColorToPixel(
+            r,
+            g,
+            b,
+            preset.midtonesColor,
+            strength,
+          );
+          r = adjustedRGB[0];
+          g = adjustedRGB[1];
+          b = adjustedRGB[2];
+        }
+
+        // Apply highlights color (bright areas)
+        if (luminance > 0.66 && preset.highlightsIntensity > 0) {
+          final strength =
+              preset.highlightsIntensity * ((luminance - 0.66) / 0.34);
+          final adjustedRGB = _applyColorToPixel(
+            r,
+            g,
+            b,
+            preset.highlightsColor,
+            strength,
+          );
+          r = adjustedRGB[0];
+          g = adjustedRGB[1];
+          b = adjustedRGB[2];
+        }
+
+        // Apply color balance if not zero
+        if (preset.colorBalance != 0) {
+          // Shift colors toward shadows or highlights
+          if (preset.colorBalance > 0) {
+            // Bias toward highlights color
+            final strength = preset.colorBalance * luminance * 0.5;
+            final adjustedRGB = _applyColorToPixel(
+              r,
+              g,
+              b,
+              preset.highlightsColor,
+              strength,
+            );
+            r = adjustedRGB[0];
+            g = adjustedRGB[1];
+            b = adjustedRGB[2];
+          } else {
+            // Bias toward shadows color
+            final strength = -preset.colorBalance * (1.0 - luminance) * 0.5;
+            final adjustedRGB = _applyColorToPixel(
+              r,
+              g,
+              b,
+              preset.shadowsColor,
+              strength,
+            );
+            r = adjustedRGB[0];
+            g = adjustedRGB[1];
+            b = adjustedRGB[2];
+          }
+        }
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
+  }
+
+  // Helper to apply a color with strength to RGB values
+  static List<int> _applyColorToPixel(
+    int inR,
+    int inG,
+    int inB,
+    Color colorToApply,
+    double strength,
+  ) {
+    // Convert target color to HSL
+    final hsl = _rgbToHsl(
+      colorToApply.red,
+      colorToApply.green,
+      colorToApply.blue,
+    );
+
+    // Convert current pixel to HSL
+    final pixelHsl = _rgbToHsl(inR, inG, inB);
+
+    // Blend hue and saturation, keeping original luminance
+    final blendedHsl = [
+      _lerpDouble(pixelHsl[0], hsl[0], strength),
+      _lerpDouble(pixelHsl[1], math.min(1.0, hsl[1] * 1.5), strength),
+      pixelHsl[2], // Keep original luminance to preserve image brightness
+    ];
+
+    // Convert back to RGB
+    final rgb = _hslToRgb(blendedHsl[0], blendedHsl[1], blendedHsl[2]);
+
+    return [rgb[0], rgb[1], rgb[2]];
+  }
+
+  // Helper for linear interpolation
+  static double _lerpDouble(double a, double b, double t) {
+    return a + (b - a) * t;
   }
 }
