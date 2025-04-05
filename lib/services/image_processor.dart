@@ -39,7 +39,10 @@ class ImageProcessor {
         processedImage = _adjustExposure(processedImage, preset.exposure);
       }
 
-      // 3. Apply blacks and whites
+      // 3. Apply tone curve adjustments - after white balance but before other adjustments
+      processedImage = _applyToneCurves(processedImage, preset);
+
+      // 4. Apply blacks and whites
       if (preset.blacks != 0.0 || preset.whites != 0.0) {
         processedImage = _adjustBlacksWhites(
           processedImage,
@@ -48,7 +51,7 @@ class ImageProcessor {
         );
       }
 
-      // 4. Apply highlights and shadows
+      // 5. Apply highlights and shadows
       if (preset.highlights != 0.0 || preset.shadows != 0.0) {
         processedImage = _adjustHighlightsShadows(
           processedImage,
@@ -57,10 +60,10 @@ class ImageProcessor {
         );
       }
 
-      // 5. Apply color mixer adjustments
+      // 6. Apply color mixer adjustments
       processedImage = _applyColorMixer(processedImage, preset);
 
-      // 6. Black and White (if enabled)
+      // 7. Black and White (if enabled)
       if (preset.blackAndWhite) {
         processedImage = img.grayscale(processedImage);
       }
@@ -69,12 +72,12 @@ class ImageProcessor {
         processedImage = _adjustSaturation(processedImage, preset.saturation);
       }
 
-      // 7. Adjust brightness (-1.0 to 1.0)
+      // 8. Adjust brightness (-1.0 to 1.0)
       if (preset.brightness != 0) {
         processedImage = _adjustBrightness(processedImage, preset.brightness);
       }
 
-      // 8. Adjust contrast (-1.0 to 1.0)
+      // 9. Adjust contrast (-1.0 to 1.0)
       if (preset.contrast != 0) {
         final contrastFactor =
             preset.contrast > 0
@@ -91,7 +94,7 @@ class ImageProcessor {
         }
       }
 
-      // 9. Apply border if needed
+      // 10. Apply border if needed
       if (preset.borderWidth > 0) {
         final borderSize = preset.borderWidth.round();
         final color = img.ColorRgb8(
@@ -788,5 +791,103 @@ class ImageProcessor {
     }
 
     return result;
+  }
+
+  // Apply tone curves to the image
+  static img.Image _applyToneCurves(img.Image image, PresetModel preset) {
+    // If all curves are linear (default), skip processing
+    if (_isLinearCurve(preset.rgbCurvePoints) &&
+        _isLinearCurve(preset.redCurvePoints) &&
+        _isLinearCurve(preset.greenCurvePoints) &&
+        _isLinearCurve(preset.blueCurvePoints)) {
+      return image;
+    }
+
+    // Create a copy to modify
+    final result = img.Image.from(image);
+
+    // Create lookup tables for faster processing
+    final rgbLUT = _createLookupTable(preset.rgbCurvePoints);
+    final redLUT = _createLookupTable(preset.redCurvePoints);
+    final greenLUT = _createLookupTable(preset.greenCurvePoints);
+    final blueLUT = _createLookupTable(preset.blueCurvePoints);
+
+    // Apply curve to each pixel
+    for (var y = 0; y < result.height; y++) {
+      for (var x = 0; x < result.width; x++) {
+        final pixel = result.getPixel(x, y);
+
+        // Get color components
+        int r = pixel.r.toInt();
+        int g = pixel.g.toInt();
+        int b = pixel.b.toInt();
+        int a = pixel.a.toInt();
+
+        // Apply RGB curve (affects all channels equally)
+        r = rgbLUT[r];
+        g = rgbLUT[g];
+        b = rgbLUT[b];
+
+        // Apply individual channel curves
+        r = redLUT[r];
+        g = greenLUT[g];
+        b = blueLUT[b];
+
+        // Set the adjusted pixel
+        result.setPixel(x, y, img.ColorRgba8(r, g, b, a));
+      }
+    }
+
+    return result;
+  }
+
+  // Check if curve is linear (default diagonal line)
+  static bool _isLinearCurve(List<Offset> points) {
+    if (points.length != 2) return false;
+
+    // Check if points are at opposite corners
+    return (points[0].dx < 1 &&
+        points[0].dy > 255 &&
+        points[1].dx > 255 &&
+        points[1].dy < 1);
+  }
+
+  // Create lookup table from curve points for faster processing
+  static List<int> _createLookupTable(List<Offset> points) {
+    const tableSize = 256;
+    final lookupTable = List<int>.filled(tableSize, 0);
+
+    // For each possible input value (0-255)
+    for (int i = 0; i < tableSize; i++) {
+      // Convert to curve coordinates (x increases left to right, y increases bottom to top)
+      final x = i.toDouble();
+
+      // Find the two points that surround this x value
+      Offset p1 = points.first;
+      Offset p2 = points.last;
+
+      for (int j = 0; j < points.length - 1; j++) {
+        if (points[j].dx <= x && points[j + 1].dx >= x) {
+          p1 = points[j];
+          p2 = points[j + 1];
+          break;
+        }
+      }
+
+      // Linear interpolation between the two points
+      double t = 0;
+      if (p2.dx != p1.dx) {
+        t = (x - p1.dx) / (p2.dx - p1.dx);
+      }
+
+      // Calculate the y value and convert to output range (0-255)
+      // Note: y coordinate is inverted (0 at top, 255 at bottom)
+      final y = p1.dy + t * (p2.dy - p1.dy);
+
+      // Convert y from curve coordinates to actual output (invert y)
+      lookupTable[i] = (255 - y).round().clamp(0, 255);
+    }
+
+    return lookupTable;
   }
 }

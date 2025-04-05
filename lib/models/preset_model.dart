@@ -34,6 +34,12 @@ class PresetModel {
   final double blueSaturation;
   final double blueLuminance;
 
+  // Tone Curve adjustments
+  final List<Offset> rgbCurvePoints;
+  final List<Offset> redCurvePoints;
+  final List<Offset> greenCurvePoints;
+  final List<Offset> blueCurvePoints;
+
   const PresetModel({
     required this.id,
     required this.name,
@@ -62,6 +68,11 @@ class PresetModel {
     this.blueHue = 0.0,
     this.blueSaturation = 0.0,
     this.blueLuminance = 0.0,
+    // Tone curve defaults - linear diagonal from bottom-left to top-right
+    this.rgbCurvePoints = const [Offset(0, 256), Offset(256, 0)],
+    this.redCurvePoints = const [Offset(0, 256), Offset(256, 0)],
+    this.greenCurvePoints = const [Offset(0, 256), Offset(256, 0)],
+    this.blueCurvePoints = const [Offset(0, 256), Offset(256, 0)],
   });
 
   // Create a default preset with a specific ID
@@ -93,6 +104,11 @@ class PresetModel {
       blueHue: 0.0,
       blueSaturation: 0.0,
       blueLuminance: 0.0,
+      // Tone curve defaults
+      rgbCurvePoints: [Offset(0, 256), Offset(256, 0)],
+      redCurvePoints: [Offset(0, 256), Offset(256, 0)],
+      greenCurvePoints: [Offset(0, 256), Offset(256, 0)],
+      blueCurvePoints: [Offset(0, 256), Offset(256, 0)],
     );
   }
 
@@ -123,6 +139,11 @@ class PresetModel {
     double? blueHue,
     double? blueSaturation,
     double? blueLuminance,
+    // Tone curve properties
+    List<Offset>? rgbCurvePoints,
+    List<Offset>? redCurvePoints,
+    List<Offset>? greenCurvePoints,
+    List<Offset>? blueCurvePoints,
   }) {
     return PresetModel(
       id: id,
@@ -151,6 +172,13 @@ class PresetModel {
       blueHue: blueHue ?? this.blueHue,
       blueSaturation: blueSaturation ?? this.blueSaturation,
       blueLuminance: blueLuminance ?? this.blueLuminance,
+      // Tone curve properties
+      rgbCurvePoints: rgbCurvePoints ?? List<Offset>.from(this.rgbCurvePoints),
+      redCurvePoints: redCurvePoints ?? List<Offset>.from(this.redCurvePoints),
+      greenCurvePoints:
+          greenCurvePoints ?? List<Offset>.from(this.greenCurvePoints),
+      blueCurvePoints:
+          blueCurvePoints ?? List<Offset>.from(this.blueCurvePoints),
     );
   }
 
@@ -183,6 +211,11 @@ class PresetModel {
       blueHue: blueHue,
       blueSaturation: blueSaturation,
       blueLuminance: blueLuminance,
+      // Tone curve properties
+      rgbCurvePoints: List<Offset>.from(rgbCurvePoints),
+      redCurvePoints: List<Offset>.from(redCurvePoints),
+      greenCurvePoints: List<Offset>.from(greenCurvePoints),
+      blueCurvePoints: List<Offset>.from(blueCurvePoints),
     );
   }
 
@@ -215,11 +248,54 @@ class PresetModel {
       'blueHue': blueHue,
       'blueSaturation': blueSaturation,
       'blueLuminance': blueLuminance,
+      // Tone curve properties
+      'rgbCurvePoints': _encodePointsList(rgbCurvePoints),
+      'redCurvePoints': _encodePointsList(redCurvePoints),
+      'greenCurvePoints': _encodePointsList(greenCurvePoints),
+      'blueCurvePoints': _encodePointsList(blueCurvePoints),
     };
+  }
+
+  // Helper method to encode list of Offset to JSON
+  static List<Map<String, double>> _encodePointsList(List<Offset> points) {
+    return points.map((point) => {'x': point.dx, 'y': point.dy}).toList();
+  }
+
+  // Helper method to decode JSON to list of Offset
+  static List<Offset> _decodePointsList(List<dynamic> pointsData) {
+    return pointsData
+        .map((point) => Offset(point['x'].toDouble(), point['y'].toDouble()))
+        .toList();
   }
 
   // Create model from JSON map
   factory PresetModel.fromJson(Map<String, dynamic> json) {
+    // Default points for curves if not present in JSON
+    final defaultPoints = [const Offset(0, 256), const Offset(256, 0)];
+
+    // Decode curve points with fallback to defaults
+    List<Offset> rgbPoints = defaultPoints;
+    List<Offset> redPoints = defaultPoints;
+    List<Offset> greenPoints = defaultPoints;
+    List<Offset> bluePoints = defaultPoints;
+
+    try {
+      if (json['rgbCurvePoints'] != null) {
+        rgbPoints = _decodePointsList(json['rgbCurvePoints']);
+      }
+      if (json['redCurvePoints'] != null) {
+        redPoints = _decodePointsList(json['redCurvePoints']);
+      }
+      if (json['greenCurvePoints'] != null) {
+        greenPoints = _decodePointsList(json['greenCurvePoints']);
+      }
+      if (json['blueCurvePoints'] != null) {
+        bluePoints = _decodePointsList(json['blueCurvePoints']);
+      }
+    } catch (e) {
+      print('Error decoding curve points: $e');
+    }
+
     return PresetModel(
       id: json['id'] ?? 'default',
       name: json['name'] ?? 'Default',
@@ -250,6 +326,11 @@ class PresetModel {
       blueHue: json['blueHue']?.toDouble() ?? 0.0,
       blueSaturation: json['blueSaturation']?.toDouble() ?? 0.0,
       blueLuminance: json['blueLuminance']?.toDouble() ?? 0.0,
+      // Tone curve properties
+      rgbCurvePoints: rgbPoints,
+      redCurvePoints: redPoints,
+      greenCurvePoints: greenPoints,
+      blueCurvePoints: bluePoints,
     );
   }
 
@@ -296,7 +377,11 @@ class PresetModel {
         other.greenLuminance == greenLuminance &&
         other.blueHue == blueHue &&
         other.blueSaturation == blueSaturation &&
-        other.blueLuminance == blueLuminance;
+        other.blueLuminance == blueLuminance &&
+        other.rgbCurvePoints == rgbCurvePoints &&
+        other.redCurvePoints == redCurvePoints &&
+        other.greenCurvePoints == greenCurvePoints &&
+        other.blueCurvePoints == blueCurvePoints;
   }
 
   // Override hashCode for value equality
@@ -337,6 +422,10 @@ class PresetModel {
       blueHue,
       blueSaturation,
       blueLuminance,
+      Object.hashAll(rgbCurvePoints),
+      Object.hashAll(redCurvePoints),
+      Object.hashAll(greenCurvePoints),
+      Object.hashAll(blueCurvePoints),
     );
 
     // Combine all hash values into one

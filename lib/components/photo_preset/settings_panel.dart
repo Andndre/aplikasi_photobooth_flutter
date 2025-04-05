@@ -4,6 +4,7 @@ import 'package:photobooth/components/photo_preset/sections/basic_section.dart';
 import 'package:photobooth/components/photo_preset/sections/color_mixer_section.dart';
 import 'package:photobooth/components/photo_preset/sections/effects_section.dart';
 import 'package:photobooth/components/photo_preset/sections/preset_info_section.dart';
+import 'package:photobooth/components/photo_preset/sections/tone_curve_section.dart';
 import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/providers/preset_provider.dart';
 
@@ -119,6 +120,16 @@ class SettingsPanel extends StatelessWidget {
               updateContrast: updateContrast,
               updateSaturation: updateSaturation,
               updateBlackAndWhite: updateBlackAndWhite,
+              onPresetUpdated: onPresetUpdated,
+              onUpdatePreview: onUpdatePreview,
+            ),
+
+            const SizedBox(height: 8),
+
+            // Tone Curve Section
+            ToneCurveSection(
+              preset: preset,
+              isEditing: isEditing,
               onPresetUpdated: onPresetUpdated,
               onUpdatePreview: onUpdatePreview,
             ),
