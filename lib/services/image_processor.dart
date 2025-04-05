@@ -94,6 +94,19 @@ class ImageProcessor {
         }
       }
 
+      // Add detail enhancements after basic adjustments but before border
+      // Apply detail enhancements (sharpness, detail, noise reduction)
+      if (preset.sharpness > 0 ||
+          preset.detail > 0 ||
+          preset.noiseReduction > 0) {
+        processedImage = _applyDetailEnhancements(
+          processedImage,
+          preset.sharpness,
+          preset.detail,
+          preset.noiseReduction,
+        );
+      }
+
       // 10. Apply border if needed
       if (preset.borderWidth > 0) {
         final borderSize = preset.borderWidth.round();
@@ -892,5 +905,236 @@ class ImageProcessor {
     }
 
     return lookupTable;
+  }
+
+  // Apply detail enhancements: sharpness, detail enhancement, noise reduction
+  static img.Image _applyDetailEnhancements(
+    img.Image image,
+    double sharpness,
+    double detail,
+    double noiseReduction,
+  ) {
+    // Create a copy to modify
+    var result = img.Image.from(image);
+
+    // Apply noise reduction first (if any)
+    if (noiseReduction > 0) {
+      try {
+        // Apply custom noise reduction with strength based on the noiseReduction value
+        result = _applyNoiseReduction(result, noiseReduction);
+      } catch (e) {
+        print('Error applying noise reduction: $e');
+      }
+    }
+
+    // Apply detail enhancement (mid-frequency contrast enhancement)
+    if (detail > 0) {
+      try {
+        // Detail enhancement is a form of local contrast enhancement
+        final strength = detail * 0.3; // Scale down for subtle effect
+        result = _enhanceDetails(result, strength);
+      } catch (e) {
+        print('Error enhancing details: $e');
+      }
+    }
+
+    // Apply sharpening last
+    if (sharpness > 0) {
+      try {
+        // Instead of trying to use built-in sharpen, use our own implementation directly
+        result = _applySimpleSharpening(result, sharpness);
+      } catch (e) {
+        print('Error applying sharpness: $e');
+      }
+    }
+
+    return result;
+  }
+
+  // Custom implementation of noise reduction using local averaging with threshold
+  static img.Image _applyNoiseReduction(img.Image image, double strength) {
+    final result = img.Image.from(image);
+    final width = image.width;
+    final height = image.height;
+
+    // Calculate radius based on strength (0-1)
+    final radius = (strength * 2).round().clamp(1, 2);
+
+    // Apply threshold-based noise reduction
+    // For each pixel, calculate the average of surrounding pixels
+    // and only apply smoothing where color variation is below a threshold
+    for (int y = radius; y < height - radius; y++) {
+      for (int x = radius; x < width - radius; x++) {
+        // Sample the local neighborhood
+        final neighborhoodSize = (2 * radius + 1) * (2 * radius + 1);
+        int sumR = 0, sumG = 0, sumB = 0;
+        List<int> valuesR = [], valuesG = [], valuesB = [];
+
+        // Collect neighborhood pixel values
+        for (int ny = -radius; ny <= radius; ny++) {
+          for (int nx = -radius; nx <= radius; nx++) {
+            final pixel = image.getPixel(x + nx, y + ny);
+            final r = pixel.r.toInt();
+            final g = pixel.g.toInt();
+            final b = pixel.b.toInt();
+
+            valuesR.add(r);
+            valuesG.add(g);
+            valuesB.add(b);
+
+            sumR += r;
+            sumG += g;
+            sumB += b;
+          }
+        }
+
+        // Calculate mean (average)
+        final avgR = sumR / neighborhoodSize;
+        final avgG = sumG / neighborhoodSize;
+        final avgB = sumB / neighborhoodSize;
+
+        // Get center pixel
+        final centerPixel = image.getPixel(x, y);
+        final centerR = centerPixel.r.toInt();
+        final centerG = centerPixel.g.toInt();
+        final centerB = centerPixel.b.toInt();
+
+        // Calculate difference between center pixel and average
+        final diffR = (centerR - avgR).abs();
+        final diffG = (centerG - avgG).abs();
+        final diffB = (centerB - avgB).abs();
+
+        // Threshold for what's considered "noise"
+        // Higher strength = more aggressive noise reduction
+        final threshold =
+            10 + 20 * (1 - strength); // 10-30 depending on strength
+
+        // If the difference exceeds threshold, it's likely a detail rather than noise
+        // Otherwise, apply smoothing by using the neighborhood average
+        final newR = diffR > threshold ? centerR : avgR.round();
+        final newG = diffG > threshold ? centerG : avgG.round();
+        final newB = diffB > threshold ? centerB : avgB.round();
+
+        result.setPixel(x, y, img.ColorRgb8(newR, newG, newB));
+      }
+    }
+
+    return result;
+  }
+
+  // Simple sharpening implementation using a 3x3 kernel
+  static img.Image _applySimpleSharpening(img.Image image, double sharpness) {
+    final result = img.Image.from(image);
+    final width = image.width;
+    final height = image.height;
+
+    // Scale sharpness to appropriate strength
+    final strength = sharpness * 0.8; // 0.0 to 0.8
+
+    for (int y = 1; y < height - 1; y++) {
+      for (int x = 1; x < width - 1; x++) {
+        final center = image.getPixel(x, y);
+        final top = image.getPixel(x, y - 1);
+        final bottom = image.getPixel(x, y + 1);
+        final left = image.getPixel(x - 1, y);
+        final right = image.getPixel(x + 1, y);
+
+        // Apply sharpening formula: center*5 - (top + right + bottom + left)
+        // For each color channel
+        int newR = _sharpenChannel(
+          center.r.toInt(),
+          top.r.toInt(),
+          right.r.toInt(),
+          bottom.r.toInt(),
+          left.r.toInt(),
+          strength,
+        );
+        int newG = _sharpenChannel(
+          center.g.toInt(),
+          top.g.toInt(),
+          right.g.toInt(),
+          bottom.g.toInt(),
+          left.g.toInt(),
+          strength,
+        );
+        int newB = _sharpenChannel(
+          center.b.toInt(),
+          top.b.toInt(),
+          right.b.toInt(),
+          bottom.b.toInt(),
+          left.b.toInt(),
+          strength,
+        );
+
+        result.setPixel(x, y, img.ColorRgb8(newR, newG, newB));
+      }
+    }
+
+    return result;
+  }
+
+  // Helper for sharpening individual color channels
+  static int _sharpenChannel(
+    int center,
+    int top,
+    int right,
+    int bottom,
+    int left,
+    double strength,
+  ) {
+    // Sharpening formula: center + strength * (center*5 - center - top - right - bottom - left)
+    final sharpened =
+        center +
+        (strength * (center * 5 - center - top - right - bottom - left))
+            .round();
+    return sharpened.clamp(0, 255);
+  }
+
+  // Detail enhancement through local contrast enhancement
+  static img.Image _enhanceDetails(img.Image image, double strength) {
+    final result = img.Image.from(image);
+    final width = image.width;
+    final height = image.height;
+
+    // Apply a simplified CLAHE-like effect (Contrast Limited Adaptive Histogram Equalization)
+    // This enhances local details without extreme contrast changes
+    for (int y = 2; y < height - 2; y++) {
+      for (int x = 2; x < width - 2; x++) {
+        final center = image.getPixel(x, y);
+
+        // Calculate local average in a 5x5 area
+        int sumR = 0, sumG = 0, sumB = 0;
+        int count = 0;
+
+        for (int ny = y - 2; ny <= y + 2; ny++) {
+          for (int nx = x - 2; nx <= x + 2; nx++) {
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              final pixel = image.getPixel(nx, ny);
+              sumR += pixel.r.toInt();
+              sumG += pixel.g.toInt();
+              sumB += pixel.b.toInt();
+              count++;
+            }
+          }
+        }
+
+        final avgR = sumR / count;
+        final avgG = sumG / count;
+        final avgB = sumB / count;
+
+        // Enhance local contrast for detail perception
+        final diffR = (center.r.toInt() - avgR) * strength;
+        final diffG = (center.g.toInt() - avgG) * strength;
+        final diffB = (center.b.toInt() - avgB) * strength;
+
+        final newR = (center.r.toInt() + diffR).round().clamp(0, 255);
+        final newG = (center.g.toInt() + diffG).round().clamp(0, 255);
+        final newB = (center.b.toInt() + diffB).round().clamp(0, 255);
+
+        result.setPixel(x, y, img.ColorRgb8(newR, newG, newB));
+      }
+    }
+
+    return result;
   }
 }

@@ -96,6 +96,11 @@ class PresetModel {
   List<Offset> get blueCurvePointsLegacy =>
       blueCurvePoints.map((cp) => cp.point).toList();
 
+  // Detail adjustments
+  final double sharpness; // Controls image sharpness (0.0-1.0)
+  final double detail; // Controls detail enhancement (0.0-1.0)
+  final double noiseReduction; // Controls noise reduction (0.0-1.0)
+
   const PresetModel({
     required this.id,
     required this.name,
@@ -141,6 +146,10 @@ class PresetModel {
       CurvePointData(point: Offset(0, 256)),
       CurvePointData(point: Offset(256, 0)),
     ],
+    // Detail properties with default values
+    this.sharpness = 0.0,
+    this.detail = 0.0,
+    this.noiseReduction = 0.0,
   });
 
   // Create a default preset with a specific ID
@@ -189,6 +198,10 @@ class PresetModel {
         CurvePointData(point: Offset(0, 256)),
         CurvePointData(point: Offset(256, 0)),
       ],
+      // Detail properties defaults
+      sharpness: 0.0,
+      detail: 0.0,
+      noiseReduction: 0.0,
     );
   }
 
@@ -224,6 +237,10 @@ class PresetModel {
     List<CurvePointData>? redCurvePoints,
     List<CurvePointData>? greenCurvePoints,
     List<CurvePointData>? blueCurvePoints,
+    // Detail properties
+    double? sharpness,
+    double? detail,
+    double? noiseReduction,
   }) {
     return PresetModel(
       id: id,
@@ -261,6 +278,10 @@ class PresetModel {
           greenCurvePoints ?? List<CurvePointData>.from(this.greenCurvePoints),
       blueCurvePoints:
           blueCurvePoints ?? List<CurvePointData>.from(this.blueCurvePoints),
+      // Detail properties
+      sharpness: sharpness ?? this.sharpness,
+      detail: detail ?? this.detail,
+      noiseReduction: noiseReduction ?? this.noiseReduction,
     );
   }
 
@@ -298,6 +319,10 @@ class PresetModel {
       redCurvePoints: List<CurvePointData>.from(redCurvePoints),
       greenCurvePoints: List<CurvePointData>.from(greenCurvePoints),
       blueCurvePoints: List<CurvePointData>.from(blueCurvePoints),
+      // Detail properties
+      sharpness: sharpness,
+      detail: detail,
+      noiseReduction: noiseReduction,
     );
   }
 
@@ -341,6 +366,10 @@ class PresetModel {
       'redCurvePoints': _encodePointsList(redCurvePointsLegacy),
       'greenCurvePoints': _encodePointsList(greenCurvePointsLegacy),
       'blueCurvePoints': _encodePointsList(blueCurvePointsLegacy),
+      // Detail properties
+      'sharpness': sharpness,
+      'detail': detail,
+      'noiseReduction': noiseReduction,
     };
   }
 
@@ -462,6 +491,10 @@ class PresetModel {
       redCurvePoints: redPoints ?? defaultPoints,
       greenCurvePoints: greenPoints ?? defaultPoints,
       blueCurvePoints: bluePoints ?? defaultPoints,
+      // Detail properties
+      sharpness: json['sharpness']?.toDouble() ?? 0.0,
+      detail: json['detail']?.toDouble() ?? 0.0,
+      noiseReduction: json['noiseReduction']?.toDouble() ?? 0.0,
     );
   }
 
@@ -512,7 +545,10 @@ class PresetModel {
         other.rgbCurvePoints == rgbCurvePoints &&
         other.redCurvePoints == redCurvePoints &&
         other.greenCurvePoints == greenCurvePoints &&
-        other.blueCurvePoints == blueCurvePoints;
+        other.blueCurvePoints == blueCurvePoints &&
+        other.sharpness == sharpness &&
+        other.detail == detail &&
+        other.noiseReduction == noiseReduction;
   }
 
   // Override hashCode for value equality
@@ -544,6 +580,9 @@ class PresetModel {
       redSaturation,
       redLuminance,
       greenHue,
+      sharpness,
+      detail,
+      noiseReduction,
     );
 
     // Third group of properties

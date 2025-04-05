@@ -160,6 +160,25 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     }
   }
 
+  // Add detail section handlers
+  void _updateSharpness(double value) {
+    setState(() {
+      _tempValues['sharpness'] = value;
+    });
+  }
+
+  void _updateDetail(double value) {
+    setState(() {
+      _tempValues['detail'] = value;
+    });
+  }
+
+  void _updateNoiseReduction(double value) {
+    setState(() {
+      _tempValues['noiseReduction'] = value;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -355,6 +374,11 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                           });
                         },
                         pickSampleImage: _pickSampleImage,
+
+                        // Detail section callbacks
+                        updateSharpness: _updateSharpness,
+                        updateDetail: _updateDetail,
+                        updateNoiseReduction: _updateNoiseReduction,
                       ),
                     ),
                 ],

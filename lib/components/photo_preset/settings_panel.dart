@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:photobooth/components/photo_preset/sections/action_buttons_section.dart';
 import 'package:photobooth/components/photo_preset/sections/basic_section.dart';
 import 'package:photobooth/components/photo_preset/sections/color_mixer_section.dart';
-import 'package:photobooth/components/photo_preset/sections/effects_section.dart';
+import 'package:photobooth/components/photo_preset/sections/detail_section.dart';
 import 'package:photobooth/components/photo_preset/sections/preset_info_section.dart';
 import 'package:photobooth/components/photo_preset/sections/tone_curve_section.dart';
 import 'package:photobooth/models/preset_model.dart';
@@ -44,6 +44,11 @@ class SettingsPanel extends StatelessWidget {
   final Function(double) updateBlueSaturation;
   final Function(double) updateBlueLuminance;
 
+  // Detail section callbacks
+  final Function(double) updateSharpness;
+  final Function(double) updateDetail;
+  final Function(double) updateNoiseReduction;
+
   final Function() pickSampleImage;
 
   const SettingsPanel({
@@ -78,6 +83,9 @@ class SettingsPanel extends StatelessWidget {
     required this.updateBlueHue,
     required this.updateBlueSaturation,
     required this.updateBlueLuminance,
+    required this.updateSharpness,
+    required this.updateDetail,
+    required this.updateNoiseReduction,
     required this.pickSampleImage,
   });
 
@@ -126,6 +134,20 @@ class SettingsPanel extends StatelessWidget {
 
             const SizedBox(height: 8),
 
+            // Detail enhancements section
+            DetailSection(
+              preset: preset,
+              isEditing: isEditing,
+              tempValues: tempValues,
+              updateSharpness: updateSharpness,
+              updateDetail: updateDetail,
+              updateNoiseReduction: updateNoiseReduction,
+              onPresetUpdated: onPresetUpdated,
+              onUpdatePreview: onUpdatePreview,
+            ),
+
+            const SizedBox(height: 8),
+
             // Tone Curve Section
             ToneCurveSection(
               preset: preset,
@@ -150,19 +172,6 @@ class SettingsPanel extends StatelessWidget {
               updateBlueHue: updateBlueHue,
               updateBlueSaturation: updateBlueSaturation,
               updateBlueLuminance: updateBlueLuminance,
-              onPresetUpdated: onPresetUpdated,
-              onUpdatePreview: onUpdatePreview,
-            ),
-
-            const SizedBox(height: 8),
-
-            // Effects Section (Border)
-            EffectsSection(
-              preset: preset,
-              isEditing: isEditing,
-              tempValues: tempValues,
-              updateBorderWidth: updateBorderWidth,
-              onPickColor: onPickColor,
               onPresetUpdated: onPresetUpdated,
               onUpdatePreview: onUpdatePreview,
             ),
