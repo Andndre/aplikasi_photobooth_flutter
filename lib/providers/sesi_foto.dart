@@ -127,7 +127,7 @@ class SesiFotoProvider with ChangeNotifier {
     // If already counting down, don't start another countdown
     if (_isCountingDown) return;
 
-    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('WhatsApp'));
+    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
     if (hwnd == 0) {
       showDialog(
         context: context,
@@ -187,7 +187,7 @@ class SesiFotoProvider with ChangeNotifier {
 
     print("Foto diambil.");
 
-    // Wait longer to ensure WhatsApp has completed its operation
+    // Wait longer to ensure Remote has completed its operation
     await Future.delayed(const Duration(seconds: 4));
 
     // Explicitly force focus back to photobooth with multiple attempts
