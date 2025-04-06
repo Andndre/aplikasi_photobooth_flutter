@@ -48,24 +48,71 @@ class SesiFotoState extends State<SesiFoto> {
   }
 
   Widget _buildLoadingOverlay() {
-    return Provider.of<SesiFotoProvider>(context).isLoading
-        ? Container(
+    final provider = Provider.of<SesiFotoProvider>(context);
+
+    if (!provider.isLoading) return const SizedBox.shrink();
+
+    return AnimatedOpacity(
+      opacity: provider.isLoading ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Container(
           color: Colors.black54,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  Provider.of<SesiFotoProvider>(context).loadingMessage,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
+          alignment: Alignment.center,
+          child: Card(
+            elevation: 8,
+            margin: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  provider.progressValue != null
+                      ? Column(
+                        children: [
+                          SizedBox(
+                            width: 300,
+                            child: LinearProgressIndicator(
+                              value: provider.progressValue,
+                              minHeight: 8,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "${(provider.progressValue! * 100).toInt()}%",
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      )
+                      : const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CircularProgressIndicator(strokeWidth: 4),
+                      ),
+                  const SizedBox(height: 16),
+                  Text(
+                    provider.loadingMessage,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (provider.subMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        provider.subMessage,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        )
-        : const SizedBox.shrink();
+        ),
+      ),
+    );
   }
 
   @override
@@ -86,12 +133,29 @@ class SesiFotoState extends State<SesiFoto> {
     return FutureBuilder(
       future: layoutsProvider.loadLayouts(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else {
-          final layout = widget.event.getLayout(context);
-          return _buildMainContent(context, sesiFotoProvider, layout);
+        // Use the loading overlay for layout loading too
+        final isLoadingLayouts =
+            snapshot.connectionState == ConnectionState.waiting;
+
+        // Set the loading message in provider when loading layouts
+        if (isLoadingLayouts && !sesiFotoProvider.isLoading) {
+          sesiFotoProvider.setLoading(
+            true,
+            'Loading layouts...',
+            'Please wait',
+            null,
+          );
+        } else if (!isLoadingLayouts &&
+            sesiFotoProvider.isLoading &&
+            sesiFotoProvider.loadingMessage == 'Loading layouts...') {
+          // Clear loading state when layouts are done loading
+          sesiFotoProvider.setLoading(false);
         }
+
+        // Always build the scaffold, but with null layout if still loading
+        final layout =
+            !isLoadingLayouts ? widget.event.getLayout(context) : null;
+        return _buildMainContent(context, sesiFotoProvider, layout);
       },
     );
   }
@@ -109,13 +173,15 @@ class SesiFotoState extends State<SesiFoto> {
       appBar: _buildAppBar(context, sesiFotoProvider, layout),
       body: Stack(
         children: [
-          _buildKeyboardShortcuts(context, sesiFotoProvider, layout),
+          // Only build main content if layout is available
+          if (layout != null)
+            _buildKeyboardShortcuts(context, sesiFotoProvider, layout),
 
-          // Loading overlay
+          // Retake banner only if layout available and in retake mode
+          if (isRetakeMode && layout != null) _buildRetakeBanner(retakeIndex),
+
+          // Loading overlay - now handles all loading states
           _buildLoadingOverlay(),
-
-          // Retake banner
-          if (isRetakeMode) _buildRetakeBanner(retakeIndex),
         ],
       ),
     );
@@ -155,16 +221,19 @@ class SesiFotoState extends State<SesiFoto> {
           },
           tooltip: 'View Gallery',
         ),
+        // Only enable camera button when layout is loaded
         IconButton(
           icon: const Icon(Icons.camera_alt),
           onPressed:
-              () => sesiFotoProvider.takePhoto(
-                widget.event.saveFolder,
-                widget.event.uploadFolder,
-                widget.event.name,
-                layout,
-                context,
-              ),
+              layout != null
+                  ? () => sesiFotoProvider.takePhoto(
+                    widget.event.saveFolder,
+                    widget.event.uploadFolder,
+                    widget.event.name,
+                    layout,
+                    context,
+                  )
+                  : null,
           tooltip: 'Take Photo (Enter)',
         ),
         WindowSelectionDropdown(provider: sesiFotoProvider),

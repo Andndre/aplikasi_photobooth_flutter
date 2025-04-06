@@ -5,7 +5,6 @@ import 'package:collection/collection.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
 import 'package:photobooth/components/dialogs/captured_photos_dialog.dart';
 import 'package:photobooth/models/layout_model.dart';
@@ -27,6 +26,8 @@ class SesiFotoProvider with ChangeNotifier {
   List<File> _compositeImages = [];
   bool _isLoading = false;
   String _loadingMessage = '';
+  String _subMessage = '';
+  double? _progressValue;
   SortOrder _sortOrder = SortOrder.newest;
 
   // Buat instance screen capture service
@@ -55,10 +56,33 @@ class SesiFotoProvider with ChangeNotifier {
   SortOrder get sortOrder => _sortOrder;
   bool get isLoading => _isLoading;
   String get loadingMessage => _loadingMessage;
+  String get subMessage => _subMessage;
+  double? get progressValue => _progressValue;
 
-  void _setLoading(bool isLoading, [String message = '']) {
+  void _setLoading(
+    bool isLoading, [
+    String message = '',
+    String subMessage = '',
+    double? progress,
+  ]) {
     _isLoading = isLoading;
     _loadingMessage = message;
+    _subMessage = subMessage;
+    _progressValue = progress;
+    notifyListeners();
+  }
+
+  // Make this public to allow showing loading state from any component
+  void setLoading(
+    bool isLoading, [
+    String message = '',
+    String subMessage = '',
+    double? progress,
+  ]) {
+    _isLoading = isLoading;
+    _loadingMessage = message;
+    _subMessage = subMessage;
+    _progressValue = progress;
     notifyListeners();
   }
 
@@ -289,6 +313,10 @@ class SesiFotoProvider with ChangeNotifier {
     assert(layout != null, 'Layout is null');
     assert(context != null, 'Context is null');
 
+    _setLoading(true, 'Starting composite generation...', 'Preparing...', 0.0);
+    // Small delay to ensure loading UI is visible
+    await Future.delayed(const Duration(milliseconds: 200));
+
     final existingFiles =
         Directory(uploadFolder).listSync().whereType<File>().toList();
     int maxCompositeIndex = 0;
@@ -320,7 +348,8 @@ class SesiFotoProvider with ChangeNotifier {
       'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
     );
 
-    _setLoading(true, 'Processing photos with preset...');
+    _setLoading(true, 'Processing photos with preset...', 'Preparing...', 0.05);
+    await Future.delayed(const Duration(milliseconds: 200));
 
     try {
       // Find the event by name
@@ -383,7 +412,7 @@ class SesiFotoProvider with ChangeNotifier {
                 context,
                 listen: false,
               );
-              eventsProvider.saveEvents();
+              await eventsProvider.saveEvents(); // Add await here
               print(
                 '✅ Updated event "${event.name}" preset ID to: ${activePreset.id}',
               );
@@ -430,56 +459,80 @@ class SesiFotoProvider with ChangeNotifier {
       print('   - Contrast: ${eventPreset.contrast}');
       print('   - Saturation: ${eventPreset.saturation}');
 
-      // PROCESS THE PHOTOS WITH PRESET
-      _setLoading(true, 'Applying preset "${eventPreset.name}" to photos...');
+      // PROCESS THE PHOTOS WITH PRESET - OPTIMIZED VERSION
+      _setLoading(
+        true,
+        'Applying preset "${eventPreset.name}"',
+        'Processing photos in parallel...',
+        0.1,
+      );
+      await Future.delayed(const Duration(milliseconds: 200));
 
       print(
         "About to process ${_takenPhotos.length} photos with preset: ${eventPreset.name}",
       );
 
-      List<File> processedPhotos = [];
-
-      try {
-        // Process each photo individually for better error tracking
-        for (int i = 0; i < _takenPhotos.length; i++) {
-          _setLoading(
-            true,
-            'Processing photo ${i + 1} of ${_takenPhotos.length}...',
+      // Process photos in parallel with progress tracking
+      List<File> processedPhotos =
+          await ImageProcessor.batchProcessImagesWithProgress(
+            _takenPhotos,
+            eventPreset,
+            (progress, message) {
+              _setLoading(
+                true,
+                'Applying preset "${eventPreset?.name}"',
+                message,
+                progress * 0.6,
+              );
+            },
           );
 
-          try {
-            final processed = await ImageProcessor.processImage(
-              _takenPhotos[i],
-              eventPreset,
-            );
-            if (processed != null) {
-              processedPhotos.add(processed);
-              print('Successfully processed photo ${i + 1}');
-            } else {
-              print('Failed to process photo ${i + 1}, using original');
-              processedPhotos.add(_takenPhotos[i]);
-            }
-          } catch (e) {
-            print('Error processing individual photo ${i + 1}: $e');
-            processedPhotos.add(_takenPhotos[i]);
-          }
-        }
+      // Ensure we have a small pause after processing to let user see the progress
+      await Future.delayed(const Duration(milliseconds: 300));
 
-        assert(
-          processedPhotos.length == _takenPhotos.length,
-          'Processed photos count (${processedPhotos.length}) doesn\'t match original count (${_takenPhotos.length})',
-        );
+      assert(
+        processedPhotos.length == _takenPhotos.length,
+        'Processed photos count (${processedPhotos.length}) doesn\'t match original count (${_takenPhotos.length})',
+      );
 
-        print(
-          "Successfully processed ${processedPhotos.length} photos with preset",
-        );
-      } catch (e) {
-        print("Error applying preset to photos: $e");
-        // Fallback to original photos
-        processedPhotos = _takenPhotos;
-      }
+      print(
+        "Successfully processed ${processedPhotos.length} photos with preset",
+      );
 
-      _setLoading(true, 'Creating composite image and GIF...');
+      // First start the GIF generation process which takes longer
+      _setLoading(
+        true,
+        'Creating composite images',
+        'Starting GIF creation...',
+        0.6,
+      );
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Create GIF in background to avoid blocking UI
+      _setLoading(
+        true,
+        'Creating GIF animation',
+        'Initializing GIF encoder...',
+        0.62,
+      );
+
+      // Start gif creation but don't await it yet
+      final gifFuture = ImageProcessor.createOptimizedGif(
+        images: processedPhotos.map((file) => file.path).toList(),
+        outputPath: gifPath,
+        progressCallback: (progress) {
+          _setLoading(
+            true,
+            'Creating GIF animation',
+            'Optimizing frames: ${(progress * 100).toInt()}%',
+            0.6 + (progress * 0.2),
+          );
+        },
+      );
+
+      // Now create the composite image
+      _setLoading(true, 'Creating composite image', 'Rendering layout...', 0.8);
+      await Future.delayed(const Duration(milliseconds: 300));
 
       // Export the composite image using processed photos
       final exportedFile = await Renderer.exportLayoutWithImages(
@@ -491,15 +544,49 @@ class SesiFotoProvider with ChangeNotifier {
 
       if (exportedFile != null) {
         print('Composite image created: ${exportedFile.path}');
+        _setLoading(
+          true,
+          'Composite image created successfully',
+          'Waiting for GIF creation to complete...',
+          0.9,
+        );
+        await Future.delayed(const Duration(milliseconds: 300));
       } else {
         print('Failed to create composite image');
+        _setLoading(
+          true,
+          'Error creating composite image',
+          'Continuing with GIF creation...',
+          0.9,
+        );
+        await Future.delayed(const Duration(milliseconds: 300));
       }
 
-      // Create GIF from processed photos
-      await _createSimpleGif(
-        images: processedPhotos.map((file) => file.path).toList(),
-        outputPath: gifPath,
-      );
+      // Wait for GIF to complete
+      _setLoading(true, 'Finalizing GIF animation', 'Please wait...', 0.95);
+      final gifFile = await gifFuture;
+
+      if (gifFile != null) {
+        print('GIF animation created: ${gifFile.path}');
+        _setLoading(
+          true,
+          'Processing complete',
+          'All images have been created successfully.',
+          1.0,
+        );
+      } else {
+        print('Failed to create GIF animation');
+        _setLoading(
+          true,
+          'Processing complete',
+          'GIF creation failed, but composite image was created.',
+          1.0,
+        );
+      }
+
+      // Show completion status for a moment before closing
+      await Future.delayed(const Duration(seconds: 1));
+      _setLoading(false);
 
       // Show the composite images dialog - ensure context is valid
       if (context.mounted) {
@@ -517,7 +604,8 @@ class SesiFotoProvider with ChangeNotifier {
       _clearTakenPhotos();
     } catch (e) {
       print('Error creating composite image or GIF: $e');
-    } finally {
+      _setLoading(true, 'Error processing images', e.toString(), null);
+      await Future.delayed(const Duration(seconds: 3));
       _setLoading(false);
     }
   }
@@ -582,36 +670,43 @@ class SesiFotoProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Improved GIF creation method with proper awaits
   Future<void> _createSimpleGif({
     required List<String> images,
     required String outputPath,
   }) async {
-    if (images.isEmpty) return;
+    _setLoading(true, 'Creating GIF animation', 'Processing images...', null);
 
-    try {
-      final frames = await compute((Map<String, dynamic> params) {
-        final paths = params['imagePaths'] as List<String>;
-        return paths.map((imagePath) {
-          final image = img.decodeImage(File(imagePath).readAsBytesSync())!;
-          return img.copyResize(
-            image,
-            width: image.width ~/ 3,
-            height: image.height ~/ 3,
-          );
-        }).toList();
-      }, {'imagePaths': images});
+    // Ensure we await the result
+    final result = await ImageProcessor.createOptimizedGif(
+      images: images,
+      outputPath: outputPath,
+      progressCallback: (progress) {
+        _setLoading(
+          true,
+          'Creating GIF animation',
+          'Processing: ${(progress * 100).toInt()}%',
+          progress,
+        );
+      },
+    );
 
-      final encoder = img.GifEncoder();
-      encoder.repeat = 3;
-      for (var frame in frames) {
-        encoder.addFrame(frame, duration: 50);
-      }
-      final gif = encoder.finish()!;
-
-      await File(outputPath).writeAsBytes(Uint8List.fromList(gif));
-      print('GIF created: $outputPath');
-    } catch (e) {
-      print('Error creating GIF: $e');
+    if (result != null) {
+      _setLoading(
+        true,
+        'GIF Created Successfully',
+        'File saved to: $outputPath',
+        1.0,
+      );
+      await Future.delayed(const Duration(milliseconds: 500));
+    } else {
+      _setLoading(
+        true,
+        'GIF Creation Failed',
+        'Could not create animation',
+        null,
+      );
+      await Future.delayed(const Duration(seconds: 1));
     }
   }
 

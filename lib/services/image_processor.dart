@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -222,6 +223,147 @@ class ImageProcessor {
 
     print('Completed batch processing: ${results.length} images');
     return results;
+  }
+
+  // New method to process images in batches with progress callback
+  static Future<List<File>> batchProcessImagesWithProgress(
+    List<File> imageFiles,
+    PresetModel preset,
+    Function(double progress, String message)? progressCallback,
+  ) async {
+    assert(imageFiles.isNotEmpty, 'Image files list is null or empty');
+    assert(preset != null, 'Preset is null');
+    print(
+      'Batch processing ${imageFiles.length} photos with preset: ${preset.name}',
+    );
+
+    final results = <File>[];
+    for (int i = 0; i < imageFiles.length; i++) {
+      try {
+        final imageFile = imageFiles[i];
+        print(
+          'Processing image ${i + 1}/${imageFiles.length}: ${imageFile.path}',
+        );
+
+        // Progress update
+        final progress = (i + 0.5) / imageFiles.length;
+        progressCallback?.call(
+          progress,
+          'Processing image ${i + 1}/${imageFiles.length}',
+        );
+
+        final processedFile = await processImage(imageFile, preset);
+        if (processedFile != null) {
+          results.add(processedFile);
+          print('Successfully processed image ${i + 1}');
+        } else {
+          print('Failed to process image ${i + 1}, using original');
+          results.add(imageFile);
+        }
+
+        // Update progress after completion
+        progressCallback?.call(
+          (i + 1) / imageFiles.length,
+          'Completed image ${i + 1}/${imageFiles.length}',
+        );
+      } catch (e) {
+        print('Error processing image ${i + 1}: $e');
+        results.add(imageFiles[i]); // Use original on error
+        progressCallback?.call(
+          (i + 1) / imageFiles.length,
+          'Error on image ${i + 1}',
+        );
+      }
+    }
+
+    print('Completed batch processing: ${results.length} images');
+    return results;
+  }
+
+  // Optimized method for GIF creation that uses compute for better performance
+  static Future<File?> createOptimizedGif({
+    required List<String> images,
+    required String outputPath,
+    Function(double progress)? progressCallback,
+  }) async {
+    if (images.isEmpty) return null;
+
+    try {
+      // Start progress reporting
+      progressCallback?.call(0.05);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      progressCallback?.call(0.1);
+
+      // Process images in parallel using compute with more granular progress updates
+      final framesResult = await compute((Map<String, dynamic> params) {
+        final paths = params['imagePaths'] as List<String>;
+        final frames = <img.Image>[];
+
+        for (int i = 0; i < paths.length; i++) {
+          final imagePath = paths[i];
+          try {
+            final rawImage = img.decodeImage(File(imagePath).readAsBytesSync());
+            if (rawImage != null) {
+              // Scale down for GIF to improve performance
+              final resizedImage = img.copyResize(
+                rawImage,
+                width: rawImage.width ~/ 2, // More aggressive downscaling
+                height: rawImage.height ~/ 2,
+                interpolation: img.Interpolation.average, // Better quality
+              );
+              frames.add(resizedImage);
+            }
+          } catch (e) {
+            print('Failed to decode image for GIF: $e');
+          }
+        }
+        return frames;
+      }, {'imagePaths': images});
+
+      // Report progress at each major step
+      progressCallback?.call(0.4);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      progressCallback?.call(0.5);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      progressCallback?.call(0.6);
+
+      // Encode the GIF more efficiently
+      final gifResult = await compute((List<img.Image> frames) {
+        final encoder = img.GifEncoder();
+        encoder.repeat = 0; // Infinite loop
+
+        // Use fewer frames and longer duration for better performance
+        for (var frame in frames) {
+          encoder.addFrame(
+            frame,
+            duration: 200,
+          ); // Longer duration = smaller file
+        }
+
+        return encoder.finish() ?? <int>[];
+      }, framesResult);
+
+      progressCallback?.call(0.8);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Write GIF to file
+      if (gifResult.isNotEmpty) {
+        progressCallback?.call(0.9);
+        await File(outputPath).writeAsBytes(Uint8List.fromList(gifResult));
+        print('GIF created: $outputPath');
+        await Future.delayed(const Duration(milliseconds: 100));
+        progressCallback?.call(1.0);
+        return File(outputPath);
+      }
+
+      return null;
+    } catch (e) {
+      print('Error creating GIF: $e');
+      return null;
+    }
   }
 
   // Adjust white balance (temperature and tint)
