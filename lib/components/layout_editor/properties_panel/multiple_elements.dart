@@ -4,6 +4,7 @@ import 'package:photobooth/models/renderables/layout_element.dart';
 import 'package:photobooth/models/renderables/text_element.dart';
 import 'package:photobooth/providers/layout_editor_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:photobooth/components/layout_editor/properties_panel/common_property_widgets.dart';
 
 class MultipleElementsPropertiesPanel extends StatelessWidget {
   final List<LayoutElement> selectedElements;
@@ -820,19 +821,6 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 4),
-          const Divider(),
-        ],
-      ),
-    );
+    return SectionHeader(title: title);
   }
 }

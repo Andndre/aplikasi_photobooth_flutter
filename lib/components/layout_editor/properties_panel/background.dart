@@ -4,6 +4,7 @@ import 'package:photobooth/providers/layout_editor_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:photobooth/components/layout_editor/properties_panel/common_property_widgets.dart';
 
 class BackgroundPropertiesPanel extends StatelessWidget {
   const BackgroundPropertiesPanel({super.key});
@@ -49,7 +50,7 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Background color section
-                  const _SectionHeader(title: 'Background'),
+                  const SectionHeader(title: 'Background'),
 
                   // Fix color picker button implementation
                   Padding(
@@ -182,15 +183,15 @@ class BackgroundPropertiesPanel extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // Canvas size section
-                  const _SectionHeader(title: 'Canvas Size'),
+                  const SectionHeader(title: 'Canvas Size'),
 
                   // Width and height (read-only)
-                  _DisplayProperty(label: 'Width', value: '${layout.width} px'),
-                  _DisplayProperty(
+                  DisplayProperty(label: 'Width', value: '${layout.width} px'),
+                  DisplayProperty(
                     label: 'Height',
                     value: '${layout.height} px',
                   ),
-                  _DisplayProperty(
+                  DisplayProperty(
                     label: 'Dimensions',
                     value:
                         '${(layout.width / 300).toStringAsFixed(2)} × ${(layout.height / 300).toStringAsFixed(2)} inches',
@@ -404,61 +405,13 @@ class BackgroundPropertiesPanel extends StatelessWidget {
   }
 }
 
-// Helper widgets
+// Helper widget that's specific to this component (not shared)
 class _SectionHeader extends StatelessWidget {
   final String title;
   const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 4),
-          const Divider(),
-        ],
-      ),
-    );
-  }
-}
-
-class _DisplayProperty extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _DisplayProperty({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 14)),
-          ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              child: Text(value),
-            ),
-          ),
-        ],
-      ),
-    );
+    return SectionHeader(title: title);
   }
 }
