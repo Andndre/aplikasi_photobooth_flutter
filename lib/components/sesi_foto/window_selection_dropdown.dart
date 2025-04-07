@@ -81,7 +81,7 @@ class WindowSelectionDropdownState extends State<WindowSelectionDropdown> {
       backgroundColor: Theme.of(context).colorScheme.error,
       smallSize: 8,
       child: PopupMenuButton(
-        icon: const Icon(Icons.settings),
+        icon: const Icon(Icons.settings, size: 18),
         tooltip:
             currentWindow == null
                 ? 'Select a window to capture'

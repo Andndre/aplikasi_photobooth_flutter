@@ -119,6 +119,18 @@ class SesiFotoState extends State<SesiFoto> {
 
   @override
   void dispose() {
+    // Exit fullscreen mode if active when leaving the page
+    if (_isFullscreen) {
+      final hwnd = FindWindow(nullptr, TEXT('photobooth'));
+      if (hwnd != 0) {
+        // Restore window decorations
+        SetWindowLongPtr(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+        // Restore window size and position
+        ShowWindow(hwnd, SW_RESTORE);
+        _isFullscreen = false;
+      }
+    }
+
     // Restore system UI when disposing
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -212,7 +224,7 @@ class SesiFotoState extends State<SesiFoto> {
     final layout = _layoutsLoaded ? widget.event.getLayout(context) : null;
 
     return Scaffold(
-      appBar: _buildAppBar(context, sesiFotoProvider, layout),
+      // AppBar removed here
       body: Stack(
         children: [
           // Only build main content if layout is available
@@ -230,87 +242,92 @@ class SesiFotoState extends State<SesiFoto> {
     );
   }
 
-  Widget _buildMainContent(
-    BuildContext context,
+  // This method is now removed as we don't use AppBar anymore
+  // AppBar _buildAppBar(...) {...}
+
+  // Helper method to build the action buttons that were in the AppBar
+  Widget _buildActionButtons(
     SesiFotoProvider sesiFotoProvider,
     dynamic layout,
   ) {
-    // Add retake status indicator
-    final isRetakeMode = sesiFotoProvider.retakePhotoIndex != null;
-    final retakeIndex = sesiFotoProvider.retakePhotoIndex;
-
-    return Scaffold(
-      appBar: _buildAppBar(context, sesiFotoProvider, layout),
-      body: Stack(
-        children: [
-          // Only build main content if layout is available
-          if (layout != null)
-            _buildKeyboardShortcuts(context, sesiFotoProvider, layout),
-
-          // Retake banner only if layout available and in retake mode
-          if (isRetakeMode && layout != null) _buildRetakeBanner(retakeIndex),
-
-          // Loading overlay - now handles all loading states
-          _buildLoadingOverlay(),
-        ],
-      ),
-    );
-  }
-
-  AppBar _buildAppBar(
-    BuildContext context,
-    SesiFotoProvider sesiFotoProvider,
-    dynamic layout,
-  ) {
-    return AppBar(
-      title: Text('Sesi Foto: ${widget.event.name}'),
-      actions: [
-        // Add photo presets button
+    return Row(
+      // Change to space-between to put back button on the left and other actions on right
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Back button on the left
         IconButton(
-          icon: const Icon(Icons.auto_fix_high),
+          icon: const Icon(Icons.arrow_back, size: 18),
           onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PhotoPresetPage()),
-            );
+            // Exit fullscreen mode if active before navigating back
+            if (_isFullscreen) {
+              final hwnd = FindWindow(nullptr, TEXT('photobooth'));
+              if (hwnd != 0) {
+                SetWindowLongPtr(
+                  hwnd,
+                  GWL_STYLE,
+                  WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                );
+                ShowWindow(hwnd, SW_RESTORE);
+              }
+            }
+            Navigator.of(context).pop();
           },
-          tooltip: 'Photo Presets',
+          tooltip: 'Back',
         ),
-        // Add new gallery button
-        IconButton(
-          icon: const Icon(Icons.photo_library),
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder:
-                  (context) => CompositeImagesDialog(
-                    eventName: widget.event.name,
-                    uploadFolder: widget.event.uploadFolder,
+
+        // Other buttons grouped on the right
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PhotoPresetPage(),
                   ),
-            );
-          },
-          tooltip: 'View Gallery',
-        ),
-        // Only enable camera button when layout is loaded
-        IconButton(
-          icon: const Icon(Icons.camera_alt),
-          onPressed:
-              layout != null
-                  ? () => sesiFotoProvider.takePhoto(
-                    widget.event.saveFolder,
-                    widget.event.uploadFolder,
-                    widget.event.name,
-                    layout,
-                    context,
-                  )
-                  : null,
-          tooltip: 'Take Photo (Enter)',
-        ),
-        WindowSelectionDropdown(provider: sesiFotoProvider),
-        IconButton(
-          icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-          onPressed: _toggleFullscreen,
-          tooltip: 'Toggle Fullscreen (F11)',
+                );
+              },
+              tooltip: 'Photo Presets',
+            ),
+            IconButton(
+              icon: const Icon(Icons.photo_library, size: 18),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => CompositeImagesDialog(
+                        eventName: widget.event.name,
+                        uploadFolder: widget.event.uploadFolder,
+                      ),
+                );
+              },
+              tooltip: 'View Gallery',
+            ),
+            IconButton(
+              icon: const Icon(Icons.camera_alt, size: 18),
+              onPressed:
+                  layout != null
+                      ? () => sesiFotoProvider.takePhoto(
+                        widget.event.saveFolder,
+                        widget.event.uploadFolder,
+                        widget.event.name,
+                        layout,
+                        context,
+                      )
+                      : null,
+              tooltip: 'Take Photo (Enter)',
+            ),
+            WindowSelectionDropdown(provider: sesiFotoProvider),
+            IconButton(
+              icon: Icon(
+                _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                size: 18,
+              ),
+              onPressed: _toggleFullscreen,
+              tooltip: 'Toggle Fullscreen (F11)',
+            ),
+          ],
         ),
       ],
     );
@@ -342,8 +359,8 @@ class SesiFotoState extends State<SesiFoto> {
           builder: (context, constraints) {
             final isLandscape = constraints.maxWidth > constraints.maxHeight;
             return isLandscape
-                ? _buildLandscapeLayout(context, sesiFotoProvider)
-                : _buildPortraitLayout(context, sesiFotoProvider);
+                ? _buildLandscapeLayout(context, sesiFotoProvider, layout)
+                : _buildPortraitLayout(context, sesiFotoProvider, layout);
           },
         ),
       ),
@@ -353,6 +370,7 @@ class SesiFotoState extends State<SesiFoto> {
   Widget _buildLandscapeLayout(
     BuildContext context,
     SesiFotoProvider sesiFotoProvider,
+    dynamic layout,
   ) {
     return Row(
       children: [
@@ -364,7 +382,7 @@ class SesiFotoState extends State<SesiFoto> {
 
         // Taken photos grid (right section) - made narrower
         SizedBox(
-          width: 250, // Changed from 300 to 250
+          width: 245, // Changed from 300 to 250
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -375,6 +393,8 @@ class SesiFotoState extends State<SesiFoto> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Add the action buttons that were in the AppBar
+                _buildActionButtons(sesiFotoProvider, layout),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
@@ -385,7 +405,7 @@ class SesiFotoState extends State<SesiFoto> {
                     ),
                   ),
                 ),
-                Expanded(child: _buildPhotoGrid(sesiFotoProvider, 2)),
+                Expanded(child: _buildPhotoGrid(sesiFotoProvider, 1)),
               ],
             ),
           ),
@@ -397,6 +417,7 @@ class SesiFotoState extends State<SesiFoto> {
   Widget _buildPortraitLayout(
     BuildContext context,
     SesiFotoProvider sesiFotoProvider,
+    dynamic layout,
   ) {
     return Column(
       children: [
@@ -421,8 +442,22 @@ class SesiFotoState extends State<SesiFoto> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Add the title and event name
                 Padding(
-                  padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                  padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
+                  child: Text(
+                    'Sesi Foto: ${widget.event.name}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Add the action buttons that were in the AppBar
+                _buildActionButtons(sesiFotoProvider, layout),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
                   child: Text(
                     'Captured Photos (${sesiFotoProvider.takenPhotos.length})',
                     style: const TextStyle(
