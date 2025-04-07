@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photobooth/models/event_model.dart';
@@ -8,7 +7,7 @@ import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/providers/preset_provider.dart';
 import 'package:provider/provider.dart';
 
-class EventsProvider extends ChangeNotifier {
+class EventsProvider with ChangeNotifier {
   List<EventModel> _events = [];
 
   List<EventModel> get events => _events;
@@ -49,9 +48,24 @@ class EventsProvider extends ChangeNotifier {
     prefs.setString('events', eventsString);
   }
 
-  // Make the save method public so it can be called from outside
+  // Ensure the saveEvents method is properly implemented
   Future<void> saveEvents() async {
-    return _saveToLocalStorage();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Convert events to JSON list
+      final eventsJsonList = _events.map((event) => event.toJson()).toList();
+      final eventsJson = jsonEncode(eventsJsonList);
+
+      // Save to SharedPreferences
+      await prefs.setString('events', eventsJson);
+
+      print('Events saved successfully: ${_events.length} events');
+      notifyListeners();
+    } catch (e) {
+      print('Error saving events: $e');
+      rethrow; // Re-throw to allow handling elsewhere
+    }
   }
 
   // Add a method to update an event's preset
@@ -86,6 +100,16 @@ class EventsProvider extends ChangeNotifier {
     try {
       return _events.firstWhere((event) => event.name == name);
     } catch (e) {
+      return null;
+    }
+  }
+
+  // Ensure we have a method to find event by ID
+  EventModel? getEventById(String id) {
+    try {
+      return _events.firstWhere((event) => event.id == id);
+    } catch (e) {
+      print('Event with ID $id not found');
       return null;
     }
   }

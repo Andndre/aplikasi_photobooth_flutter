@@ -4,8 +4,11 @@ import 'package:photobooth/models/preset_model.dart';
 import 'package:photobooth/providers/layout_provider.dart';
 import 'package:photobooth/providers/preset_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart'; // Add UUID import
 
 class EventModel {
+  // Add id field using UUID
+  final String id;
   String name;
   String description;
   String date;
@@ -19,6 +22,7 @@ class EventModel {
   PresetModel? _cachedPreset;
 
   EventModel({
+    String? id, // Make id optional with default generation
     required this.name,
     required this.description,
     required this.date,
@@ -28,7 +32,8 @@ class EventModel {
     String? presetId,
     // For backward compatibility
     PresetModel? preset,
-  }) : presetId = presetId ?? (preset?.id ?? 'default');
+  }) : id = id ?? const Uuid().v4(), // Generate UUID if not provided
+       presetId = presetId ?? (preset?.id ?? 'default');
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
     // Handle both new format (presetId) and old format (preset object)
@@ -48,6 +53,7 @@ class EventModel {
     }
 
     return EventModel(
+      id: json['id'] ?? const Uuid().v4(), // Use UUID if no id in JSON
       name: json['name'] ?? '',
       description: json['description'] ?? '',
       date: json['date'] ?? '',
@@ -60,6 +66,7 @@ class EventModel {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id, // Include id in JSON
       'name': name,
       'description': description,
       'date': date,

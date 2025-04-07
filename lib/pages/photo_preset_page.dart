@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:photobooth/models/event_model.dart';
+import 'package:photobooth/providers/event_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:photobooth/components/photo_preset/before_after_preview.dart';
@@ -34,6 +36,9 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
 
   // Temporary values for sliders
   final Map<String, double?> _tempValues = {};
+
+  // Track the current event ID
+  String? currentEventId;
 
   @override
   void initState() {
@@ -226,15 +231,35 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
   Widget build(BuildContext context) {
     // Get the current event from route arguments if available
     String? currentEventName;
+    EventModel? currentEvent; // Add this variable to store the actual event
+
     try {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic> && args.containsKey('event')) {
-        final event = args['event'];
-        if (event != null) {
-          currentEventName = event.name;
+        currentEvent = args['event']; // Store full event object
+        if (currentEvent != null) {
+          currentEventName = currentEvent.name;
+          currentEventId = currentEvent.id; // Store the event ID
         }
       } else if (widget.eventId != null) {
+        // Try to find the event by ID in the provider
+        final eventsProvider = Provider.of<EventsProvider>(
+          context,
+          listen: false,
+        );
+
+        // Use standard find method instead of firstWhereOrNull
+        try {
+          currentEvent = eventsProvider.events.firstWhere(
+            (e) => e.id == widget.eventId || e.name == widget.eventId,
+          );
+        } catch (e) {
+          // If not found, currentEvent remains null
+          print('Event not found: ${widget.eventId}');
+        }
+
         currentEventName = widget.eventId;
+        currentEventId = widget.eventId;
       }
 
       if (currentEventName != null) {
@@ -452,6 +477,12 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
                         updateHighlightsColor: _updateHighlightsColor,
                         updateHighlightsIntensity: _updateHighlightsIntensity,
                         updateColorBalance: _updateColorBalance,
+
+                        // Add a new parameter for setting preset as active for current event
+                        onSetAsActiveForEvent: (presetId) {
+                          _setPresetActiveForEvent(context, presetId);
+                        },
+                        currentEventId: currentEventId,
                       ),
                     ),
                 ],
@@ -610,5 +641,77 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
             ],
           ),
     );
+  }
+
+  // Add a new method to set the preset as active for the current event
+  void _setPresetActiveForEvent(BuildContext context, String presetId) async {
+    if (currentEventId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No event selected'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Get the events provider
+      final eventsProvider = Provider.of<EventsProvider>(
+        context,
+        listen: false,
+      );
+
+      // First, set active preset in the preset provider
+      final presetProvider = Provider.of<PresetProvider>(
+        context,
+        listen: false,
+      );
+      await presetProvider.setActivePreset(presetId);
+
+      // Find the current event - this might come from route arguments or provider
+      EventModel? event =
+          ModalRoute.of(context)?.settings.arguments is Map<String, dynamic>
+              ? (ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>)['event']
+              : null;
+
+      // If we don't have the event from arguments, look it up
+      if (event == null) {
+        try {
+          event = eventsProvider.events.firstWhere(
+            (e) => e.id == currentEventId || e.name == currentEventId,
+          );
+        } catch (e) {
+          throw Exception('Event not found: $currentEventId');
+        }
+      }
+
+      // Update the event's preset ID
+      event.updatePresetId(presetId);
+
+      // Save the changes to storage
+      await eventsProvider.saveEvents();
+
+      // Show confirmation
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Preset set as active and saved to event'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error setting preset for event: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 }

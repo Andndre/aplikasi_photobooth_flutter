@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:photobooth/models/event_model.dart';
 import 'package:photobooth/pages/photo_preset_page.dart'; // Add this import
 import 'package:photobooth/providers/layout_provider.dart';
+import 'package:photobooth/providers/preset_provider.dart';
 import 'package:photobooth/providers/sesi_foto.dart';
 import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
 import 'package:photobooth/components/sesi_foto/window_capture_preview.dart';
@@ -22,9 +23,7 @@ class SesiFoto extends StatefulWidget {
 
 class SesiFotoState extends State<SesiFoto> {
   bool _isFullscreen = false;
-  bool _isLoadingLayouts = false;
   bool _layoutsLoaded = false;
-  bool _previousLoadingState = false;
 
   void _toggleFullscreen() {
     setState(() {
@@ -130,15 +129,39 @@ class SesiFotoState extends State<SesiFoto> {
     super.initState();
     // Load layouts immediately in initState
     _loadLayouts();
+
+    // Set the active preset to match the event's preset
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setActivePresetFromEvent();
+    });
+  }
+
+  // New method to set the active preset based on the event's presetId
+  void _setActivePresetFromEvent() {
+    if (!mounted) return;
+
+    final presetProvider = Provider.of<PresetProvider>(context, listen: false);
+    final eventPresetId = widget.event.presetId;
+
+    if (eventPresetId.isNotEmpty) {
+      print('Setting active preset to match event preset ID: $eventPresetId');
+
+      // Check if the preset exists before setting it as active
+      final presetExists = presetProvider.getPresetById(eventPresetId) != null;
+
+      if (presetExists) {
+        // Set this preset as the active preset
+        presetProvider.setActivePreset(eventPresetId);
+        print('Successfully set active preset to: $eventPresetId');
+      } else {
+        print('Event preset ID $eventPresetId not found in saved presets');
+      }
+    }
   }
 
   // Separate method to load layouts once
   Future<void> _loadLayouts() async {
     if (_layoutsLoaded) return;
-
-    setState(() {
-      _isLoadingLayouts = true;
-    });
 
     // Get the provider
     final layoutsProvider = Provider.of<LayoutsProvider>(
@@ -171,7 +194,6 @@ class SesiFotoState extends State<SesiFoto> {
     } finally {
       if (mounted) {
         setState(() {
-          _isLoadingLayouts = false;
           _layoutsLoaded = true;
         });
       }
