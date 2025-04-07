@@ -127,7 +127,7 @@ class SesiFotoProvider with ChangeNotifier {
     // If already counting down, don't start another countdown
     if (_isCountingDown) return;
 
-    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
+    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('WhatsApp'));
     if (hwnd == 0) {
       showDialog(
         context: context,
@@ -310,8 +310,6 @@ class SesiFotoProvider with ChangeNotifier {
     // Add assertions for debugging
     assert(uploadFolder.isNotEmpty, 'Upload folder is empty');
     assert(eventName.isNotEmpty, 'Event name is empty');
-    assert(layout != null, 'Layout is null');
-    assert(context != null, 'Context is null');
 
     _setLoading(true, 'Starting composite generation...', 'Preparing...', 0.0);
     // Small delay to ensure loading UI is visible
@@ -348,13 +346,14 @@ class SesiFotoProvider with ChangeNotifier {
       'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
     );
 
+    // Remove folder creation for individual photos - we'll save directly to the upload folder
+
     _setLoading(true, 'Processing photos with preset...', 'Preparing...', 0.05);
     await Future.delayed(const Duration(milliseconds: 200));
 
     try {
       // Find the event by name
       final eventProvider = Provider.of<EventsProvider>(context, listen: false);
-      assert(eventProvider != null, 'EventsProvider is null');
 
       final event = eventProvider.events.firstWhereOrNull(
         (e) => e.name == eventName,
@@ -376,7 +375,6 @@ class SesiFotoProvider with ChangeNotifier {
         context,
         listen: false,
       );
-      assert(presetProvider != null, 'PresetProvider is null');
 
       print(
         'Available presets: ${presetProvider.savedPresets.map((p) => "${p.id} (${p.name})").join(", ")}',
@@ -490,13 +488,38 @@ class SesiFotoProvider with ChangeNotifier {
       // Ensure we have a small pause after processing to let user see the progress
       await Future.delayed(const Duration(milliseconds: 300));
 
-      assert(
-        processedPhotos.length == _takenPhotos.length,
-        'Processed photos count (${processedPhotos.length}) doesn\'t match original count (${_takenPhotos.length})',
+      // Modified code: Save individual processed photos directly to upload folder
+      _setLoading(
+        true,
+        'Saving individual processed photos',
+        'Copying files...',
+        0.5,
       );
 
+      List<File> savedIndividualPhotos = [];
+      for (int i = 0; i < processedPhotos.length; i++) {
+        File processedPhoto = processedPhotos[i];
+        String fileName = path.basename(processedPhoto.path);
+        String destPath = path.join(
+          uploadFolder,
+          'Luminara_${eventName}_${maxCompositeIndex + 2}_photo_${i + 1}${path.extension(fileName)}',
+        );
+
+        // Copy the processed photo to the destination
+        File savedPhoto = await processedPhoto.copy(destPath);
+        savedIndividualPhotos.add(savedPhoto);
+
+        // Update progress
+        _setLoading(
+          true,
+          'Saving individual processed photos',
+          'Saved ${i + 1} of ${processedPhotos.length}',
+          0.5 + ((i + 1) / processedPhotos.length * 0.1),
+        );
+      }
+
       print(
-        "Successfully processed ${processedPhotos.length} photos with preset",
+        'Successfully saved ${savedIndividualPhotos.length} individual processed photos to $uploadFolder',
       );
 
       // First start the GIF generation process which takes longer
@@ -505,15 +528,6 @@ class SesiFotoProvider with ChangeNotifier {
         'Creating composite images',
         'Starting GIF creation...',
         0.6,
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      // Create GIF in background to avoid blocking UI
-      _setLoading(
-        true,
-        'Creating GIF animation',
-        'Initializing GIF encoder...',
-        0.62,
       );
 
       // Start gif creation but don't await it yet

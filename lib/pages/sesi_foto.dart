@@ -22,6 +22,9 @@ class SesiFoto extends StatefulWidget {
 
 class SesiFotoState extends State<SesiFoto> {
   bool _isFullscreen = false;
+  bool _isLoadingLayouts = false;
+  bool _layoutsLoaded = false;
+  bool _previousLoadingState = false;
 
   void _toggleFullscreen() {
     setState(() {
@@ -123,6 +126,59 @@ class SesiFotoState extends State<SesiFoto> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Load layouts immediately in initState
+    _loadLayouts();
+  }
+
+  // Separate method to load layouts once
+  Future<void> _loadLayouts() async {
+    if (_layoutsLoaded) return;
+
+    setState(() {
+      _isLoadingLayouts = true;
+    });
+
+    // Get the provider
+    final layoutsProvider = Provider.of<LayoutsProvider>(
+      context,
+      listen: false,
+    );
+
+    try {
+      // Show loading in the provider
+      final sesiFotoProvider = Provider.of<SesiFotoProvider>(
+        context,
+        listen: false,
+      );
+      sesiFotoProvider.setLoading(
+        true,
+        'Loading layouts...',
+        'Please wait',
+        null,
+      );
+
+      // Wait for layouts to load
+      await layoutsProvider.loadLayouts();
+
+      // Clear loading if it was our loading message
+      if (sesiFotoProvider.loadingMessage == 'Loading layouts...') {
+        sesiFotoProvider.setLoading(false);
+      }
+    } catch (e) {
+      print('Error loading layouts: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLayouts = false;
+          _layoutsLoaded = true;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final sesiFotoProvider = Provider.of<SesiFotoProvider>(context);
     final layoutsProvider = Provider.of<LayoutsProvider>(
@@ -130,33 +186,25 @@ class SesiFotoState extends State<SesiFoto> {
       listen: false,
     );
 
-    return FutureBuilder(
-      future: layoutsProvider.loadLayouts(),
-      builder: (context, snapshot) {
-        // Use the loading overlay for layout loading too
-        final isLoadingLayouts =
-            snapshot.connectionState == ConnectionState.waiting;
+    // Get layout without triggering FutureBuilder
+    final layout = _layoutsLoaded ? widget.event.getLayout(context) : null;
 
-        // Set the loading message in provider when loading layouts
-        if (isLoadingLayouts && !sesiFotoProvider.isLoading) {
-          sesiFotoProvider.setLoading(
-            true,
-            'Loading layouts...',
-            'Please wait',
-            null,
-          );
-        } else if (!isLoadingLayouts &&
-            sesiFotoProvider.isLoading &&
-            sesiFotoProvider.loadingMessage == 'Loading layouts...') {
-          // Clear loading state when layouts are done loading
-          sesiFotoProvider.setLoading(false);
-        }
+    return Scaffold(
+      appBar: _buildAppBar(context, sesiFotoProvider, layout),
+      body: Stack(
+        children: [
+          // Only build main content if layout is available
+          if (layout != null)
+            _buildKeyboardShortcuts(context, sesiFotoProvider, layout),
 
-        // Always build the scaffold, but with null layout if still loading
-        final layout =
-            !isLoadingLayouts ? widget.event.getLayout(context) : null;
-        return _buildMainContent(context, sesiFotoProvider, layout);
-      },
+          // Retake banner only if layout available and in retake mode
+          if (sesiFotoProvider.retakePhotoIndex != null && layout != null)
+            _buildRetakeBanner(sesiFotoProvider.retakePhotoIndex),
+
+          // Loading overlay - handles all loading states
+          _buildLoadingOverlay(),
+        ],
+      ),
     );
   }
 
