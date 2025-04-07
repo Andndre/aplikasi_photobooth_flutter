@@ -66,7 +66,7 @@ class SingleElementPropertiesPanel extends StatelessWidget {
                     onChanged: (value) {
                       editorProvider.updateElementPosition(
                         element.id,
-                        Offset(value, element.y),
+                        Offset(value.toDouble(), element.y),
                       );
                     },
                   ),
@@ -76,7 +76,7 @@ class SingleElementPropertiesPanel extends StatelessWidget {
                     onChanged: (value) {
                       editorProvider.updateElementPosition(
                         element.id,
-                        Offset(element.x, value),
+                        Offset(element.x, value.toDouble()),
                       );
                     },
                   ),
@@ -88,7 +88,7 @@ class SingleElementPropertiesPanel extends StatelessWidget {
                     onChanged: (value) {
                       editorProvider.updateElementSize(
                         element.id,
-                        Size(value, element.height),
+                        Size(value.toDouble(), element.height),
                       );
                     },
                   ),
@@ -98,7 +98,7 @@ class SingleElementPropertiesPanel extends StatelessWidget {
                     onChanged: (value) {
                       editorProvider.updateElementSize(
                         element.id,
-                        Size(element.width, value),
+                        Size(element.width, value.toDouble()),
                       );
                     },
                   ),
@@ -108,7 +108,10 @@ class SingleElementPropertiesPanel extends StatelessWidget {
                     label: 'Rotation',
                     value: element.rotation,
                     onChanged: (value) {
-                      editorProvider.updateElementRotation(element.id, value);
+                      editorProvider.updateElementRotation(
+                        element.id,
+                        value.toDouble(),
+                      );
                     },
                   ),
 
@@ -509,7 +512,10 @@ class SingleElementPropertiesPanel extends StatelessWidget {
               label: 'Font Size',
               value: element.fontSize,
               onChanged: (value) {
-                editorProvider.updateTextElement(element.id, fontSize: value);
+                editorProvider.updateTextElement(
+                  element.id,
+                  fontSize: value.toDouble(),
+                );
               },
             ),
 

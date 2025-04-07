@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 // Common widgets for property panels
 class SectionHeader extends StatelessWidget {
@@ -26,7 +25,7 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-class NumberPropertyRow extends StatelessWidget {
+class NumberPropertyRow extends StatefulWidget {
   final String label;
   final double value;
   final Function(double) onChanged;
@@ -39,29 +38,75 @@ class NumberPropertyRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Create a text controller with the current value
-    final controller = TextEditingController(text: value.toStringAsFixed(1));
+  State<NumberPropertyRow> createState() => _NumberPropertyRowState();
+}
 
+class _NumberPropertyRowState extends State<NumberPropertyRow> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use integers for better editing experience
+    final intValue = widget.value.round();
+    _controller = TextEditingController(text: intValue.toString());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(NumberPropertyRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only update controller if value changed externally and we're not editing
+    if (oldWidget.value != widget.value && !_controller.text.contains('.')) {
+      final intValue = widget.value.round();
+
+      // Remember cursor position
+      final currentSelection = _controller.selection;
+      final oldLength = _controller.text.length;
+
+      // Set new text
+      _controller.text = intValue.toString();
+
+      // Try to maintain cursor position logic
+      if (currentSelection.isValid) {
+        final newLength = _controller.text.length;
+        final offset = currentSelection.baseOffset;
+
+        if (offset <= oldLength) {
+          // Adjust offset based on length change
+          final newOffset = (offset * newLength / oldLength).round().clamp(
+            0,
+            newLength,
+          );
+          _controller.selection = TextSelection.fromPosition(
+            TextPosition(offset: newOffset),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 14)),
+            child: Text(widget.label, style: const TextStyle(fontSize: 14)),
           ),
           Expanded(
-            child: StatefulBuilder(
-              builder: (context, setState) {
-                // Create state variables outside the builder function as private properties
-                return DraggableValueField(
-                  controller: controller,
-                  value: value,
-                  label: label,
-                  onChanged: onChanged,
-                );
-              },
+            child: DraggableValueField(
+              controller: _controller,
+              value: widget.value.round().toDouble(), // Use rounded value
+              label: widget.label,
+              onChanged: widget.onChanged,
             ),
           ),
         ],
@@ -70,7 +115,6 @@ class NumberPropertyRow extends StatelessWidget {
   }
 }
 
-// Create a new StatefulWidget to properly track dragging state
 class DraggableValueField extends StatefulWidget {
   final TextEditingController controller;
   final double value;
@@ -94,69 +138,94 @@ class DraggableValueFieldState extends State<DraggableValueField> {
   double startValue = 0;
   bool isDragging = false;
   bool isShiftPressed = false;
+  bool isEditing = false;
+  FocusNode focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Set up focus listener
+    focusNode.addListener(() {
+      setState(() {
+        isEditing = focusNode.hasFocus;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  // Apply changes when editing is complete
+  void _applyChanges() {
+    if (!isDragging) {
+      try {
+        // Parse the current text as an integer
+        final value = int.tryParse(widget.controller.text);
+        if (value != null) {
+          // Only update if value changed
+          if (value != widget.value.round()) {
+            widget.onChanged(value.toDouble());
+          }
+        } else {
+          // Reset to last valid value if parsing fails
+          widget.controller.text = widget.value.round().toString();
+        }
+      } catch (e) {
+        // Reset on error
+        widget.controller.text = widget.value.round().toString();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
-      // Use Listener instead of GestureDetector to detect mouse buttons
+      // Middle mouse button dragging
       onPointerDown: (PointerDownEvent event) {
-        // Check if middle button is pressed (button index 2 corresponds to middle button)
         if (event.buttons == 4) {
           // 4 is middle button
           setState(() {
             startX = event.localPosition.dx;
             startValue = widget.value;
             isDragging = true;
-            // Check if shift key is pressed for precision mode
             isShiftPressed = event.down && (event.buttons & 0x8) != 0;
           });
         }
       },
       onPointerMove: (PointerMoveEvent event) {
         if (isDragging) {
-          // Calculate delta and apply a sensitivity factor
           final dx = event.localPosition.dx - startX;
-
-          // Check if shift key is currently pressed
           bool newShiftPressed = (event.buttons & 0x8) != 0;
+
           if (isShiftPressed != newShiftPressed) {
             setState(() {
               isShiftPressed = newShiftPressed;
             });
           }
 
-          // Determine the adjustment factor based on precision mode and value magnitude
-          double adjustmentFactor;
+          // Adjustment factor based on precision mode
+          double adjustmentFactor = isShiftPressed ? 0.05 : 0.5;
 
-          if (isShiftPressed) {
-            // Precision mode (slow changes) with Shift key
-            adjustmentFactor = 0.05; // Very fine control
-
-            if (widget.label == 'Rotation') {
-              adjustmentFactor = 0.02; // Even finer for rotation
-            }
-          } else {
-            // Fast mode (without Shift key)
-            adjustmentFactor = 0.5; // Reduced from 5.0 for better control
-
-            if (startValue.abs() > 100) {
-              adjustmentFactor = 1.0; // Reduced from 10.0
-            }
-
-            if (widget.label == 'Rotation') {
-              adjustmentFactor = 0.2; // Reduced from 2.0
-            }
+          if (widget.label == 'Rotation') {
+            adjustmentFactor = isShiftPressed ? 0.02 : 0.2;
+          } else if (startValue.abs() > 100) {
+            adjustmentFactor = isShiftPressed ? 0.05 : 1.0;
           }
 
-          // Calculate new value with the appropriate sensitivity
+          // Calculate new value and round to integers
           final newValue = startValue + (dx * adjustmentFactor);
+          final roundedValue = newValue.round();
 
-          // Optionally round to 1 decimal place for better usability
-          final roundedValue = (newValue * 10).round() / 10;
-
-          // Update the controller text and call the callback
-          widget.controller.text = roundedValue.toStringAsFixed(1);
-          widget.onChanged(roundedValue);
+          // Only update if value has changed
+          if (roundedValue != int.tryParse(widget.controller.text)) {
+            setState(() {
+              widget.controller.text = roundedValue.toString();
+            });
+            widget.onChanged(roundedValue.toDouble());
+          }
         }
       },
       onPointerUp: (PointerUpEvent event) {
@@ -170,22 +239,36 @@ class DraggableValueFieldState extends State<DraggableValueField> {
         children: [
           TextField(
             controller: widget.controller,
+            focusNode: focusNode,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               isDense: true,
             ),
             keyboardType: TextInputType.number,
-            onChanged: (text) {
-              final newValue = double.tryParse(text);
-              if (newValue != null) {
-                widget.onChanged(newValue);
-              }
+            // Don't process changes while typing
+            onChanged: null,
+            // Only apply changes when edit is complete
+            onEditingComplete: () {
+              _applyChanges();
+              // Keep focus but hide keyboard
+              FocusScope.of(context).unfocus();
+              FocusScope.of(context).requestFocus(focusNode);
             },
+            onSubmitted: (_) {
+              _applyChanges();
+            },
+            // Apply changes when focus is lost
+            onTapOutside: (_) {
+              _applyChanges();
+              focusNode.unfocus();
+            },
+            // Show cursor explicitly
+            showCursor: true,
             mouseCursor: SystemMouseCursors.resizeLeftRight,
           ),
 
-          // Now the tooltip will properly show when isDragging is true
+          // Tooltip during dragging
           if (isDragging)
             Positioned(
               right: 8,

@@ -670,6 +670,9 @@ class LayoutEditorProvider extends ChangeNotifier {
       selectedElement = element;
     }
 
+    // Mark that we have unsaved changes
+    hasUnsavedChanges = true;
+
     // Explicitly notify listeners to ensure UI updates
     notifyListeners();
   }
@@ -725,6 +728,9 @@ class LayoutEditorProvider extends ChangeNotifier {
     if (selectedElement?.id == id) {
       selectedElement = element;
     }
+
+    // Mark that we have unsaved changes
+    hasUnsavedChanges = true;
 
     notifyListeners();
   }
@@ -1393,6 +1399,10 @@ class LayoutEditorProvider extends ChangeNotifier {
     }
 
     updateElementPosition(elementId, Offset(newX, newY));
+
+    // Mark that we have unsaved changes (already set in updateElementPosition)
+    // and save to history
+    saveToHistory();
   }
 
   // Add getElementById method
