@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
 class BeforeAfterPreview extends StatefulWidget {
   final File? currentSampleImage;
@@ -8,8 +8,8 @@ class BeforeAfterPreview extends StatefulWidget {
 
   const BeforeAfterPreview({
     super.key,
-    required this.currentSampleImage,
-    required this.processedImagePreview,
+    this.currentSampleImage,
+    this.processedImagePreview,
   });
 
   @override
@@ -17,225 +17,348 @@ class BeforeAfterPreview extends StatefulWidget {
 }
 
 class _BeforeAfterPreviewState extends State<BeforeAfterPreview> {
-  // Zoom levels for both images
-  double _beforeZoom = 1.0;
-  double _afterZoom = 1.0;
+  // Using separate zoom levels for each image
+  double _beforeZoomLevel = 1.0;
+  double _afterZoomLevel = 1.0;
+  final double _minZoom = 0.5;
+  final double _maxZoom = 3.0;
+  final double _zoomStep = 0.25;
 
-  // Scroll controllers to handle scrolling in both directions
-  final ScrollController _beforeHorizontalScrollController = ScrollController();
-  final ScrollController _beforeVerticalScrollController = ScrollController();
-  final ScrollController _afterHorizontalScrollController = ScrollController();
-  final ScrollController _afterVerticalScrollController = ScrollController();
+  // Controllers for scrollable views
+  final TransformationController _beforeTransformController =
+      TransformationController();
+  final TransformationController _afterTransformController =
+      TransformationController();
+
+  final ScrollController _beforeHorizontalController = ScrollController();
+  final ScrollController _beforeVerticalController = ScrollController();
+  final ScrollController _afterHorizontalController = ScrollController();
+  final ScrollController _afterVerticalController = ScrollController();
 
   @override
   void dispose() {
-    _beforeHorizontalScrollController.dispose();
-    _beforeVerticalScrollController.dispose();
-    _afterHorizontalScrollController.dispose();
-    _afterVerticalScrollController.dispose();
+    _beforeTransformController.dispose();
+    _afterTransformController.dispose();
+    _beforeHorizontalController.dispose();
+    _beforeVerticalController.dispose();
+    _afterHorizontalController.dispose();
+    _afterVerticalController.dispose();
     super.dispose();
   }
 
-  // Adjust zoom level with bounds
-  void _adjustZoom(bool isBeforeImage, double delta) {
+  void _zoomInBefore() {
     setState(() {
-      if (isBeforeImage) {
-        _beforeZoom = (_beforeZoom + delta).clamp(1.0, 5.0);
-      } else {
-        _afterZoom = (_afterZoom + delta).clamp(1.0, 5.0);
-      }
+      _beforeZoomLevel = (_beforeZoomLevel + _zoomStep).clamp(
+        _minZoom,
+        _maxZoom,
+      );
+      _beforeTransformController.value =
+          Matrix4.identity()..scale(_beforeZoomLevel);
+    });
+  }
+
+  void _zoomOutBefore() {
+    setState(() {
+      _beforeZoomLevel = (_beforeZoomLevel - _zoomStep).clamp(
+        _minZoom,
+        _maxZoom,
+      );
+      _beforeTransformController.value =
+          Matrix4.identity()..scale(_beforeZoomLevel);
+    });
+  }
+
+  void _resetZoomBefore() {
+    setState(() {
+      _beforeZoomLevel = 1.0;
+      _beforeTransformController.value = Matrix4.identity();
+    });
+  }
+
+  void _zoomInAfter() {
+    setState(() {
+      _afterZoomLevel = (_afterZoomLevel + _zoomStep).clamp(_minZoom, _maxZoom);
+      _afterTransformController.value =
+          Matrix4.identity()..scale(_afterZoomLevel);
+    });
+  }
+
+  void _zoomOutAfter() {
+    setState(() {
+      _afterZoomLevel = (_afterZoomLevel - _zoomStep).clamp(_minZoom, _maxZoom);
+      _afterTransformController.value =
+          Matrix4.identity()..scale(_afterZoomLevel);
+    });
+  }
+
+  void _resetZoomAfter() {
+    setState(() {
+      _afterZoomLevel = 1.0;
+      _afterTransformController.value = Matrix4.identity();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Calculate the height for each image container
-        // giving each an equal share of the available height
-        final containerHeight = constraints.maxHeight / 2 - 8;
-
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return widget.currentSampleImage == null
+        ? const Center(child: Text('Select a preset to view preview'))
+        : Column(
           children: [
-            // Before image (original) - Top
-            _buildImageContainer(
-              true,
-              widget.currentSampleImage != null
-                  ? Image.file(widget.currentSampleImage!, fit: BoxFit.contain)
-                  : const Center(child: Text('No image selected')),
-              _beforeZoom,
-              _beforeHorizontalScrollController,
-              _beforeVerticalScrollController,
-              constraints.maxWidth,
-              containerHeight,
-            ),
-
-            const SizedBox(height: 16),
-
-            // After image (processed) - Bottom
-            _buildImageContainer(
-              false,
-              widget.processedImagePreview != null
-                  ? Image.memory(
-                    widget.processedImagePreview!,
-                    fit: BoxFit.contain,
-                  )
-                  : widget.currentSampleImage != null
-                  ? Image.file(
-                    widget.currentSampleImage!,
-                    fit: BoxFit.contain,
-                    color: Colors.black.withOpacity(0.5),
-                    colorBlendMode: BlendMode.darken,
-                  )
-                  : const Center(child: Text('No image selected')),
-              _afterZoom,
-              _afterHorizontalScrollController,
-              _afterVerticalScrollController,
-              constraints.maxWidth,
-              containerHeight,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Build a container for an image with zoom controls and scrollbars
-  Widget _buildImageContainer(
-    bool isBeforeImage,
-    Widget imageWidget,
-    double zoomLevel,
-    ScrollController horizontalController,
-    ScrollController verticalController,
-    double containerWidth,
-    double containerHeight,
-  ) {
-    return Container(
-      width: containerWidth,
-      height: containerHeight,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        children: [
-          // Scrollable image with zoom
-          ClipRRect(
-            borderRadius: BorderRadius.circular(7),
-            child: Scrollbar(
-              controller: horizontalController,
-              thumbVisibility: zoomLevel > 1.0,
-              child: Scrollbar(
-                controller: verticalController,
-                thumbVisibility: zoomLevel > 1.0,
-                notificationPredicate:
-                    (notification) => notification.depth == 1,
-                child: SingleChildScrollView(
-                  controller: horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    controller: verticalController,
-                    child: SizedBox(
-                      width:
-                          containerWidth *
-                          zoomLevel, // Scale width based on zoom
-                      height:
-                          containerHeight *
-                          zoomLevel, // Scale height based on zoom
-                      child: FittedBox(
-                        alignment: Alignment.topLeft,
-                        fit: BoxFit.contain,
-                        child: SizedBox(
-                          width: containerWidth,
-                          height: containerHeight,
-                          child: imageWidget,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Processing indicator (for after image)
-          if (!isBeforeImage &&
-              widget.processedImagePreview == null &&
-              widget.currentSampleImage != null)
-            const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 8),
-                  Text('Processing...'),
+                  Text(
+                    'Preview (HD Resolution)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const Text(
+                    'Images are automatically resized for performance',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    // Before image (top)
+                    Expanded(
+                      child: Card(
+                        elevation: 4,
+                        child: Stack(
+                          children: [
+                            // Scrollable image view with both scrollbars
+                            Positioned.fill(
+                              child: Scrollbar(
+                                controller: _beforeVerticalController,
+                                thumbVisibility: true,
+                                child: Scrollbar(
+                                  controller: _beforeHorizontalController,
+                                  thumbVisibility: true,
+                                  notificationPredicate:
+                                      (notification) => notification.depth == 1,
+                                  child: InteractiveViewer(
+                                    boundaryMargin: const EdgeInsets.all(20),
+                                    minScale: _minZoom,
+                                    maxScale: _maxZoom,
+                                    transformationController:
+                                        _beforeTransformController,
+                                    onInteractionEnd: (details) {
+                                      setState(() {
+                                        _beforeZoomLevel =
+                                            _beforeTransformController.value
+                                                .getMaxScaleOnAxis();
+                                      });
+                                    },
+                                    child: Center(
+                                      child: Image.file(
+                                        widget.currentSampleImage!,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
 
-          // Zoom controls
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: Row(
-              children: [
-                // Zoom out button
-                Material(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _adjustZoom(isBeforeImage, -0.5),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      child: const Icon(
-                        Icons.remove,
-                        color: Colors.white,
-                        size: 20,
+                            // Zoom controls in bottom right corner
+                            Positioned(
+                              right: 8,
+                              bottom: 8,
+                              child: Card(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surface.withOpacity(0.8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.zoom_in,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _beforeZoomLevel < _maxZoom
+                                                ? _zoomInBefore
+                                                : null,
+                                        tooltip: 'Zoom In',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                      Text(
+                                        '${(_beforeZoomLevel * 100).round()}%',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.zoom_out,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _beforeZoomLevel > _minZoom
+                                                ? _zoomOutBefore
+                                                : null,
+                                        tooltip: 'Zoom Out',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.refresh,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _beforeZoomLevel != 1.0
+                                                ? _resetZoomBefore
+                                                : null,
+                                        tooltip: 'Reset Zoom',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Zoom text indicator
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${(zoomLevel * 100).round()}%',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Zoom in button
-                Material(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _adjustZoom(isBeforeImage, 0.5),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 20,
+                    const SizedBox(height: 16),
+                    // After image (bottom)
+                    Expanded(
+                      child: Card(
+                        elevation: 4,
+                        child: Stack(
+                          children: [
+                            // Scrollable image view with both scrollbars
+                            Positioned.fill(
+                              child: Scrollbar(
+                                controller: _afterVerticalController,
+                                thumbVisibility: true,
+                                child: Scrollbar(
+                                  controller: _afterHorizontalController,
+                                  thumbVisibility: true,
+                                  notificationPredicate:
+                                      (notification) => notification.depth == 1,
+                                  child: InteractiveViewer(
+                                    boundaryMargin: const EdgeInsets.all(20),
+                                    minScale: _minZoom,
+                                    maxScale: _maxZoom,
+                                    transformationController:
+                                        _afterTransformController,
+                                    onInteractionEnd: (details) {
+                                      setState(() {
+                                        _afterZoomLevel =
+                                            _afterTransformController.value
+                                                .getMaxScaleOnAxis();
+                                      });
+                                    },
+                                    child: Center(
+                                      child:
+                                          widget.processedImagePreview != null
+                                              ? Image.memory(
+                                                widget.processedImagePreview!,
+                                                fit: BoxFit.contain,
+                                              )
+                                              : const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Zoom controls in bottom right corner
+                            Positioned(
+                              right: 8,
+                              bottom: 8,
+                              child: Card(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surface.withOpacity(0.8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.zoom_in,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _afterZoomLevel < _maxZoom
+                                                ? _zoomInAfter
+                                                : null,
+                                        tooltip: 'Zoom In',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                      Text(
+                                        '${(_afterZoomLevel * 100).round()}%',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.zoom_out,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _afterZoomLevel > _minZoom
+                                                ? _zoomOutAfter
+                                                : null,
+                                        tooltip: 'Zoom Out',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.refresh,
+                                          size: 18,
+                                        ),
+                                        onPressed:
+                                            _afterZoomLevel != 1.0
+                                                ? _resetZoomAfter
+                                                : null,
+                                        tooltip: 'Reset Zoom',
+                                        constraints: const BoxConstraints(
+                                          minHeight: 32,
+                                        ),
+                                        padding: const EdgeInsets.all(4.0),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        );
   }
 }

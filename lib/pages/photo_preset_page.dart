@@ -66,7 +66,10 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
       if (_selectedPreset!.sampleImagePath != null) {
         final imageFile = File(_selectedPreset!.sampleImagePath!);
         if (await imageFile.exists()) {
-          _currentSampleImage = imageFile;
+          // Resize the image to HD resolution for better performance
+          _currentSampleImage = await ImageProcessor.resizeImageForPreview(
+            imageFile,
+          );
           await _updateProcessedPreview();
         } else {
           // If image doesn't exist, use placeholder
@@ -135,7 +138,7 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
 
-        // Copy the file to the app's documents directory for persistence
+        // First, save the original file to the app's documents directory
         final docDir = await getApplicationDocumentsDirectory();
         final sampleDir = Directory('${docDir.path}/preset_samples');
         await sampleDir.create(recursive: true);
@@ -143,14 +146,20 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
         final fileName = '${uuid.v4()}${path.extension(file.path)}';
         final savedFile = await file.copy('${sampleDir.path}/$fileName');
 
+        // Then resize it for preview
+        final resizedFile = await ImageProcessor.resizeImageForPreview(
+          savedFile,
+        );
+
         setState(() {
-          _currentSampleImage = savedFile;
+          _currentSampleImage = resizedFile;
         });
 
         if (_isEditing && _selectedPreset != null) {
           setState(() {
             _selectedPreset = _selectedPreset!.copyWith(
-              sampleImagePath: savedFile.path,
+              sampleImagePath:
+                  savedFile.path, // Still store the path to the original file
             );
           });
         }

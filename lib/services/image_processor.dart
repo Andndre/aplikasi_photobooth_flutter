@@ -1,9 +1,8 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
-import 'package:path_provider/path_provider.dart';
+import 'package:path_provider/path_provider.dart'; // Add this import
 import 'package:photobooth/models/preset_model.dart';
 import 'package:path/path.dart' as path;
 import 'package:photobooth/utils/isolate_helper.dart'; // Import the new helper
@@ -13,12 +12,10 @@ class ImageProcessor {
   static Future<File?> processImage(File imageFile, PresetModel preset) async {
     try {
       // Add assertions for debugging
-      assert(imageFile != null, 'Image file is null');
       assert(
         await imageFile.exists(),
         'Image file does not exist: ${imageFile.path}',
       );
-      assert(preset != null, 'Preset is null');
 
       print('Processing image with preset: ${preset.name}');
       print('Image path: ${imageFile.path}');
@@ -613,6 +610,61 @@ class ImageProcessor {
     } catch (e) {
       print('Error creating GIF: $e');
       return null;
+    }
+  }
+
+  /// Resizes an image file to HD resolution for preview purposes
+  static Future<File> resizeImageForPreview(File imageFile) async {
+    try {
+      // Read the image file
+      final bytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(bytes);
+
+      if (image == null) {
+        throw Exception('Failed to decode image for preview');
+      }
+
+      // Calculate new dimensions (keeping aspect ratio) with max HD resolution (1920x1080)
+      final maxWidth = 1920;
+      final maxHeight = 1080;
+
+      int newWidth, newHeight;
+
+      if (image.width > image.height) {
+        // Landscape orientation
+        newWidth = maxWidth;
+        newHeight = (image.height * maxWidth / image.width).round();
+      } else {
+        // Portrait orientation
+        newHeight = maxHeight;
+        newWidth = (image.width * maxHeight / image.height).round();
+      }
+
+      // Resize the image
+      final resizedImage = img.copyResize(
+        image,
+        width: newWidth,
+        height: newHeight,
+        interpolation: img.Interpolation.average,
+      );
+
+      // Save the resized image to a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final tempPath =
+          '${tempDir.path}/preview_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final tempFile = File(tempPath);
+
+      await tempFile.writeAsBytes(img.encodeJpg(resizedImage, quality: 90));
+
+      print(
+        'Resized image for preview: ${image.width}x${image.height} -> ${newWidth}x${newHeight}',
+      );
+
+      return tempFile;
+    } catch (e) {
+      print('Error resizing image for preview: $e');
+      // Return the original file if resizing fails
+      return imageFile;
     }
   }
 
