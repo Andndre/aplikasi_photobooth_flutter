@@ -282,7 +282,7 @@ class SesiFotoProvider with ChangeNotifier {
 
     await showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: false, // The WillPopScope will handle dismissals
       builder:
           (dialogContext) => CapturedPhotosDialog(
             photos: _takenPhotos,
