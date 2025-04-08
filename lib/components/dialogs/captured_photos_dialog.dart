@@ -5,12 +5,14 @@ class CapturedPhotosDialog extends StatelessWidget {
   final List<File> photos;
   final Function(int) onRetake;
   final VoidCallback onConfirm;
+  final VoidCallback onCancel;
 
   const CapturedPhotosDialog({
     super.key,
     required this.photos,
     required this.onRetake,
     required this.onConfirm,
+    required this.onCancel,
   });
 
   @override
@@ -22,6 +24,13 @@ class CapturedPhotosDialog extends StatelessWidget {
           AppBar(
             title: const Text('Captured Photos'),
             actions: [
+              TextButton(
+                onPressed: onCancel,
+                child: const Text('Cancel'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+              ),
               TextButton(
                 onPressed: onConfirm,
                 child: const Text('Confirm & Generate'),

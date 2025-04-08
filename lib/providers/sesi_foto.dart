@@ -297,6 +297,12 @@ class SesiFotoProvider with ChangeNotifier {
               Navigator.of(dialogContext).pop();
               await generateComposite(uploadFolder, eventName, layout, context);
             },
+            onCancel: () {
+              // Close the dialog without generating composite
+              Navigator.of(dialogContext).pop();
+              // Clear all captured photos when canceling
+              _clearTakenPhotos();
+            },
           ),
     );
   }
