@@ -11,6 +11,7 @@ import 'package:photobooth/components/sesi_foto/window_capture_preview.dart';
 import 'package:photobooth/components/sesi_foto/window_selection_dropdown.dart';
 import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
+import 'dart:io';
 
 class SesiFoto extends StatefulWidget {
   final EventModel event;
@@ -49,7 +50,23 @@ class SesiFotoState extends State<SesiFoto> {
     }
   }
 
-  // New function to build the loading indicators in the sidebar
+  void _clearImageCache() {
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleProviderChanges() {
+    final provider = Provider.of<SesiFotoProvider>(context, listen: false);
+
+    if (provider.retakePhotoIndex == null) {
+      _clearImageCache();
+    }
+  }
+
   Widget _buildSidebarLoadingIndicator(SesiFotoProvider provider) {
     if (provider.compositeJobs.isEmpty && !provider.isLoading) {
       return const SizedBox.shrink();
@@ -68,7 +85,6 @@ class SesiFotoState extends State<SesiFoto> {
     );
   }
 
-  // For general loading tasks (not composite related)
   Widget _buildGeneralLoadingIndicator(SesiFotoProvider provider) {
     return Card(
       margin: const EdgeInsets.all(8.0),
@@ -106,7 +122,6 @@ class SesiFotoState extends State<SesiFoto> {
     );
   }
 
-  // For composite job indicators
   Widget _buildCompositeJobIndicator(CompositeJob job) {
     Color statusColor =
         job.hasError
@@ -174,19 +189,18 @@ class SesiFotoState extends State<SesiFoto> {
 
   @override
   void dispose() {
-    // Exit fullscreen mode if active when leaving the page
+    final provider = Provider.of<SesiFotoProvider>(context, listen: false);
+    provider.removeListener(_handleProviderChanges);
+
     if (_isFullscreen) {
       final hwnd = FindWindow(nullptr, TEXT('photobooth'));
       if (hwnd != 0) {
-        // Restore window decorations
         SetWindowLongPtr(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
-        // Restore window size and position
         ShowWindow(hwnd, SW_RESTORE);
         _isFullscreen = false;
       }
     }
 
-    // Restore system UI when disposing
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -194,16 +208,16 @@ class SesiFotoState extends State<SesiFoto> {
   @override
   void initState() {
     super.initState();
-    // Load layouts immediately in initState
     _loadLayouts();
 
-    // Set the active preset to match the event's preset
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setActivePresetFromEvent();
+
+      final provider = Provider.of<SesiFotoProvider>(context, listen: false);
+      provider.addListener(_handleProviderChanges);
     });
   }
 
-  // New method to set the active preset based on the event's presetId
   void _setActivePresetFromEvent() {
     if (!mounted) return;
 
@@ -213,11 +227,9 @@ class SesiFotoState extends State<SesiFoto> {
     if (eventPresetId.isNotEmpty) {
       print('Setting active preset to match event preset ID: $eventPresetId');
 
-      // Check if the preset exists before setting it as active
       final presetExists = presetProvider.getPresetById(eventPresetId) != null;
 
       if (presetExists) {
-        // Set this preset as the active preset and also update the current event
         presetProvider.setActivePreset(
           eventPresetId,
           context: context,
@@ -230,18 +242,15 @@ class SesiFotoState extends State<SesiFoto> {
     }
   }
 
-  // Separate method to load layouts once
   Future<void> _loadLayouts() async {
     if (_layoutsLoaded) return;
 
-    // Get the provider
     final layoutsProvider = Provider.of<LayoutsProvider>(
       context,
       listen: false,
     );
 
     try {
-      // Show loading in the provider
       final sesiFotoProvider = Provider.of<SesiFotoProvider>(
         context,
         listen: false,
@@ -253,10 +262,8 @@ class SesiFotoState extends State<SesiFoto> {
         null,
       );
 
-      // Wait for layouts to load
       await layoutsProvider.loadLayouts();
 
-      // Clear loading if it was our loading message
       if (sesiFotoProvider.loadingMessage == 'Loading layouts...') {
         sesiFotoProvider.setLoading(false);
       }
@@ -279,45 +286,33 @@ class SesiFotoState extends State<SesiFoto> {
       listen: false,
     );
 
-    // Get layout without triggering FutureBuilder
     final layout = _layoutsLoaded ? widget.event.getLayout(context) : null;
 
     return Scaffold(
-      // AppBar removed here
       body: Stack(
         children: [
-          // Only build main content if layout is available
           if (layout != null)
             _buildKeyboardShortcuts(context, sesiFotoProvider, layout),
 
-          // Retake banner only if layout available and in retake mode
           if (sesiFotoProvider.retakePhotoIndex != null && layout != null)
             _buildRetakeBanner(sesiFotoProvider.retakePhotoIndex),
 
-          // Loading overlay - handles all loading states
           _buildLoadingOverlay(),
         ],
       ),
     );
   }
 
-  // This method is now removed as we don't use AppBar anymore
-  // AppBar _buildAppBar(...) {...}
-
-  // Helper method to build the action buttons that were in the AppBar
   Widget _buildActionButtons(
     SesiFotoProvider sesiFotoProvider,
     dynamic layout,
   ) {
     return Row(
-      // Change to space-between to put back button on the left and other actions on right
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Back button on the left
         IconButton(
           icon: const Icon(Icons.arrow_back, size: 18),
           onPressed: () {
-            // Exit fullscreen mode if active before navigating back
             if (_isFullscreen) {
               final hwnd = FindWindow(nullptr, TEXT('photobooth'));
               if (hwnd != 0) {
@@ -333,8 +328,6 @@ class SesiFotoState extends State<SesiFoto> {
           },
           tooltip: 'Back',
         ),
-
-        // Other buttons grouped on the right
         Row(
           children: [
             IconButton(
@@ -399,7 +392,6 @@ class SesiFotoState extends State<SesiFoto> {
   ) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        // Change to Enter key instead of F1
         const SingleActivator(LogicalKeyboardKey.enter): () {
           print('Taking picture');
           sesiFotoProvider.takePhoto(
@@ -433,15 +425,12 @@ class SesiFotoState extends State<SesiFoto> {
   ) {
     return Row(
       children: [
-        // Large screen capture preview (left section)
         Expanded(
-          flex: 4, // Changed from 2 to 4 for bigger preview
+          flex: 4,
           child: WindowCapturePreview(provider: sesiFotoProvider),
         ),
-
-        // Taken photos grid (right section) - made narrower
         SizedBox(
-          width: 245, // Changed from 300 to 250
+          width: 245,
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -452,7 +441,6 @@ class SesiFotoState extends State<SesiFoto> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Add the action buttons that were in the AppBar
                 _buildActionButtons(sesiFotoProvider, layout),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -464,14 +452,12 @@ class SesiFotoState extends State<SesiFoto> {
                     ),
                   ),
                 ),
-                // Add loading indicators at the top of the photo grid
                 if (sesiFotoProvider.compositeJobs.isNotEmpty ||
                     sesiFotoProvider.isLoading)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: _buildSidebarLoadingIndicator(sesiFotoProvider),
                   ),
-                // Existing photo grid
                 Expanded(child: _buildPhotoGrid(sesiFotoProvider, 1)),
               ],
             ),
@@ -488,15 +474,12 @@ class SesiFotoState extends State<SesiFoto> {
   ) {
     return Column(
       children: [
-        // Large screen capture preview (top section)
         Expanded(
-          flex: 4, // Changed from 2 to 4 for bigger preview
+          flex: 4,
           child: WindowCapturePreview(provider: sesiFotoProvider),
         ),
-
-        // Bottom section - made smaller
         Expanded(
-          flex: 1, // Added flex: 1 to make it smaller
+          flex: 1,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             decoration: BoxDecoration(
@@ -509,7 +492,6 @@ class SesiFotoState extends State<SesiFoto> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Add the title and event name
                 Padding(
                   padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
                   child: Text(
@@ -521,7 +503,6 @@ class SesiFotoState extends State<SesiFoto> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // Add the action buttons that were in the AppBar
                 _buildActionButtons(sesiFotoProvider, layout),
                 Padding(
                   padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
@@ -533,11 +514,9 @@ class SesiFotoState extends State<SesiFoto> {
                     ),
                   ),
                 ),
-                // Add loading indicators at the top of the photo grid
                 if (sesiFotoProvider.compositeJobs.isNotEmpty ||
                     sesiFotoProvider.isLoading)
                   _buildSidebarLoadingIndicator(sesiFotoProvider),
-                // Existing photo grid
                 Expanded(child: _buildPhotoGrid(sesiFotoProvider, 4)),
               ],
             ),
@@ -551,6 +530,8 @@ class SesiFotoState extends State<SesiFoto> {
     SesiFotoProvider sesiFotoProvider,
     int crossAxisCount,
   ) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
     return sesiFotoProvider.takenPhotos.isEmpty
         ? const Center(
           child: Text(
@@ -560,6 +541,7 @@ class SesiFotoState extends State<SesiFoto> {
           ),
         )
         : GridView.builder(
+          key: ValueKey('photo-grid-$timestamp'),
           padding: const EdgeInsets.all(16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
@@ -568,14 +550,34 @@ class SesiFotoState extends State<SesiFoto> {
           ),
           itemCount: sesiFotoProvider.takenPhotos.length,
           itemBuilder: (context, index) {
-            final photo = sesiFotoProvider.takenPhotos[index];
+            final photoPath = sesiFotoProvider.takenPhotos[index].path;
+            final photo = File(photoPath);
+
             return Card(
               clipBehavior: Clip.antiAlias,
               elevation: 3.0,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(photo, fit: BoxFit.cover),
+                  FutureBuilder<FileStat>(
+                    future: photo.stat(),
+                    builder: (context, snapshot) {
+                      final statInfo = snapshot.data?.toString() ?? '';
+                      return Image.file(
+                        photo,
+                        key: ValueKey('$photoPath-$timestamp-$statInfo'),
+                        fit: BoxFit.cover,
+                        cacheWidth: null,
+                        cacheHeight: null,
+                        errorBuilder: (context, error, stackTrace) {
+                          print('Error loading sidebar image: $error');
+                          return Center(
+                            child: Icon(Icons.broken_image, color: Colors.red),
+                          );
+                        },
+                      );
+                    },
+                  ),
                   Positioned(
                     top: 4,
                     right: 4,
@@ -590,6 +592,30 @@ class SesiFotoState extends State<SesiFoto> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap:
+                            () => sesiFotoProvider.setRetakePhotoIndex(index),
+                        child: Container(
+                          padding: const EdgeInsets.all(6.0),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.refresh,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
