@@ -15,7 +15,6 @@ import 'package:photobooth/services/image_processor.dart';
 import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
-// Import service
 import 'package:photobooth/services/screen_capture_service.dart';
 
 class CompositeJob {
@@ -317,7 +316,17 @@ class SesiFotoProvider with ChangeNotifier {
               // }
 
               // Start the composite generation
-              generateComposite(uploadFolder, eventName, layout, context);
+              Future.microtask(() {
+                Future.delayed(
+                  const Duration(milliseconds: 300),
+                  () => generateComposite(
+                    uploadFolder,
+                    eventName,
+                    layout,
+                    context,
+                  ),
+                );
+              });
             },
             onCancel: () {
               // Close the dialog without generating composite
@@ -402,8 +411,7 @@ class SesiFotoProvider with ChangeNotifier {
         progress: 0.1,
       );
 
-      // Process photos directly without nested compute calls
-      // This avoids BackgroundIsolateBinaryMessenger initialization issues
+      // Use the improved batchProcessImagesWithProgress method
       List<File> processedPhotos =
           await ImageProcessor.batchProcessImagesWithProgress(
             photosCopy,

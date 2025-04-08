@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:photobooth/models/preset_model.dart';
 import 'package:path/path.dart' as path;
+import 'package:photobooth/utils/isolate_helper.dart'; // Import the new helper
 
 class ImageProcessor {
   // Process an image with a preset and return the modified image
@@ -188,6 +189,60 @@ class ImageProcessor {
     }
   }
 
+  // Helper method for safely processing images in isolates
+  static Future<File?> processSingleImageInIsolate(
+    String imagePath,
+    PresetModel preset,
+  ) async {
+    try {
+      final imageFile = File(imagePath);
+      if (!await imageFile.exists()) {
+        print('Image file does not exist: $imagePath');
+        return null;
+      }
+
+      // Read the image
+      final bytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(bytes);
+
+      if (image == null) {
+        print('Failed to decode image: $imagePath');
+        return null;
+      }
+
+      // Process image here...
+      // Create a copy to modify
+      img.Image processedImage = img.copyResize(
+        image,
+        width: image.width,
+        height: image.height,
+      );
+
+      // Apply image processing operations...
+      // (Keep all the existing processing logic)
+
+      // Save the processed image to a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = path.basename(imagePath);
+      final outputPath = path.join(
+        tempDir.path,
+        'processed_${timestamp}_$filename',
+      );
+
+      final outputFile = File(outputPath);
+      await outputFile.writeAsBytes(
+        Uint8List.fromList(img.encodeJpg(processedImage)),
+      );
+
+      print('Successfully saved processed image to: ${outputFile.path}');
+      return outputFile;
+    } catch (e) {
+      print('Error processing image: $e');
+      return null;
+    }
+  }
+
   // New method to apply preset to multiple photos at once with better error handling
   static Future<List<File>> batchProcessImages(
     List<File> imageFiles,
@@ -237,31 +292,38 @@ class ImageProcessor {
       'Batch processing ${imageFiles.length} photos with preset: ${preset.name}',
     );
 
-    // Process images in smaller chunks to prevent UI freezing
+    // Process images individually to prevent isolate communication issues
     final results = <File>[];
     final totalImages = imageFiles.length;
 
-    // Process each image individually to avoid isolate issues
     for (int i = 0; i < totalImages; i++) {
       try {
         final imageFile = imageFiles[i];
         print('Processing image ${i + 1}/${totalImages}: ${imageFile.path}');
 
-        // Progress update
+        // Progress update at start of processing this image
         progressCallback?.call(
-          (i + 0.5) / totalImages,
+          (i) / totalImages,
           'Processing image ${i + 1}/${totalImages}',
         );
 
-        // Process the image directly without nested compute calls
-        // This is safer than nested compute calls that can cause isolate initialization issues
+        // Process the image
         File? processedFile;
         try {
-          processedFile = await processImage(imageFile, preset);
+          // Use proper isolate helper instead of compute
+          processedFile = await IsolateHelper.computeWithMessenger(
+            _processSingleImageIsolate,
+            {'imagePath': imageFile.path, 'preset': preset},
+          );
         } catch (e) {
-          print('Error processing image directly: $e');
-          // Fall back to using the original image
-          processedFile = null;
+          print('Error processing image: $e');
+          // Fall back to processing in main isolate if isolate fails
+          try {
+            processedFile = await processImage(imageFile, preset);
+          } catch (e) {
+            print('Error processing in main isolate: $e');
+            processedFile = null;
+          }
         }
 
         if (processedFile != null) {
@@ -272,14 +334,11 @@ class ImageProcessor {
           results.add(imageFile);
         }
 
-        // Update progress after completion
+        // Progress update after processing this image
         progressCallback?.call(
           (i + 1) / totalImages,
           'Completed image ${i + 1}/${totalImages}',
         );
-
-        // Add small delay to allow UI to update
-        await Future.delayed(const Duration(milliseconds: 50));
       } catch (e) {
         print('Error processing image ${i + 1}: $e');
         results.add(imageFiles[i]); // Use original on error
@@ -288,10 +347,183 @@ class ImageProcessor {
           'Error on image ${i + 1}',
         );
       }
+
+      // Add a small delay to allow UI updates
+      await Future.delayed(const Duration(milliseconds: 10));
     }
 
     print('Completed batch processing: ${results.length} images');
     return results;
+  }
+
+  // Static method for processing a single image in an isolate
+  static Future<File?> _processSingleImageIsolate(
+    Map<String, dynamic> params,
+  ) async {
+    try {
+      final String imagePath = params['imagePath'];
+      final PresetModel preset = params['preset'];
+
+      final imageFile = File(imagePath);
+      if (!await imageFile.exists()) {
+        print('Image file does not exist: $imagePath');
+        return null;
+      }
+
+      // Read the image
+      final bytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(bytes);
+
+      if (image == null) {
+        print('Failed to decode image: $imagePath');
+        return null;
+      }
+
+      // Create a copy to modify
+      img.Image processedImage = img.copyResize(
+        image,
+        width: image.width,
+        height: image.height,
+      );
+
+      // Apply image processing operations in the correct order:
+      // (Using the same processing operations as in the processImage method)
+
+      // 1. Apply temperature and tint (white balance)
+      if (preset.temperature != 0.0 || preset.tint != 0.0) {
+        processedImage = _adjustWhiteBalance(
+          processedImage,
+          preset.temperature,
+          preset.tint,
+        );
+      }
+
+      // 2. Apply exposure
+      if (preset.exposure != 0.0) {
+        processedImage = _adjustExposure(processedImage, preset.exposure);
+      }
+
+      // 3. Apply tone curve adjustments
+      processedImage = _applyToneCurves(processedImage, preset);
+
+      // 4. Apply blacks and whites
+      if (preset.blacks != 0.0 || preset.whites != 0.0) {
+        processedImage = _adjustBlacksWhites(
+          processedImage,
+          preset.blacks,
+          preset.whites,
+        );
+      }
+
+      // 5. Apply highlights and shadows
+      if (preset.highlights != 0.0 || preset.shadows != 0.0) {
+        processedImage = _adjustHighlightsShadows(
+          processedImage,
+          preset.highlights,
+          preset.shadows,
+        );
+      }
+
+      // 6. Apply color mixer adjustments
+      processedImage = _applyColorMixer(processedImage, preset);
+
+      // Apply Color Grading
+      if (preset.shadowsIntensity > 0 ||
+          preset.midtonesIntensity > 0 ||
+          preset.highlightsIntensity > 0) {
+        processedImage = _applyColorGrading(processedImage, preset);
+      }
+
+      // 7. Black and White (if enabled)
+      if (preset.blackAndWhite) {
+        processedImage = img.grayscale(processedImage);
+      }
+      // Otherwise apply saturation adjustment
+      else if (preset.saturation != 0) {
+        processedImage = _adjustSaturation(processedImage, preset.saturation);
+      }
+
+      // 8. Adjust brightness
+      if (preset.brightness != 0) {
+        processedImage = _adjustBrightness(processedImage, preset.brightness);
+      }
+
+      // 9. Adjust contrast
+      if (preset.contrast != 0) {
+        try {
+          processedImage = img.contrast(
+            processedImage,
+            contrast:
+                preset.contrast > 0
+                    ? 1.0 + preset.contrast
+                    : 1.0 / (1.0 - preset.contrast),
+          );
+        } catch (e) {
+          processedImage = _adjustContrast(processedImage, preset.contrast);
+        }
+      }
+
+      // Apply detail enhancements
+      if (preset.sharpness > 0 ||
+          preset.detail > 0 ||
+          preset.noiseReduction > 0) {
+        processedImage = _applyDetailEnhancements(
+          processedImage,
+          preset.sharpness,
+          preset.detail,
+          preset.noiseReduction,
+        );
+      }
+
+      // 10. Apply border if needed
+      if (preset.borderWidth > 0) {
+        final borderSize = preset.borderWidth.round();
+        final color = img.ColorRgb8(
+          preset.borderColor.red,
+          preset.borderColor.green,
+          preset.borderColor.blue,
+        );
+
+        // Create a new image with borders
+        final borderedImage = img.Image(
+          width: processedImage.width + borderSize * 2,
+          height: processedImage.height + borderSize * 2,
+        );
+
+        // Fill with border color
+        img.fill(borderedImage, color: color);
+
+        // Paste original image in the center
+        img.compositeImage(
+          borderedImage,
+          processedImage,
+          dstX: borderSize,
+          dstY: borderSize,
+        );
+
+        processedImage = borderedImage;
+      }
+
+      // Save the processed image to a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = path.basename(imagePath);
+      final outputPath = path.join(
+        tempDir.path,
+        'processed_${timestamp}_$filename',
+      );
+
+      final outputFile = File(outputPath);
+      await outputFile.writeAsBytes(
+        Uint8List.fromList(img.encodeJpg(processedImage)),
+      );
+
+      print('Successfully saved processed image to: ${outputFile.path}');
+      return outputFile;
+    } catch (e) {
+      print('Error processing image in isolate: $e');
+      return null;
+    }
   }
 
   // Optimized method for GIF creation that uses compute for better performance
@@ -309,8 +541,10 @@ class ImageProcessor {
 
       progressCallback?.call(0.1);
 
-      // Process images in parallel using compute with more granular progress updates
-      final framesResult = await compute((Map<String, dynamic> params) {
+      // Process images using our proper isolate helper
+      final framesResult = await IsolateHelper.computeWithMessenger((
+        Map<String, dynamic> params,
+      ) {
         final paths = params['imagePaths'] as List<String>;
         final frames = <img.Image>[];
 
@@ -344,8 +578,10 @@ class ImageProcessor {
 
       progressCallback?.call(0.6);
 
-      // Encode the GIF more efficiently
-      final gifResult = await compute((List<img.Image> frames) {
+      // Encode the GIF using our proper isolate helper
+      final gifResult = await IsolateHelper.computeWithMessenger((
+        List<img.Image> frames,
+      ) {
         final encoder = img.GifEncoder();
         encoder.repeat = 0; // Infinite loop
 

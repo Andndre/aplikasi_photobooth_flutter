@@ -190,24 +190,6 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                   },
                 ),
               ),
-
-              // Add a progress indicator at the bottom when processing
-              if (_isProcessing)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Processing images... Please wait.',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ),
         ),
