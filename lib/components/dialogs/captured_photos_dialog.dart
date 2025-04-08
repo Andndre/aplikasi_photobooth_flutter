@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class CapturedPhotosDialog extends StatefulWidget {
-  // Changed to StatefulWidget
   final List<File> photos;
   final Function(int) onRetake;
   final VoidCallback onConfirm;
@@ -23,28 +22,26 @@ class CapturedPhotosDialog extends StatefulWidget {
 
 class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
   bool _isProcessing = false;
+  // Add a random timestamp to ensure all images are refreshed on build
+  final String _buildTimestamp =
+      DateTime.now().millisecondsSinceEpoch.toString();
 
   void _handleConfirm() async {
-    // Prevent multiple clicks
     if (_isProcessing) return;
 
     setState(() {
       _isProcessing = true;
     });
 
-    // Call onConfirm asynchronously
     widget.onConfirm();
   }
 
   @override
   Widget build(BuildContext context) {
-    // WillPopScope wraps the Dialog to handle when user presses back button or clicks outside
     return WillPopScope(
       onWillPop: () async {
-        // Don't allow dismissing if processing
         if (_isProcessing) return false;
 
-        // Call onCancel when dialog is dismissed
         widget.onCancel();
         return true;
       },
@@ -52,17 +49,13 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
         focusNode: FocusNode(),
         autofocus: true,
         onKeyEvent: (keyEvent) {
-          // Don't process key events if processing
           if (_isProcessing) return;
 
-          // Check for Enter key press
           if (keyEvent is KeyDownEvent &&
               (keyEvent.logicalKey == LogicalKeyboardKey.enter ||
                   keyEvent.logicalKey == LogicalKeyboardKey.numpadEnter)) {
             _handleConfirm();
-          }
-          // Check for Escape key press
-          else if (keyEvent is KeyDownEvent &&
+          } else if (keyEvent is KeyDownEvent &&
               keyEvent.logicalKey == LogicalKeyboardKey.escape) {
             widget.onCancel();
           }
@@ -73,16 +66,13 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
             children: [
               AppBar(
                 title: const Text('Captured Photos'),
-                // Handle close button press with onCancel
                 leading: IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: _isProcessing ? null : widget.onCancel,
-                  // Disable button when processing
                 ),
                 actions: [
                   TextButton(
                     onPressed: _isProcessing ? null : widget.onCancel,
-                    // Disable button when processing
                     style: TextButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.error,
                     ),
@@ -90,7 +80,6 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                   ),
                   TextButton(
                     onPressed: _isProcessing ? null : _handleConfirm,
-                    // Disable button when processing
                     child:
                         _isProcessing
                             ? Row(
@@ -118,28 +107,49 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                     crossAxisCount: 3,
                     crossAxisSpacing: 10.0,
                     mainAxisSpacing: 10.0,
-                    childAspectRatio: 1.0, // Square grid cells
+                    childAspectRatio: 1.0,
                   ),
                   shrinkWrap: true,
                   itemCount: widget.photos.length,
                   itemBuilder: (context, index) {
+                    final photo = widget.photos[index];
+                    final imageKey = ValueKey(
+                      '${photo.path}?t=$_buildTimestamp-$index',
+                    );
+
                     return Card(
                       clipBehavior: Clip.antiAlias,
                       elevation: 3.0,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          // Use AspectRatio to maintain image aspect ratio
                           AspectRatio(
                             aspectRatio: 1.0,
-                            child: Image.file(
-                              widget.photos[index],
-                              fit:
-                                  BoxFit
-                                      .cover, // Cover the space while maintaining aspect ratio
+                            child: FutureBuilder(
+                              future: photo.lastModified(),
+                              builder: (context, snapshot) {
+                                final modTime =
+                                    snapshot.data?.millisecondsSinceEpoch ?? 0;
+                                return Image.file(
+                                  photo,
+                                  key: ValueKey(
+                                    '${photo.path}?t=$_buildTimestamp-$modTime',
+                                  ),
+                                  fit: BoxFit.cover,
+                                  cacheHeight: null,
+                                  cacheWidth: null,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Center(
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        color: Colors.red,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
                             ),
                           ),
-                          // Add a small badge with photo number
                           Positioned(
                             top: 4,
                             left: 4,
@@ -159,8 +169,7 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                               ),
                             ),
                           ),
-                          // Retake button as overlay - disabled when processing
-                          if (!_isProcessing) // Hide retake button during processing
+                          if (!_isProcessing)
                             Positioned(
                               right: 4,
                               bottom: 4,

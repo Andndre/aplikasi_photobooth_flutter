@@ -241,22 +241,59 @@ class SesiFotoProvider with ChangeNotifier {
           final oldPhoto = _takenPhotos[index];
           final oldPath = oldPhoto.path;
 
-          // Copy the new photo to replace the old one
-          newPhoto.copySync(oldPath);
-          _takenPhotos[index] = File(oldPath);
+          try {
+            // Make sure the old file is not locked
+            if (await oldPhoto.exists()) {
+              try {
+                await oldPhoto.delete();
+              } catch (e) {
+                print('Failed to delete old photo: $e');
+                // Continue anyway
+              }
+            }
 
-          // Reset retake index
-          _retakePhotoIndex = null;
+            // Copy the new photo to replace the old one
+            await newPhoto.copy(oldPath);
 
-          // Show captured photos dialog again - ensure context is valid
-          if (context.mounted) {
-            await _showCapturedPhotosDialog(
-              saveFolder,
-              uploadFolder,
-              eventName,
-              layout,
-              context,
-            );
+            // Explicitly recreate the file reference to avoid cache issues
+            _takenPhotos[index] = File(oldPath);
+
+            // Ensure the file exists and is readable
+            final newFile = _takenPhotos[index];
+            if (!await newFile.exists()) {
+              print('Warning: New file does not exist after copy: $oldPath');
+            } else {
+              // Force read to verify file is accessible
+              await newFile.readAsBytes();
+            }
+
+            // Reset retake index before showing the dialog
+            final savedRetakeIndex = _retakePhotoIndex;
+            _retakePhotoIndex = null;
+
+            // Force refresh all File references to clear any cache
+            for (int i = 0; i < _takenPhotos.length; i++) {
+              _takenPhotos[i] = File(_takenPhotos[i].path);
+            }
+
+            // Notify listeners before showing the dialog
+            notifyListeners();
+
+            // Show captured photos dialog again - ensure context is valid
+            if (context.mounted) {
+              await _showCapturedPhotosDialog(
+                saveFolder,
+                uploadFolder,
+                eventName,
+                layout,
+                context,
+              );
+            }
+          } catch (e) {
+            print('Error during photo retake: $e');
+            // If there was an error, reset retake index
+            _retakePhotoIndex = null;
+            notifyListeners();
           }
         } else {
           // Normal case - add the new photo
@@ -294,12 +331,29 @@ class SesiFotoProvider with ChangeNotifier {
   ) async {
     if (!context.mounted) return;
 
+    // Clear Flutter's image cache to force reload of all images
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+
+    // Force update with notifyListeners to ensure latest images are used in the dialog
+    notifyListeners();
+
+    // Add a small delay to ensure the UI refreshes
+    await Future.delayed(const Duration(milliseconds: 100));
+
     await showDialog(
       context: context,
       barrierDismissible: false, // The WillPopScope will handle dismissals
       builder:
           (dialogContext) => CapturedPhotosDialog(
-            photos: _takenPhotos,
+            // Use timestamp in key to guarantee fresh instance
+            key: ValueKey(
+              'captured-photos-${DateTime.now().millisecondsSinceEpoch}',
+            ),
+            photos:
+                _takenPhotos
+                    .map((file) => File(file.path))
+                    .toList(), // Force new File instances
             onRetake: (index) {
               // Set the retake index
               setRetakePhotoIndex(index);
@@ -309,11 +363,6 @@ class SesiFotoProvider with ChangeNotifier {
             onConfirm: () {
               // Close the dialog first
               Navigator.of(dialogContext).pop();
-
-              // Notify user that processing has started
-              // if (context.mounted) {
-              //   ProgressNotifier.showJobStartedNotification(context, eventName);
-              // }
 
               // Start the composite generation
               Future.microtask(() {
