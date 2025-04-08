@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CapturedPhotosDialog extends StatelessWidget {
   final List<File> photos;
@@ -24,110 +25,127 @@ class CapturedPhotosDialog extends StatelessWidget {
         onCancel();
         return true;
       },
-      child: Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: const Text('Captured Photos'),
-              // Handle close button press with onCancel
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: onCancel,
-              ),
-              actions: [
-                TextButton(
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        autofocus: true,
+        onKeyEvent: (keyEvent) {
+          // Check for Enter key press
+          if (keyEvent is KeyDownEvent &&
+              (keyEvent.logicalKey == LogicalKeyboardKey.enter ||
+                  keyEvent.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+            onConfirm();
+          }
+          // Check for Escape key press
+          else if (keyEvent is KeyDownEvent &&
+              keyEvent.logicalKey == LogicalKeyboardKey.escape) {
+            onCancel();
+          }
+        },
+        child: Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                title: const Text('Captured Photos'),
+                // Handle close button press with onCancel
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
                   onPressed: onCancel,
-                  style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                  child: const Text('Cancel'),
                 ),
-                TextButton(
-                  onPressed: onConfirm,
-                  child: const Text('Confirm & Generate'),
-                ),
-              ],
-            ),
-            Flexible(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(12.0),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 10.0,
-                  mainAxisSpacing: 10.0,
-                  childAspectRatio: 1.0, // Square grid cells
-                ),
-                shrinkWrap: true,
-                itemCount: photos.length,
-                itemBuilder: (context, index) {
-                  return Card(
-                    clipBehavior: Clip.antiAlias,
-                    elevation: 3.0,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // Use AspectRatio to maintain image aspect ratio
-                        AspectRatio(
-                          aspectRatio: 1.0,
-                          child: Image.file(
-                            photos[index],
-                            fit:
-                                BoxFit
-                                    .cover, // Cover the space while maintaining aspect ratio
-                          ),
-                        ),
-                        // Add a small badge with photo number
-                        Positioned(
-                          top: 4,
-                          left: 4,
-                          child: Container(
-                            padding: const EdgeInsets.all(4.0),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${index + 1}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Retake button as overlay
-                        Positioned(
-                          right: 4,
-                          bottom: 4,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () => onRetake(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(6.0),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Icon(
-                                  Icons.refresh,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                actions: [
+                  TextButton(
+                    onPressed: onCancel,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
                     ),
-                  );
-                },
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: onConfirm,
+                    child: const Text('Confirm & Generate'),
+                  ),
+                ],
               ),
-            ),
-          ],
+              Flexible(
+                child: GridView.builder(
+                  padding: const EdgeInsets.all(12.0),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 10.0,
+                    mainAxisSpacing: 10.0,
+                    childAspectRatio: 1.0, // Square grid cells
+                  ),
+                  shrinkWrap: true,
+                  itemCount: photos.length,
+                  itemBuilder: (context, index) {
+                    return Card(
+                      clipBehavior: Clip.antiAlias,
+                      elevation: 3.0,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Use AspectRatio to maintain image aspect ratio
+                          AspectRatio(
+                            aspectRatio: 1.0,
+                            child: Image.file(
+                              photos[index],
+                              fit:
+                                  BoxFit
+                                      .cover, // Cover the space while maintaining aspect ratio
+                            ),
+                          ),
+                          // Add a small badge with photo number
+                          Positioned(
+                            top: 4,
+                            left: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4.0),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Retake button as overlay
+                          Positioned(
+                            right: 4,
+                            bottom: 4,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => onRetake(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6.0),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(
+                                    Icons.refresh,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
