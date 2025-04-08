@@ -49,72 +49,127 @@ class SesiFotoState extends State<SesiFoto> {
     }
   }
 
-  Widget _buildLoadingOverlay() {
-    final provider = Provider.of<SesiFotoProvider>(context);
+  // New function to build the loading indicators in the sidebar
+  Widget _buildSidebarLoadingIndicator(SesiFotoProvider provider) {
+    if (provider.compositeJobs.isEmpty && !provider.isLoading) {
+      return const SizedBox.shrink();
+    }
 
-    if (!provider.isLoading) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (provider.isLoading) _buildGeneralLoadingIndicator(provider),
 
-    return AnimatedOpacity(
-      opacity: provider.isLoading ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 200),
-      child: Material(
-        type: MaterialType.transparency,
-        child: Container(
-          color: Colors.black54,
-          alignment: Alignment.center,
-          child: Card(
-            elevation: 8,
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
+        // Build composite job indicators
+        ...provider.compositeJobs.map(
+          (job) => _buildCompositeJobIndicator(job),
+        ),
+      ],
+    );
+  }
+
+  // For general loading tasks (not composite related)
+  Widget _buildGeneralLoadingIndicator(SesiFotoProvider provider) {
+    return Card(
+      margin: const EdgeInsets.all(8.0),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  provider.progressValue != null
-                      ? Column(
-                        children: [
-                          SizedBox(
-                            width: 300,
-                            child: LinearProgressIndicator(
-                              value: provider.progressValue,
-                              minHeight: 8,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "${(provider.progressValue! * 100).toInt()}%",
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        ],
-                      )
-                      : const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: CircularProgressIndicator(strokeWidth: 4),
-                      ),
-                  const SizedBox(height: 16),
                   Text(
                     provider.loadingMessage,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   if (provider.subMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        provider.subMessage,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
+                    Text(
+                      provider.subMessage,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
                     ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  // For composite job indicators
+  Widget _buildCompositeJobIndicator(CompositeJob job) {
+    Color statusColor =
+        job.hasError
+            ? Colors.red
+            : job.isComplete
+            ? Colors.green
+            : Colors.blue;
+
+    return Card(
+      margin: const EdgeInsets.all(8.0),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  job.hasError
+                      ? Icons.error
+                      : job.isComplete
+                      ? Icons.check_circle
+                      : Icons.hourglass_top,
+                  color: statusColor,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Processing '${job.eventName}'",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (job.progressValue != null)
+              LinearProgressIndicator(
+                value: job.progressValue,
+                minHeight: 4,
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              job.message,
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              job.subMessage,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return const SizedBox.shrink(); // No longer used
   }
 
   @override
@@ -405,6 +460,14 @@ class SesiFotoState extends State<SesiFoto> {
                     ),
                   ),
                 ),
+                // Add loading indicators at the top of the photo grid
+                if (sesiFotoProvider.compositeJobs.isNotEmpty ||
+                    sesiFotoProvider.isLoading)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: _buildSidebarLoadingIndicator(sesiFotoProvider),
+                  ),
+                // Existing photo grid
                 Expanded(child: _buildPhotoGrid(sesiFotoProvider, 1)),
               ],
             ),
@@ -466,6 +529,11 @@ class SesiFotoState extends State<SesiFoto> {
                     ),
                   ),
                 ),
+                // Add loading indicators at the top of the photo grid
+                if (sesiFotoProvider.compositeJobs.isNotEmpty ||
+                    sesiFotoProvider.isLoading)
+                  _buildSidebarLoadingIndicator(sesiFotoProvider),
+                // Existing photo grid
                 Expanded(child: _buildPhotoGrid(sesiFotoProvider, 4)),
               ],
             ),
