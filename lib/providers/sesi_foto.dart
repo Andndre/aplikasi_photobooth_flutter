@@ -569,18 +569,6 @@ class SesiFotoProvider with ChangeNotifier {
       // Wait a moment before showing the dialog
       await Future.delayed(const Duration(seconds: 1));
 
-      // Show the composite images dialog - ensure context is valid
-      // if (context.mounted) {
-      //   await showDialog(
-      //     context: context,
-      //     builder:
-      //         (dialogContext) => CompositeImagesDialog(
-      //           eventName: eventName,
-      //           uploadFolder: uploadFolder,
-      //         ),
-      //   );
-      // }
-
       // Remove job from list after a delay
       await Future.delayed(const Duration(seconds: 10));
       _compositeJobs.remove(newJob);
