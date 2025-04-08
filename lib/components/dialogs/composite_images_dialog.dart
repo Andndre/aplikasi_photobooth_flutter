@@ -134,7 +134,8 @@ class _CompositeImagesDialogState extends State<CompositeImagesDialog> {
                 actions: [
                   PopupMenuButton<SortOrder>(
                     icon: const Icon(Icons.sort),
-                    onSelected: provider.setSortOrder,
+                    onSelected:
+                        (order) => provider.setSortOrder(order), // Fixed
                     itemBuilder:
                         (context) => [
                           const PopupMenuItem(

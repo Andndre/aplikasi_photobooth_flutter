@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:photobooth/models/event_model.dart';
 import 'package:photobooth/models/preset_model.dart';
+import 'package:photobooth/providers/event_provider.dart';
 import 'package:photobooth/providers/preset_provider.dart';
+import 'package:provider/provider.dart';
 
 class PresetInfoSection extends StatelessWidget {
   final PresetModel preset;
@@ -8,6 +11,8 @@ class PresetInfoSection extends StatelessWidget {
   final PresetProvider presetProvider;
   final Function(PresetModel) onPresetUpdated;
   final Function() pickSampleImage;
+  final String? currentEventId; // Parameter for current event ID
+  final Function(String) onSetAsActiveForEvent; // Required callback
 
   const PresetInfoSection({
     super.key,
@@ -16,10 +21,26 @@ class PresetInfoSection extends StatelessWidget {
     required this.presetProvider,
     required this.onPresetUpdated,
     required this.pickSampleImage,
+    this.currentEventId,
+    required this.onSetAsActiveForEvent, // Make this required
   });
 
   @override
   Widget build(BuildContext context) {
+    // Get the current event from context if possible
+    EventModel? currentEvent;
+    if (currentEventId != null) {
+      try {
+        final eventsProvider = Provider.of<EventsProvider>(
+          context,
+          listen: false,
+        );
+        currentEvent = eventsProvider.getEventById(currentEventId!);
+      } catch (e) {
+        // Silently ignore if we can't get the event
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -35,17 +56,32 @@ class PresetInfoSection extends StatelessWidget {
               ),
             ),
             if (!isEditing)
+              // Single button that both sets as active and applies to current event
               IconButton(
                 icon: const Icon(Icons.check_circle),
-                tooltip: 'Set as Active',
+                tooltip: 'Set as Active Preset',
                 onPressed: () {
-                  presetProvider.setActivePreset(preset.id);
+                  // Set as active in PresetProvider, passing current event if available
+                  presetProvider.setActivePreset(
+                    preset.id,
+                    context: context,
+                    currentEvent: currentEvent,
+                  );
+
+                  // Show feedback to user
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('${preset.name} set as active preset'),
+                      content: Text(
+                        '${preset.name} set as active preset${currentEvent != null ? ' for ${currentEvent.name}' : ''}',
+                      ),
                       duration: const Duration(seconds: 2),
                     ),
                   );
+
+                  // Also call the traditional callback if available
+                  if (currentEvent != null) {
+                    onSetAsActiveForEvent(preset.id);
+                  }
                 },
               ),
           ],

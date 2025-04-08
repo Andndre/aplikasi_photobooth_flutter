@@ -11,8 +11,8 @@ class Renderer {
   static Future<File?> exportLayoutWithImages({
     required LayoutModel layout,
     required String exportPath,
-    required double resolutionMultiplier,
     required List<String> filePaths,
+    double resolutionMultiplier = 1.0,
   }) async {
     if (layout.allCameraElements.length != filePaths.length) {
       throw Exception(

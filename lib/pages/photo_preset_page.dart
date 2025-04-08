@@ -643,7 +643,7 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     );
   }
 
-  // Add a new method to set the preset as active for the current event
+  // Update method to set preset active for the current event
   void _setPresetActiveForEvent(BuildContext context, String presetId) async {
     if (currentEventId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -656,51 +656,48 @@ class _PhotoPresetPageState extends State<PhotoPresetPage> {
     }
 
     try {
-      // Get the events provider
+      // Get providers
       final eventsProvider = Provider.of<EventsProvider>(
         context,
         listen: false,
       );
-
-      // First, set active preset in the preset provider
       final presetProvider = Provider.of<PresetProvider>(
         context,
         listen: false,
       );
+
+      // 1. Set active preset in the preset provider
       await presetProvider.setActivePreset(presetId);
 
-      // Find the current event - this might come from route arguments or provider
-      EventModel? event =
-          ModalRoute.of(context)?.settings.arguments is Map<String, dynamic>
-              ? (ModalRoute.of(context)?.settings.arguments
-                  as Map<String, dynamic>)['event']
-              : null;
+      // 2. Get the current event - look it up from the provider
+      EventModel? event = eventsProvider.getEventById(currentEventId!);
 
-      // If we don't have the event from arguments, look it up
+      // 3. If not found by ID, try looking up by name
       if (event == null) {
-        try {
-          event = eventsProvider.events.firstWhere(
-            (e) => e.id == currentEventId || e.name == currentEventId,
-          );
-        } catch (e) {
-          throw Exception('Event not found: $currentEventId');
-        }
+        event = eventsProvider.events.firstWhere(
+          (e) => e.name == currentEventId,
+          orElse: () => throw Exception('Event not found: $currentEventId'),
+        );
       }
 
-      // Update the event's preset ID
-      event.updatePresetId(presetId);
+      // 4. Update the event's presetId
+      if (event != null) {
+        event.updatePresetId(presetId);
 
-      // Save the changes to storage
-      await eventsProvider.saveEvents();
+        // 5. Save the changes to SharedPreferences
+        await eventsProvider.saveEvents();
 
-      // Show confirmation
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Preset set as active and saved to event'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // 6. Show confirmation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Preset set as active for "${event.name}" event'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Event not found: $currentEventId');
       }
     } catch (e) {
       print('Error setting preset for event: $e');

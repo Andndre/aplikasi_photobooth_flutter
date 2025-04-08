@@ -19,9 +19,8 @@ class SettingsPanel extends StatelessWidget {
   final String? eventId;
   final Map<String, double?> tempValues;
   final Function() onCancel;
-  // Add new callback for setting preset active for current event
-  final Function(String)? onSetAsActiveForEvent;
   final String? currentEventId;
+  final Function(String) onSetAsActiveForEvent;
 
   // Parameters for updating sliders - Basic
   final Function(double) updateBrightness;
@@ -73,10 +72,10 @@ class SettingsPanel extends StatelessWidget {
     required this.onUpdatePreview,
     required this.onPickColor,
     this.eventId,
-    this.currentEventId,
-    this.onSetAsActiveForEvent,
     required this.tempValues,
     required this.onCancel,
+    required this.currentEventId,
+    required this.onSetAsActiveForEvent,
     required this.updateBrightness,
     required this.updateContrast,
     required this.updateSaturation,
@@ -132,6 +131,9 @@ class SettingsPanel extends StatelessWidget {
               presetProvider: presetProvider,
               onPresetUpdated: onPresetUpdated,
               pickSampleImage: pickSampleImage,
+              // Pass the new parameters
+              currentEventId: currentEventId,
+              onSetAsActiveForEvent: onSetAsActiveForEvent,
             ),
 
             // Basic Section (White Balance, Tone, Presence)

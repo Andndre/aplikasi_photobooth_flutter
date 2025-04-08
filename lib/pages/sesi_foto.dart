@@ -217,8 +217,12 @@ class SesiFotoState extends State<SesiFoto> {
       final presetExists = presetProvider.getPresetById(eventPresetId) != null;
 
       if (presetExists) {
-        // Set this preset as the active preset
-        presetProvider.setActivePreset(eventPresetId);
+        // Set this preset as the active preset and also update the current event
+        presetProvider.setActivePreset(
+          eventPresetId,
+          context: context,
+          currentEvent: widget.event,
+        );
         print('Successfully set active preset to: $eventPresetId');
       } else {
         print('Event preset ID $eventPresetId not found in saved presets');

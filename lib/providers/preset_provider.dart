@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:photobooth/providers/event_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:photobooth/models/preset_model.dart';
@@ -231,8 +233,12 @@ class PresetProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Set the active preset and optionally update the current event
-  Future<void> setActivePreset(String id) async {
+  // Set the active preset and also update the current event
+  Future<void> setActivePreset(
+    String id, {
+    BuildContext? context,
+    EventModel? currentEvent,
+  }) async {
     print('Setting active preset ID to: $id');
     _activePresetId = id;
 
@@ -240,6 +246,26 @@ class PresetProvider with ChangeNotifier {
     final preset = getPresetById(id);
     if (preset != null) {
       print('Successfully activated preset: ${preset.name} (ID: $id)');
+
+      // Apply this preset to current event if provided
+      if (currentEvent != null) {
+        print('Applying preset to event: ${currentEvent.name}');
+        currentEvent.updatePresetId(id);
+
+        // Save the event changes if context is provided
+        if (context != null) {
+          try {
+            final eventProvider = Provider.of<EventsProvider>(
+              context,
+              listen: false,
+            );
+            await eventProvider.saveEvents();
+            print('Updated and saved event with new preset ID: $id');
+          } catch (e) {
+            print('Error saving event with updated preset: $e');
+          }
+        }
+      }
     } else {
       print(
         'Warning: Activating preset with ID $id that was not found in saved presets',
@@ -252,7 +278,7 @@ class PresetProvider with ChangeNotifier {
 
   // Add a new method to get the actual preset by ID without falling back to the default
   PresetModel? getPresetById(String id) {
-    if (id == null || id.isEmpty) {
+    if (id.isEmpty) {
       print('Warning: Attempted to get preset with null or empty ID');
       return null;
     }

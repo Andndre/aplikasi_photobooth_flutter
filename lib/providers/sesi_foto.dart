@@ -5,7 +5,6 @@ import 'package:collection/collection.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:photobooth/components/dialogs/composite_images_dialog.dart';
 import 'package:photobooth/components/dialogs/captured_photos_dialog.dart';
 import 'package:photobooth/models/layout_model.dart';
 import 'package:photobooth/models/preset_model.dart';
@@ -88,19 +87,6 @@ class SesiFotoProvider with ChangeNotifier {
   bool get hasActiveCompositeJobs =>
       _compositeJobs.any((job) => !job.isComplete);
 
-  void _setLoading(
-    bool isLoading, [
-    String message = '',
-    String subMessage = '',
-    double? progress,
-  ]) {
-    _isLoading = isLoading;
-    _loadingMessage = message;
-    _subMessage = subMessage;
-    _progressValue = progress;
-    notifyListeners();
-  }
-
   // Make this public to allow showing loading state from any component
   void setLoading(
     bool isLoading, [
@@ -156,7 +142,7 @@ class SesiFotoProvider with ChangeNotifier {
     // If already counting down, don't start another countdown
     if (_isCountingDown) return;
 
-    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('WhatsApp'));
+    final hwnd = FindWindowEx(0, 0, nullptr, TEXT('Remote'));
     if (hwnd == 0) {
       showDialog(
         context: context,
@@ -321,10 +307,17 @@ class SesiFotoProvider with ChangeNotifier {
               // Close the dialog using the dialog's context
               Navigator.of(dialogContext).pop();
             },
-            onConfirm: () async {
-              // Close the dialog using the dialog's context
+            onConfirm: () {
+              // Close the dialog first
               Navigator.of(dialogContext).pop();
-              await generateComposite(uploadFolder, eventName, layout, context);
+
+              // Notify user that processing has started
+              // if (context.mounted) {
+              //   ProgressNotifier.showJobStartedNotification(context, eventName);
+              // }
+
+              // Start the composite generation
+              generateComposite(uploadFolder, eventName, layout, context);
             },
             onCancel: () {
               // Close the dialog without generating composite
@@ -352,21 +345,80 @@ class SesiFotoProvider with ChangeNotifier {
     _compositeJobs.insert(0, newJob); // Add to the beginning of the list
     notifyListeners();
 
-    // Continue with the existing implementation, but update the job instead
-    // of calling _setLoading
-
     assert(uploadFolder.isNotEmpty, 'Upload folder is empty');
     assert(eventName.isNotEmpty, 'Event name is empty');
 
     // Start processing
     try {
-      // Copy original photos for processing
+      // Copy original photos for processing - do this immediately to free up takenPhotos
       final List<File> photosCopy = List.from(_takenPhotos);
 
       // Clear taken photos to allow a new session to start immediately
       _clearTakenPhotos();
 
-      // Process as before, but with job updates
+      _updateCompositeJob(
+        newJob,
+        message: 'Processing photos with preset...',
+        subMessage: 'Preparing...',
+        progress: 0.05,
+      );
+
+      if (!context.mounted) return;
+      final eventProvider = Provider.of<EventsProvider>(context, listen: false);
+      final presetProvider = Provider.of<PresetProvider>(
+        context,
+        listen: false,
+      );
+
+      // Get the active preset from PresetProvider
+      final activePreset = presetProvider.activePreset;
+      final event = eventProvider.events.firstWhereOrNull(
+        (e) => e.name == eventName,
+      );
+
+      // Use the active preset and update it to the event
+      PresetModel? eventPreset = activePreset;
+
+      // If we have an event and the active preset isn't default, update the event's preset ID
+      if (event != null &&
+          activePreset != null &&
+          activePreset.id != 'default') {
+        // Update the event to use the active preset
+        event.updatePresetId(activePreset.id);
+        // Save this change to SharedPreferences
+        await eventProvider.saveEvents();
+        print(
+          'Updated event ${event.name} to use preset ${activePreset.name} (ID: ${activePreset.id})',
+        );
+      }
+
+      // Final fallback to default preset
+      eventPreset ??= PresetModel.defaultPreset();
+
+      _updateCompositeJob(
+        newJob,
+        message: 'Applying preset "${eventPreset.name}"',
+        subMessage: 'Processing photos...',
+        progress: 0.1,
+      );
+
+      // Process photos directly without nested compute calls
+      // This avoids BackgroundIsolateBinaryMessenger initialization issues
+      List<File> processedPhotos =
+          await ImageProcessor.batchProcessImagesWithProgress(
+            photosCopy,
+            eventPreset,
+            (progress, message) {
+              _updateCompositeJob(
+                newJob,
+                message: 'Processing photos',
+                subMessage: message,
+                progress: 0.1 + (progress * 0.4), // Scale progress to 10-50%
+              );
+            },
+          );
+
+      // Find existing files to determine next index
       final existingFiles =
           Directory(uploadFolder).listSync().whereType<File>().toList();
       int maxCompositeIndex = 0;
@@ -398,68 +450,11 @@ class SesiFotoProvider with ChangeNotifier {
         'Luminara_${eventName}_${maxCompositeIndex + 2}_gif.gif',
       );
 
+      // Save individual processed photos
       _updateCompositeJob(
         newJob,
-        message: 'Processing photos with preset...',
-        subMessage: 'Preparing...',
-        progress: 0.05,
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      // ...existing code for getting event and preset...
-      final eventProvider = Provider.of<EventsProvider>(context, listen: false);
-      final event = eventProvider.events.firstWhereOrNull(
-        (e) => e.name == eventName,
-      );
-
-      // ...existing preset handling code...
-      PresetModel? eventPreset;
-      final presetProvider = Provider.of<PresetProvider>(
-        context,
-        listen: false,
-      );
-
-      // ...rest of existing preset lookup logic...
-
-      // Once we have the preset, continue with photo processing
-      if (event != null && event.presetId.isNotEmpty) {
-        // Existing preset lookup code...
-        // All the logic to determine the correct preset to use
-      } else {
-        // No event or no preset ID, use active preset directly from provider
-        eventPreset = presetProvider.activePreset;
-      }
-
-      // Final fallback to default preset
-      eventPreset ??= PresetModel.defaultPreset();
-
-      _updateCompositeJob(
-        newJob,
-        message: 'Applying preset "${eventPreset.name}"',
-        subMessage: 'Processing photos in parallel...',
-        progress: 0.1,
-      );
-
-      // Process photos in parallel with progress tracking
-      List<File> processedPhotos =
-          await ImageProcessor.batchProcessImagesWithProgress(
-            photosCopy,
-            eventPreset,
-            (progress, message) {
-              _updateCompositeJob(
-                newJob,
-                message: 'Applying preset "${eventPreset?.name}"',
-                subMessage: message,
-                progress: progress * 0.6,
-              );
-            },
-          );
-
-      // Continue with saving individual photos
-      _updateCompositeJob(
-        newJob,
-        message: 'Saving individual processed photos',
-        subMessage: 'Copying files...',
+        message: 'Photos processed successfully',
+        subMessage: 'Saving individual photos...',
         progress: 0.5,
       );
 
@@ -485,7 +480,7 @@ class SesiFotoProvider with ChangeNotifier {
         );
       }
 
-      // First start the GIF generation process which takes longer
+      // Start GIF creation
       _updateCompositeJob(
         newJob,
         message: 'Creating composite images',
@@ -507,7 +502,7 @@ class SesiFotoProvider with ChangeNotifier {
         },
       );
 
-      // Now create the composite image
+      // Create the composite image
       _updateCompositeJob(
         newJob,
         message: 'Creating composite image',
@@ -515,13 +510,18 @@ class SesiFotoProvider with ChangeNotifier {
         progress: 0.8,
       );
 
-      // Export the composite image using processed photos
-      final exportedFile = await Renderer.exportLayoutWithImages(
-        layout: layout,
-        exportPath: compositeImagePath,
-        filePaths: processedPhotos.map((file) => file.path).toList(),
-        resolutionMultiplier: 1,
-      );
+      // Use a single compute call here, not nested inside another compute
+      File? exportedFile;
+      try {
+        exportedFile = await Renderer.exportLayoutWithImages(
+          layout: layout,
+          exportPath: compositeImagePath,
+          filePaths: processedPhotos.map((file) => file.path).toList(),
+          resolutionMultiplier: 1,
+        );
+      } catch (e) {
+        print('Error creating composite: $e');
+      }
 
       if (exportedFile != null) {
         _updateCompositeJob(
@@ -546,6 +546,7 @@ class SesiFotoProvider with ChangeNotifier {
         subMessage: 'Please wait...',
         progress: 0.95,
       );
+
       final gifFile = await gifFuture;
 
       if (gifFile != null) {
@@ -556,6 +557,10 @@ class SesiFotoProvider with ChangeNotifier {
           progress: 1.0,
           isComplete: true,
         );
+        // Notify user of successful completion
+        // if (context.mounted) {
+        //   ProgressNotifier.showJobCompletedNotification(context, newJob);
+        // }
       } else {
         _updateCompositeJob(
           newJob,
@@ -564,6 +569,11 @@ class SesiFotoProvider with ChangeNotifier {
           progress: 1.0,
           isComplete: true,
         );
+
+        // Notify user of completion with warnings
+        // if (context.mounted) {
+        //   ProgressNotifier.showJobCompletedNotification(context, newJob);
+        // }
       }
 
       // Wait a moment before showing the dialog
@@ -584,6 +594,11 @@ class SesiFotoProvider with ChangeNotifier {
         hasError: true,
         errorMessage: e.toString(),
       );
+
+      // Notify user of error
+      // if (context.mounted) {
+      //   ProgressNotifier.showJobCompletedNotification(context, newJob);
+      // }
 
       // Keep error jobs visible longer
       await Future.delayed(const Duration(seconds: 30));
@@ -664,54 +679,59 @@ class SesiFotoProvider with ChangeNotifier {
     }
   }
 
-  // Helper method to update state and notify listeners
   void setState(VoidCallback fn) {
     fn();
     notifyListeners();
   }
 
   // Improved GIF creation method with proper awaits
-  Future<void> _createSimpleGif({
-    required List<String> images,
-    required String outputPath,
-  }) async {
-    _setLoading(true, 'Creating GIF animation', 'Processing images...', null);
+  // Future<void> _createSimpleGif({
+  //   required List<String> images,
+  //   required String outputPath,
+  // }) async {
+  //   _setLoading(true, 'Creating GIF animation', 'Processing images...', null);
 
-    // Ensure we await the result
-    final result = await ImageProcessor.createOptimizedGif(
-      images: images,
-      outputPath: outputPath,
-      progressCallback: (progress) {
-        _setLoading(
-          true,
-          'Creating GIF animation',
-          'Processing: ${(progress * 100).toInt()}%',
-          progress,
-        );
-      },
-    );
+  //   // Ensure we await the result
+  //   final result = await ImageProcessor.createOptimizedGif(
+  //     images: images,
+  //     outputPath: outputPath,
+  //     progressCallback: (progress) {
+  //       _setLoading(
+  //         true,
+  //         'Creating GIF animation',
+  //         'Processing: ${(progress * 100).toInt()}%',
+  //         progress,
+  //       );
+  //     },
+  //   );
 
-    if (result != null) {
-      _setLoading(
-        true,
-        'GIF Created Successfully',
-        'File saved to: $outputPath',
-        1.0,
-      );
-      await Future.delayed(const Duration(milliseconds: 500));
-    } else {
-      _setLoading(
-        true,
-        'GIF Creation Failed',
-        'Could not create animation',
-        null,
-      );
-      await Future.delayed(const Duration(seconds: 1));
-    }
-  }
+  //   if (result != null) {
+  //     _setLoading(
+  //       true,
+  //       'GIF Created Successfully',
+  //       'File saved to: $outputPath',
+  //       1.0,
+  //     );
+  //     await Future.delayed(const Duration(milliseconds: 500));
+  //   } else {
+  //     _setLoading(
+  //       true,
+  //       'GIF Creation Failed',
+  //       'Could not create animation',
+  //       null,
+  //     );
+  //     await Future.delayed(const Duration(seconds: 1));
+  //   }
+  // }
 
-  void _clearTakenPhotos() {
+  // Make this public so it can be called from outside
+  void clearTakenPhotos() {
     _takenPhotos.clear();
     notifyListeners();
+  }
+
+  // Keep _clearTakenPhotos as an alias for compatibility
+  void _clearTakenPhotos() {
+    clearTakenPhotos();
   }
 }

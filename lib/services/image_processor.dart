@@ -237,22 +237,33 @@ class ImageProcessor {
       'Batch processing ${imageFiles.length} photos with preset: ${preset.name}',
     );
 
+    // Process images in smaller chunks to prevent UI freezing
     final results = <File>[];
-    for (int i = 0; i < imageFiles.length; i++) {
+    final totalImages = imageFiles.length;
+
+    // Process each image individually to avoid isolate issues
+    for (int i = 0; i < totalImages; i++) {
       try {
         final imageFile = imageFiles[i];
-        print(
-          'Processing image ${i + 1}/${imageFiles.length}: ${imageFile.path}',
-        );
+        print('Processing image ${i + 1}/${totalImages}: ${imageFile.path}');
 
         // Progress update
-        final progress = (i + 0.5) / imageFiles.length;
         progressCallback?.call(
-          progress,
-          'Processing image ${i + 1}/${imageFiles.length}',
+          (i + 0.5) / totalImages,
+          'Processing image ${i + 1}/${totalImages}',
         );
 
-        final processedFile = await processImage(imageFile, preset);
+        // Process the image directly without nested compute calls
+        // This is safer than nested compute calls that can cause isolate initialization issues
+        File? processedFile;
+        try {
+          processedFile = await processImage(imageFile, preset);
+        } catch (e) {
+          print('Error processing image directly: $e');
+          // Fall back to using the original image
+          processedFile = null;
+        }
+
         if (processedFile != null) {
           results.add(processedFile);
           print('Successfully processed image ${i + 1}');
@@ -263,14 +274,17 @@ class ImageProcessor {
 
         // Update progress after completion
         progressCallback?.call(
-          (i + 1) / imageFiles.length,
-          'Completed image ${i + 1}/${imageFiles.length}',
+          (i + 1) / totalImages,
+          'Completed image ${i + 1}/${totalImages}',
         );
+
+        // Add small delay to allow UI to update
+        await Future.delayed(const Duration(milliseconds: 50));
       } catch (e) {
         print('Error processing image ${i + 1}: $e');
         results.add(imageFiles[i]); // Use original on error
         progressCallback?.call(
-          (i + 1) / imageFiles.length,
+          (i + 1) / totalImages,
           'Error on image ${i + 1}',
         );
       }
