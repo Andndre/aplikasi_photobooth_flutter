@@ -412,17 +412,17 @@ class WindowCapturePreviewState extends State<WindowCapturePreview>
             if (isCountingDown)
               Center(
                 child: Container(
-                  width: 120,
-                  height: 120,
+                  width: 150,
+                  height: 150,
                   decoration: BoxDecoration(
                     color: Colors.black54,
-                    borderRadius: BorderRadius.circular(60),
+                    borderRadius: BorderRadius.circular(200),
                   ),
                   child: Center(
                     child: Text(
                       countdownValue.toString(),
                       style: const TextStyle(
-                        fontSize: 64,
+                        fontSize: 100,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),

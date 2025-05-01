@@ -22,7 +22,6 @@ class CapturedPhotosDialog extends StatefulWidget {
 
 class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
   bool _isProcessing = false;
-  // Add a random timestamp to ensure all images are refreshed on build
   final String _buildTimestamp =
       DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -104,7 +103,7 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                 child: GridView.builder(
                   padding: const EdgeInsets.all(12.0),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
+                    crossAxisCount: 2,
                     crossAxisSpacing: 10.0,
                     mainAxisSpacing: 10.0,
                     childAspectRatio: 1.0,
@@ -113,9 +112,6 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                   itemCount: widget.photos.length,
                   itemBuilder: (context, index) {
                     final photo = widget.photos[index];
-                    final imageKey = ValueKey(
-                      '${photo.path}?t=$_buildTimestamp-$index',
-                    );
 
                     return Card(
                       clipBehavior: Clip.antiAlias,
@@ -123,32 +119,29 @@ class _CapturedPhotosDialogState extends State<CapturedPhotosDialog> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          AspectRatio(
-                            aspectRatio: 1.0,
-                            child: FutureBuilder(
-                              future: photo.lastModified(),
-                              builder: (context, snapshot) {
-                                final modTime =
-                                    snapshot.data?.millisecondsSinceEpoch ?? 0;
-                                return Image.file(
-                                  photo,
-                                  key: ValueKey(
-                                    '${photo.path}?t=$_buildTimestamp-$modTime',
-                                  ),
-                                  fit: BoxFit.cover,
-                                  cacheHeight: null,
-                                  cacheWidth: null,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Icon(
-                                        Icons.broken_image,
-                                        color: Colors.red,
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
+                          FutureBuilder(
+                            future: photo.lastModified(),
+                            builder: (context, snapshot) {
+                              final modTime =
+                                  snapshot.data?.millisecondsSinceEpoch ?? 0;
+                              return Image.file(
+                                photo,
+                                key: ValueKey(
+                                  '${photo.path}?t=$_buildTimestamp-$modTime',
+                                ),
+                                fit: BoxFit.contain,
+                                cacheHeight: null,
+                                cacheWidth: null,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Icon(
+                                      Icons.broken_image,
+                                      color: Colors.red,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
                           ),
                           Positioned(
                             top: 4,
