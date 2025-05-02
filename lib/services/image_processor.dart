@@ -582,12 +582,12 @@ class ImageProcessor {
         final encoder = img.GifEncoder();
         encoder.repeat = 0; // Infinite loop
 
-        // Use fewer frames and longer duration for better performance
+        // Use fewer frames and shorter duration for better performance
         for (var frame in frames) {
           encoder.addFrame(
             frame,
-            duration: 200,
-          ); // Longer duration = smaller file
+            duration: 80 ~/ 10 * 8, // 0.8 seconds
+          );
         }
 
         return encoder.finish() ?? <int>[];
